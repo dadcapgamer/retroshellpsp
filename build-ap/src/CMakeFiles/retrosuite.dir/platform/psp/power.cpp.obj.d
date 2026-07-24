@@ -1,0 +1,46 @@
+src/CMakeFiles/retrosuite.dir/platform/psp/power.cpp.obj: \
+ /Users/jump/PSP\ EMU/src/platform/psp/power.cpp \
+ /Users/jump/PSP\ EMU/src/platform/psp/power.h \
+ /Users/jump/pspdev/psp/sdk/include/psppower.h \
+ /Users/jump/pspdev/psp/sdk/include/pspkerneltypes.h \
+ /Users/jump/pspdev/psp/sdk/include/psptypes.h \
+ /Users/jump/pspdev/lib/gcc/psp/15.2.0/include/stdint.h \
+ /Users/jump/pspdev/psp/include/stdint.h \
+ /Users/jump/pspdev/psp/include/machine/_default_types.h \
+ /Users/jump/pspdev/psp/include/sys/features.h \
+ /Users/jump/pspdev/psp/include/_newlib_version.h \
+ /Users/jump/pspdev/psp/include/sys/_intsup.h \
+ /Users/jump/pspdev/psp/include/sys/_stdint.h \
+ /Users/jump/pspdev/psp/sdk/include/psprtc.h \
+ /Users/jump/pspdev/psp/include/time.h \
+ /Users/jump/pspdev/psp/include/_ansi.h \
+ /Users/jump/pspdev/psp/include/newlib.h \
+ /Users/jump/pspdev/psp/include/sys/config.h \
+ /Users/jump/pspdev/psp/include/machine/ieeefp.h \
+ /Users/jump/pspdev/psp/include/sys/cdefs.h \
+ /Users/jump/pspdev/lib/gcc/psp/15.2.0/include/stddef.h \
+ /Users/jump/pspdev/psp/include/sys/reent.h \
+ /Users/jump/pspdev/psp/include/_ansi.h \
+ /Users/jump/pspdev/psp/include/sys/_types.h \
+ /Users/jump/pspdev/psp/include/machine/_types.h \
+ /Users/jump/pspdev/psp/include/sys/lock.h \
+ /Users/jump/pspdev/psp/include/machine/time.h \
+ /Users/jump/pspdev/psp/include/sys/types.h \
+ /Users/jump/pspdev/psp/include/machine/endian.h \
+ /Users/jump/pspdev/psp/include/machine/_endian.h \
+ /Users/jump/pspdev/psp/include/sys/select.h \
+ /Users/jump/pspdev/psp/include/sys/_sigset.h \
+ /Users/jump/pspdev/psp/include/sys/_timeval.h \
+ /Users/jump/pspdev/psp/include/sys/timespec.h \
+ /Users/jump/pspdev/psp/include/sys/_timespec.h \
+ /Users/jump/pspdev/psp/include/sys/_pthreadtypes.h \
+ /Users/jump/pspdev/psp/include/bits/posix_opt.h \
+ /Users/jump/pspdev/lib/gcc/psp/15.2.0/include/limits.h \
+ /Users/jump/pspdev/lib/gcc/psp/15.2.0/include/syslimits.h \
+ /Users/jump/pspdev/psp/include/limits.h \
+ /Users/jump/pspdev/psp/include/sys/syslimits.h \
+ /Users/jump/pspdev/psp/include/sys/sched.h \
+ /Users/jump/pspdev/psp/include/machine/types.h \
+ /Users/jump/pspdev/psp/include/sys/_locale.h \
+ /Users/jump/pspdev/psp/include/signal.h \
+ /Users/jump/pspdev/psp/include/sys/signal.h

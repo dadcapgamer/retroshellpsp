@@ -1,0 +1,2 @@
+/Users/jump/pspdev/bin/psp-ar qc librs_external.a CMakeFiles/rs_external.dir/stb_impl.c.obj CMakeFiles/rs_external.dir/miniz.c.obj CMakeFiles/rs_external.dir/cJSON.c.obj
+/Users/jump/pspdev/bin/psp-ranlib librs_external.a

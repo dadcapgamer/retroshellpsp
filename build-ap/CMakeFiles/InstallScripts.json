@@ -1,0 +1,10 @@
+{
+	"InstallScripts" : 
+	[
+		"/Users/jump/PSP EMU/build-ap/cmake_install.cmake",
+		"/Users/jump/PSP EMU/build-ap/external/cmake_install.cmake",
+		"/Users/jump/PSP EMU/build-ap/src/cmake_install.cmake",
+		"/Users/jump/PSP EMU/build-ap/cores/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

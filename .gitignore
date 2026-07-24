@@ -1,0 +1,7 @@
+build/
+build-static/
+.DS_Store
+*.o
+*.elf
+*.prx
+tools/assetgen
