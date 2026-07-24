@@ -6,10 +6,15 @@ add_executable(retrosuite
   platform/psp/power.cpp
   platform/psp/fs_psp.cpp
   platform/psp/threading.cpp
+  platform/psp/audio_out.cpp
   runtime/log.cpp
   runtime/arena.cpp
   runtime/config.cpp
+  runtime/host_services.cpp
+  runtime/save_manager.cpp
   frontend/app.cpp
+  frontend/core_manager.cpp
+  frontend/game_session.cpp
   frontend/autopilot.cpp
   frontend/text/font.cpp
   frontend/ui/prim.cpp
@@ -33,6 +38,7 @@ target_link_libraries(retrosuite PRIVATE
   pspctrl
   psppower
   psprtc
+  pspaudio
   pspdebug
   m)
 

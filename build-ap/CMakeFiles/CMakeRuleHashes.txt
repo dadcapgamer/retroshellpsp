@@ -1,4 +1,5 @@
 # Hashes of file build rules.
+e785598345f4b8a0e9f3cf327dd36c64 cores/dummy/dummy_exports.c
 0be94fab15655b6f68349fd3cafd2bff embedded_assets/rs_asset_font_body_rsf.c
 d0ba67110dacd6371fcd39b34854ef0f embedded_assets/rs_asset_font_large_rsf.c
 561a24ccc2fa10f5875edb2e1e9e93af embedded_assets/rs_asset_font_small_rsf.c

@@ -20,37 +20,42 @@ struct Step {
     const char* capture;   /* shot name, or nullptr */
 };
 
-/* Boot → GB list (boxart, metadata, zip entry) → favorite → back →
- * Settings (theme cycle incl. a custom Memory Stick theme) → home. */
+/* Boot → GB list → launch first game through the dummy core (from a ZIP)
+ * → verify video/audio/input → in-game menu → save then load a state →
+ * exit back to the browser → confirm Recently Played picked it up. */
 constexpr Step SCRIPT[] = {
     {30,   0,                 "boot"},
     {150,  0,                 "home"},
     {170,  PSP_CTRL_DOWN,     nullptr},   /* enter GB game list */
     {230,  0,                 "list_gb"},
-    {245,  PSP_CTRL_DOWN,     nullptr},
-    {260,  PSP_CTRL_DOWN,     nullptr},
-    {320,  0,                 "list_nav"},
-    {335,  PSP_CTRL_TRIANGLE, nullptr},   /* toggle favorite */
-    {380,  0,                 "list_fav"},
-    {400,  PSP_CTRL_CIRCLE,   nullptr},   /* back to categories */
-    {420,  PSP_CTRL_RIGHT,    nullptr},   /* GB → ... → Settings (9x) */
-    {428,  PSP_CTRL_RIGHT,    nullptr},
-    {436,  PSP_CTRL_RIGHT,    nullptr},
-    {444,  PSP_CTRL_RIGHT,    nullptr},
-    {452,  PSP_CTRL_RIGHT,    nullptr},
-    {460,  PSP_CTRL_RIGHT,    nullptr},
-    {468,  PSP_CTRL_RIGHT,    nullptr},
-    {476,  PSP_CTRL_RIGHT,    nullptr},
-    {484,  PSP_CTRL_RIGHT,    nullptr},
-    {540,  0,                 "home_settings"},
-    {555,  PSP_CTRL_CROSS,    nullptr},   /* open settings */
-    {640,  0,                 "settings"},
-    {655,  PSP_CTRL_RIGHT,    nullptr},   /* theme: dark → light */
-    {720,  0,                 "settings_light"},
-    {735,  PSP_CTRL_RIGHT,    nullptr},   /* light → midnight (custom) */
-    {800,  0,                 "settings_midnight"},
-    {820,  PSP_CTRL_CIRCLE,   nullptr},   /* back home */
-    {880,  0,                 "home_final"},
+    {250,  PSP_CTRL_CROSS,    nullptr},   /* launch! */
+    {400,  0,                 "game_running"},
+    {420,  PSP_CTRL_CROSS,    nullptr},   /* held button lights indicator */
+    {421,  PSP_CTRL_CROSS,    nullptr},
+    {422,  PSP_CTRL_CROSS,    "game_input"},
+    {460,  PSP_CTRL_LTRIGGER | PSP_CTRL_RTRIGGER, nullptr},
+    {461,  PSP_CTRL_LTRIGGER | PSP_CTRL_RTRIGGER | PSP_CTRL_START, nullptr},
+    {530,  0,                 "game_menu"},
+    {545,  PSP_CTRL_DOWN,     nullptr},   /* → Save state */
+    {560,  PSP_CTRL_CROSS,    nullptr},   /* save slot 1 */
+    {640,  0,                 "menu_saved"},
+    {655,  PSP_CTRL_DOWN,     nullptr},   /* → Load state */
+    {670,  PSP_CTRL_CROSS,    nullptr},   /* load slot 1, resumes */
+    {740,  0,                 "game_loaded"},
+    {760,  PSP_CTRL_LTRIGGER | PSP_CTRL_RTRIGGER, nullptr},
+    {761,  PSP_CTRL_LTRIGGER | PSP_CTRL_RTRIGGER | PSP_CTRL_START, nullptr},
+    {790,  PSP_CTRL_DOWN,     nullptr},
+    {798,  PSP_CTRL_DOWN,     nullptr},
+    {806,  PSP_CTRL_DOWN,     nullptr},
+    {814,  PSP_CTRL_DOWN,     nullptr},
+    {822,  PSP_CTRL_DOWN,     nullptr},   /* → Exit game */
+    {840,  PSP_CTRL_CROSS,    nullptr},
+    {940,  0,                 "home_back"},
+    {960,  PSP_CTRL_CIRCLE,   nullptr},   /* leave list */
+    {975,  PSP_CTRL_LEFT,     nullptr},   /* GB → Favorites → Recent */
+    {983,  PSP_CTRL_LEFT,     nullptr},
+    {1000, PSP_CTRL_DOWN,     nullptr},   /* into Recent list */
+    {1060, 0,                 "recent_list"},
 };
 constexpr int STEPS = int(sizeof(SCRIPT) / sizeof(SCRIPT[0]));
 

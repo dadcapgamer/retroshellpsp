@@ -1,27 +1,99 @@
 # rs_add_core(<name> SOURCES <src>... [LIBS <lib>...])
 #
-# Builds an emulator core against the RetroSuite Core API, either as a
-# loadable PRX module (default) or as a static library registered with the
-# frontend's StaticCoreLoader when -DRS_STATIC_CORES=ON.
+# Builds an emulator core against the RetroSuite Core API in one of two
+# delivery modes:
 #
-# Fleshed out in Phase 3 alongside the dummy core; the interface is fixed
-# here so core directories can be written against it.
+#   default            — relocatable PRX module (build/cores/<name>.prx,
+#                        installed to ms0:/RETROSUITE/cores/). Only one
+#                        core occupies RAM at a time.
+#   -DRS_STATIC_CORES  — static library linked into the EBOOT and listed
+#                        in the generated rs_static_cores.inc registry.
+#
+# In static mode the core's rs_get_core_api symbol is renamed per-core so
+# several cores can coexist in one binary; RS_STATIC_BUILD=1 lets core
+# sources drop their PRX module boilerplate.
+#
+# PRX link recipe mirrors $PSPSDK/lib/build_prx.mak: link with -Wl,-q and
+# linkfile.prx, no start files, then psp-fixup-imports + psp-prxgen.
+
+execute_process(COMMAND psp-config --pspsdk-path
+                OUTPUT_VARIABLE RS_PSPSDK_PATH
+                OUTPUT_STRIP_TRAILING_WHITESPACE)
 
 function(rs_add_core name)
   cmake_parse_arguments(ARG "" "" "SOURCES;LIBS" ${ARGN})
+  set(target rs_core_${name})
 
   if(RS_STATIC_CORES)
-    add_library(rs_core_${name} STATIC ${ARG_SOURCES})
+    add_library(${target} STATIC ${ARG_SOURCES})
+    target_compile_definitions(${target} PRIVATE
+      RS_STATIC_BUILD=1
+      rs_get_core_api=rs_core_entry_${name})
+    set_property(GLOBAL APPEND PROPERTY RS_STATIC_CORE_NAMES ${name})
+    target_link_libraries(retrosuite PRIVATE ${target})
   else()
-    add_executable(rs_core_${name} ${ARG_SOURCES})
-    # PRX modules are relocatable; the pspdev toolchain file provides the
-    # link flags when BUILD_PRX-style output is requested per target.
-    set_target_properties(rs_core_${name} PROPERTIES OUTPUT_NAME ${name})
+    set(exports_c ${CMAKE_CURRENT_BINARY_DIR}/${name}_exports.c)
+    add_custom_command(
+      OUTPUT ${exports_c}
+      COMMAND sh -c "psp-build-exports -b '${CMAKE_CURRENT_SOURCE_DIR}/exports.exp' > '${exports_c}'"
+      DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/exports.exp
+      COMMENT "Generating exports for core ${name}"
+      VERBATIM)
+
+    add_executable(${target} ${ARG_SOURCES} ${exports_c})
+    set_target_properties(${target} PROPERTIES
+      OUTPUT_NAME ${name}
+      SUFFIX .elf)
+    target_link_options(${target} PRIVATE
+      -Wl,-q
+      -T${RS_PSPSDK_PATH}/lib/linkfile.prx
+      -nostartfiles
+      -Wl,-zmax-page-size=128)
+
+    add_custom_command(
+      TARGET ${target} POST_BUILD
+      # fixup-imports fails on modules with zero sce imports (no .lib.stub
+      # section) — that's fine for self-contained cores like dummy.
+      COMMAND sh -c "psp-fixup-imports '$<TARGET_FILE:${target}>' || true"
+      COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/cores
+      COMMAND psp-prxgen $<TARGET_FILE:${target}>
+              ${CMAKE_BINARY_DIR}/cores/${name}.prx
+      COMMENT "Packaging core ${name}.prx"
+      VERBATIM)
   endif()
 
-  target_include_directories(rs_core_${name} PRIVATE
-    ${CMAKE_SOURCE_DIR}/src)          # for core_api headers only
+  target_include_directories(${target} PRIVATE ${CMAKE_SOURCE_DIR}/src)
   if(ARG_LIBS)
-    target_link_libraries(rs_core_${name} PRIVATE ${ARG_LIBS})
+    target_link_libraries(${target} PRIVATE ${ARG_LIBS})
   endif()
+endfunction()
+
+# Called once from cores/CMakeLists.txt after all rs_add_core() calls:
+# writes the static-core registry consumed by core_manager.cpp.
+function(rs_finalize_static_cores)
+  if(NOT RS_STATIC_CORES)
+    return()
+  endif()
+  get_property(names GLOBAL PROPERTY RS_STATIC_CORE_NAMES)
+  set(decls "")
+  set(rows "")
+  set(SC "\;")   # literal semicolon for the generated C source
+  foreach(n IN LISTS names)
+    string(APPEND decls
+           "extern \"C\" const RSCoreAPI* rs_core_entry_${n}(void)${SC}\n")
+    string(APPEND rows "    {\"${n}\", &rs_core_entry_${n}},\n")
+  endforeach()
+  set(content "/* Auto-generated static core registry — do not edit. */
+${decls}
+struct RSStaticCoreEntry {
+    const char* name${SC}
+    const RSCoreAPI* (*getApi)(void)${SC}
+}${SC}
+
+static const RSStaticCoreEntry RS_STATIC_CORE_TABLE[] = {
+${rows}}${SC}
+")
+  string(REPLACE "\;" ";" content "${content}")
+  file(WRITE ${CMAKE_BINARY_DIR}/generated/rs_static_cores.inc "${content}")
+  target_include_directories(retrosuite PRIVATE ${CMAKE_BINARY_DIR}/generated)
 endfunction()

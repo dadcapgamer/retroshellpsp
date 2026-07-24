@@ -142,6 +142,19 @@ retrosuite/fast:
 	$(MAKE) $(MAKESILENT) -f src/CMakeFiles/retrosuite.dir/build.make src/CMakeFiles/retrosuite.dir/build
 .PHONY : retrosuite/fast
 
+#=============================================================================
+# Target rules for targets named rs_core_dummy
+
+# Build rule for target.
+rs_core_dummy: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 rs_core_dummy
+.PHONY : rs_core_dummy
+
+# fast build rule for target.
+rs_core_dummy/fast:
+	$(MAKE) $(MAKESILENT) -f cores/dummy/CMakeFiles/rs_core_dummy.dir/build.make cores/dummy/CMakeFiles/rs_core_dummy.dir/build
+.PHONY : rs_core_dummy/fast
+
 # Help Target
 help:
 	@echo "The following are some of the valid targets for this Makefile:"
@@ -151,6 +164,7 @@ help:
 	@echo "... edit_cache"
 	@echo "... rebuild_cache"
 	@echo "... retrosuite"
+	@echo "... rs_core_dummy"
 	@echo "... rs_external"
 .PHONY : help
 

@@ -21,6 +21,12 @@ constexpr u32 FB1_OFFSET = FB_BYTES;
 void  init();
 void* alloc(u32 size, u32 align = 16);  /* absolute pointer, or nullptr */
 void  freeAll();                        /* reset texture region          */
+
+/* Persistent boot assets (fonts, primitive masks) live below the boot
+ * mark; theme/boxart textures above it are evicted before a core runs. */
+void  setBootMark();
+void  freeToBootMark();
+
 u32   available();
 u32   highWater();
 

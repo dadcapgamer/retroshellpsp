@@ -192,7 +192,14 @@ src/CMakeFiles/retrosuite.dir/frontend/app.cpp.obj: \
  /Users/jump/pspdev/psp/include/c++/15.2.0/pstl/glue_memory_defs.h \
  /Users/jump/pspdev/psp/include/c++/15.2.0/pstl/execution_defs.h \
  /Users/jump/PSP\ EMU/src/frontend/autopilot.h \
+ /Users/jump/PSP\ EMU/src/frontend/game_session.h \
+ /Users/jump/PSP\ EMU/src/frontend/core_manager.h \
+ /Users/jump/PSP\ EMU/src/frontend/emulator_core.h \
+ /Users/jump/PSP\ EMU/src/core_api/rs_core_api.h \
+ /Users/jump/PSP\ EMU/src/core_api/rs_host_api.h \
+ /Users/jump/PSP\ EMU/src/runtime/save_manager.h \
  /Users/jump/PSP\ EMU/src/frontend/scenes/boot_scene.h \
+ /Users/jump/PSP\ EMU/src/platform/psp/audio_out.h \
  /Users/jump/PSP\ EMU/src/platform/psp/fs_psp.h \
  /Users/jump/pspdev/psp/include/c++/15.2.0/functional \
  /Users/jump/pspdev/psp/include/c++/15.2.0/bits/std_function.h \
@@ -206,6 +213,8 @@ src/CMakeFiles/retrosuite.dir/frontend/app.cpp.obj: \
  /Users/jump/pspdev/psp/include/c++/15.2.0/array \
  /Users/jump/pspdev/psp/include/c++/15.2.0/compare \
  /Users/jump/PSP\ EMU/src/platform/psp/power.h \
+ /Users/jump/PSP\ EMU/src/platform/psp/vram.h \
+ /Users/jump/PSP\ EMU/src/runtime/arena.h \
  /Users/jump/PSP\ EMU/src/runtime/config.h \
  /Users/jump/pspdev/psp/include/c++/15.2.0/utility \
  /Users/jump/pspdev/psp/include/c++/15.2.0/bits/stl_relops.h \

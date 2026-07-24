@@ -8,3 +8,6 @@
 /Users/jump/PSP EMU/build-ap/src/CMakeFiles/rebuild_cache.dir
 /Users/jump/PSP EMU/build-ap/cores/CMakeFiles/edit_cache.dir
 /Users/jump/PSP EMU/build-ap/cores/CMakeFiles/rebuild_cache.dir
+/Users/jump/PSP EMU/build-ap/cores/dummy/CMakeFiles/rs_core_dummy.dir
+/Users/jump/PSP EMU/build-ap/cores/dummy/CMakeFiles/edit_cache.dir
+/Users/jump/PSP EMU/build-ap/cores/dummy/CMakeFiles/rebuild_cache.dir

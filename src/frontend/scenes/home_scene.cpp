@@ -149,8 +149,7 @@ void HomeScene::updateList(App& app) {
     }
 
     if (pad.isPressed(PSP_CTRL_CROSS) && !m_visible.empty()) {
-        /* Phase 3 wires this into the CoreManager launch flow. */
-        app.toast("Emulator cores arrive in Phase 3");
+        app.launchGame(*m_visible[size_t(m_listIdx)]);
     }
 }
 

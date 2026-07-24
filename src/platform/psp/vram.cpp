@@ -27,6 +27,14 @@ void* alloc(u32 size, u32 align) {
 }
 
 void freeAll()      { s_cursor = FB1_OFFSET + FB_BYTES; }
+
+namespace {
+u32 s_bootMark = FB1_OFFSET + FB_BYTES;
+}
+
+void setBootMark()    { s_bootMark = s_cursor; }
+void freeToBootMark() { s_cursor = s_bootMark; }
+
 u32  available()    { return s_size - s_cursor; }
 u32  highWater()    { return s_high; }
 

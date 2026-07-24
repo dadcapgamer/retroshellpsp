@@ -1,8 +1,12 @@
 #include "frontend/app.h"
 #include "frontend/autopilot.h"
+#include "frontend/game_session.h"
 #include "frontend/scenes/boot_scene.h"
+#include "platform/psp/audio_out.h"
 #include "platform/psp/fs_psp.h"
 #include "platform/psp/power.h"
+#include "platform/psp/vram.h"
+#include "runtime/arena.h"
 #include "runtime/config.h"
 #include "runtime/log.h"
 
@@ -43,9 +47,14 @@ bool App::init() {
     }
 
     m_pad.init();
+    if (!audio::init()) RS_LOGW("app: audio unavailable");
 
     cfg::load();
     power::setCpuMhz(cfg::get().cpuMenuMhz);
+
+    /* Fonts and primitive masks stay resident across core launches;
+     * everything allocated after this mark is evictable. */
+    gfx::vram::setBootMark();
 
     m_theme = theme::loadTheme(cfg::get().theme);
     m_pal = m_theme.palette;
@@ -61,11 +70,33 @@ bool App::init() {
     return true;
 }
 
+void App::launchGame(const db::GameEntry& game) {
+    RS_LOGI("app: launching '%s'", game.name.c_str());
+    switchScene(std::make_unique<GameSession>(game));
+}
+
+void App::evictForCore() {
+    m_boxart.clear();
+    m_theme.freeAssets();
+    gfx::vram::freeToBootMark();
+    RS_LOGI("app: evicted frontend caches (%u KB arena, %u KB vram free)",
+            unsigned(mem::available() / 1024),
+            unsigned(gfx::vram::available() / 1024));
+}
+
+void App::restoreAfterCore() {
+    m_theme = theme::loadTheme(m_theme.id);
+    m_pal = m_theme.palette;
+    m_themeFrom = m_pal;
+    RS_LOGI("app: frontend restored");
+}
+
 void App::shutdown() {
     m_scene.reset();
     m_pending.reset();
     m_boxart.clear();
     m_theme.freeAssets();
+    audio::shutdown();
     m_fonts.title.unload();
     m_fonts.large.unload();
     m_fonts.body.unload();

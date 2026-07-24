@@ -66,6 +66,16 @@ public:
     /* Takes ownership; transitions through a brief scrim fade. */
     void switchScene(std::unique_ptr<Scene> next, bool instant = false);
 
+    /* Starts a GameSession for this library entry. */
+    void launchGame(const db::GameEntry& game);
+
+    /* Bi-layer launch protocol (called by GameSession):
+     * evictForCore drops every large frontend resource — box art, theme
+     * assets, non-boot VRAM — so the core owns the memory; restoreAfterCore
+     * rebuilds them when the game exits. */
+    void evictForCore();
+    void restoreAfterCore();
+
     /* --- shared chrome ---------------------------------------------------- */
     void drawBackground();
     void drawTopBar();

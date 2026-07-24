@@ -14,6 +14,7 @@ set(CMAKE_MAKEFILE_DEPENDS
   "/Users/jump/PSP EMU/cmake/rs_add_core.cmake"
   "/Users/jump/PSP EMU/cmake/rs_assets.cmake"
   "/Users/jump/PSP EMU/cores/CMakeLists.txt"
+  "/Users/jump/PSP EMU/cores/dummy/CMakeLists.txt"
   "/Users/jump/PSP EMU/external/CMakeLists.txt"
   "/Users/jump/PSP EMU/src/CMakeLists.txt"
   "/Users/jump/pspdev/psp/share/AddPrxModule.cmake"
@@ -49,10 +50,12 @@ set(CMAKE_MAKEFILE_PRODUCTS
   "external/CMakeFiles/CMakeDirectoryInformation.cmake"
   "src/CMakeFiles/CMakeDirectoryInformation.cmake"
   "cores/CMakeFiles/CMakeDirectoryInformation.cmake"
+  "cores/dummy/CMakeFiles/CMakeDirectoryInformation.cmake"
   )
 
 # Dependency information for all targets:
 set(CMAKE_DEPEND_INFO_FILES
   "external/CMakeFiles/rs_external.dir/DependInfo.cmake"
   "src/CMakeFiles/retrosuite.dir/DependInfo.cmake"
+  "cores/dummy/CMakeFiles/rs_core_dummy.dir/DependInfo.cmake"
   )
