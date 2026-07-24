@@ -1,7 +1,17 @@
-build/
-build-static/
-.DS_Store
+# Build output (build/, build-static/, build-ap/, …)
+build*/
+
+# Toolchain / compiled artifacts
 *.o
 *.elf
 *.prx
 tools/assetgen
+
+# Local ROMs (never commit copyrighted games)
+*.gbc
+*.gb
+*.gba
+*.zip
+
+.DS_Store
+dist/

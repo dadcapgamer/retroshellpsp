@@ -10,7 +10,7 @@ architecture — inspired by Emu4Vita++, built native for the PSP.
 - **Design:** bi-layer runtime — the frontend tears itself down to hand
   nearly all RAM to the running emulator core, then rebuilds seamlessly
 
-## Features (Phases 1–3, current)
+## Features (Phases 1–4, current)
 
 - 60 fps animated UI: XMB-style category bar, game lists, light/dark themes
   with live crossfade, animated wave background, battery + clock
@@ -22,10 +22,19 @@ architecture — inspired by Emu4Vita++, built native for the PSP.
   the background image, and the wave animation
 - Core API: emulator cores as loadable PRX plugins (one core in RAM at a
   time — key for the PSP-1000) or statically linked (`-DRS_STATIC_CORES=ON`)
+- **Game Boy / Game Boy Color** via Gambatte — the first real core
+- **Manifest-driven core registry**: cores are discovered at boot from
+  `.json` sidecars, so adding one never touches frontend source. When a
+  system has more than one installed core the launch UI offers a picker,
+  and each game remembers the core it was last played with
+- **libretro shim** (`cores/shared/`): one reusable bridge so future
+  libretro cores integrate with almost no per-core code
 - Save states with thumbnails, battery-save autosave, screenshots,
   in-game menu (L + R + START)
-- Dummy core proving the whole pipeline; real cores arrive in Phases 4+
-  (gambatte → SMS Plus GX → PicoDrive → gpSP → Snes9x 2005 → PCE)
+- Remaining cores land in Phases 5+
+  (SMS Plus GX → PicoDrive → gpSP → Snes9x 2005 → PCE; NES via FCEUmm)
+
+See [docs/ADDING_A_CORE.md](docs/ADDING_A_CORE.md) to add your own.
 
 ## Building
 
@@ -47,9 +56,13 @@ dependencies: `brew install gmp mpfr libmpc isl zstd`.
 
 ```
 ms0:/PSP/GAME/RetroSuite/EBOOT.PBP      ← build/src/EBOOT.PBP
-ms0:/RETROSUITE/cores/*.prx             ← build/cores/*.prx (PRX mode only)
+ms0:/RETROSUITE/cores/*.prx + *.json    ← build/cores/* (PRX mode; ship both)
 ms0:/ROMS/GameBoy/…                     ← your ROMs (see layout below)
 ```
+
+Each core needs both its `.prx` and its `.json` manifest in the cores
+folder — the frontend lists a core from the manifest and won't show one
+whose module is missing.
 
 ROM directories: `GameBoy`, `GameBoyColor`, `GBA`, `NES`, `SNES`,
 `Genesis`, `MasterSystem`, `GameGear`, `PCEngine`. ZIPs are fine.

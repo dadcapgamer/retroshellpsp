@@ -1,4 +1,5 @@
 #include "frontend/database/metadata.h"
+#include "runtime/jsonfile.h"
 #include "platform/psp/fs_psp.h"
 #include "runtime/log.h"
 
@@ -25,10 +26,7 @@ GameMeta loadMeta(const GameEntry& g) {
     char path[512];
     metaPath(path, sizeof path, g, "metadata", "json");
 
-    std::vector<u8> buf;
-    if (!fs::readFile(path, buf)) return m;
-    buf.push_back(0);
-    cJSON* root = cJSON_Parse(reinterpret_cast<const char*>(buf.data()));
+    cJSON* root = json::parseFile(path);
     if (!root) return m;
 
     auto str = [&](const char* key) -> std::string {

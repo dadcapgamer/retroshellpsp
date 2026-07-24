@@ -20,6 +20,11 @@ void roundedRect(gfx::Renderer& r, float x, float y, float w, float h,
 void roundedOutline(gfx::Renderer& r, float x, float y, float w, float h,
                     float radius, u32 color);
 
+/* Selected-row treatment shared by every list panel (settings, core
+ * picker, in-game menu): soft rounded fill plus a 3px accent bar. */
+void focusRow(gfx::Renderer& r, float x, float y, float w, float h,
+              u32 fill, u32 bar);
+
 void circle(gfx::Renderer& r, float cx, float cy, float radius, u32 color);
 void ring(gfx::Renderer& r, float cx, float cy, float radius, u32 color);
 

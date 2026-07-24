@@ -16,16 +16,19 @@
 
 namespace rs {
 
-const char* CoreManager::coreForSystem(db::System) {
-    /* Real per-system cores land in Phases 4+ (gambatte first); every
-     * system currently routes to the API-validation dummy core. */
-    return "dummy";
-}
-
 #ifdef RS_STATIC_CORES
 
-bool CoreManager::loadCore(const char* name) {
+int CoreManager::staticCoreCount() {
+    return int(sizeof(RS_STATIC_CORE_TABLE) / sizeof(RS_STATIC_CORE_TABLE[0]));
+}
+
+const RSCoreAPI* CoreManager::staticCoreApi(int i) {
+    return RS_STATIC_CORE_TABLE[i].getApi();
+}
+
+bool CoreManager::loadCore(const CoreInfo& info) {
     unloadCore();
+    const char* name = info.name.c_str();
     for (const auto& entry : RS_STATIC_CORE_TABLE) {
         if (std::strcmp(entry.name, name) == 0) {
             const RSCoreAPI* api = entry.getApi();
@@ -50,9 +53,10 @@ void CoreManager::unloadCore() {
 
 #else  /* PRX loading */
 
-bool CoreManager::loadCore(const char* name) {
+bool CoreManager::loadCore(const CoreInfo& info) {
     unloadCore();
 
+    const char* name = info.name.c_str();
     char path[128];
     std::snprintf(path, sizeof path, "ms0:/RETROSUITE/cores/%s.prx", name);
 

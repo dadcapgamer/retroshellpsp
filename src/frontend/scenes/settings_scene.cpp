@@ -150,10 +150,10 @@ void SettingsScene::draw(App& app) {
 
     /* Sliding highlight. */
     const float hy = py + 8.f + m_rowPos.v * rowH;
-    ui::prim::roundedRect(r, px + 8.f, hy, pw - 16.f, rowH - 2.f, 8.f,
-                          rsWithAlpha(pal.tileFocusBg,
-                                      rsAlphaOf(pal.tileFocusBg) * a / 255u));
-    r.rect(px + 12.f, hy + 4.f, 3.f, rowH - 10.f, rsWithAlpha(pal.accent, a));
+    ui::prim::focusRow(r, px + 8.f, hy, pw - 16.f, rowH - 2.f,
+                       rsWithAlpha(pal.tileFocusBg,
+                                   rsAlphaOf(pal.tileFocusBg) * a / 255u),
+                       rsWithAlpha(pal.accent, a));
 
     char buf[48];
     for (int i = 0; i < ROW_COUNT; i++) {

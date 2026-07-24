@@ -1,4 +1,5 @@
 #include "frontend/database/library.h"
+#include "runtime/jsonfile.h"
 #include "platform/psp/fs_psp.h"
 #include "runtime/log.h"
 
@@ -29,14 +30,8 @@ void writeHashArray(cJSON* root, const char* key, const std::vector<u32>& v) {
 }  // namespace
 
 void Library::load() {
-    std::vector<u8> buf;
-    if (!fs::readFile(LIB_PATH, buf)) return;
-    buf.push_back(0);
-    cJSON* root = cJSON_Parse(reinterpret_cast<const char*>(buf.data()));
-    if (!root) {
-        RS_LOGW("library: bad json, starting fresh");
-        return;
-    }
+    cJSON* root = json::parseFile(LIB_PATH);
+    if (!root) return;   /* first boot, or bad json — start fresh */
     readHashArray(root, "favorites", m_favorites);
     readHashArray(root, "recents", m_recents);
     const cJSON* counts = cJSON_GetObjectItemCaseSensitive(root, "playCounts");

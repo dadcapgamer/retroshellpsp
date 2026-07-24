@@ -26,6 +26,7 @@ struct SystemInfo {
     const char* dirName;      /* under ms0:/ROMS/ */
     const char* displayName;
     const char* badge;        /* short label on the category tile */
+    const char* coreId;       /* stable token used in core manifests */
     u32 accentRgb;
     const char* extensions;   /* pipe-separated, lower case, no dots */
 };
@@ -33,23 +34,23 @@ struct SystemInfo {
 inline const SystemInfo& systemInfo(System s) {
     static const SystemInfo TABLE[] = {
         {System::GameBoy,      "GameBoy",      "Game Boy",         "GB",
-         0x7BB661, "gb|dmg"},
+         "gb",   0x7BB661, "gb|dmg"},
         {System::GameBoyColor, "GameBoyColor", "Game Boy Color",   "GBC",
-         0x9B72CF, "gbc|cgb"},
+         "gbc",  0x9B72CF, "gbc|cgb"},
         {System::GBA,          "GBA",          "Game Boy Advance", "GBA",
-         0x5C67C7, "gba|agb"},
+         "gba",  0x5C67C7, "gba|agb"},
         {System::NES,          "NES",          "Nintendo",         "NES",
-         0xD9534F, "nes"},
+         "nes",  0xD9534F, "nes"},
         {System::SNES,         "SNES",         "Super Nintendo",   "SNES",
-         0x8E7CC3, "sfc|smc"},
+         "snes", 0x8E7CC3, "sfc|smc"},
         {System::Genesis,      "Genesis",      "Genesis",          "MD",
-         0x4A90D9, "md|gen|smd|bin"},
+         "md",   0x4A90D9, "md|gen|smd|bin"},
         {System::MasterSystem, "MasterSystem", "Master System",    "SMS",
-         0xD64545, "sms"},
+         "sms",  0xD64545, "sms"},
         {System::GameGear,     "GameGear",     "Game Gear",        "GG",
-         0x2FA4D9, "gg"},
+         "gg",   0x2FA4D9, "gg"},
         {System::PCEngine,     "PCEngine",     "PC Engine",        "PCE",
-         0xF2A03D, "pce"},
+         "pce",  0xF2A03D, "pce"},
     };
     return TABLE[u8(s)];
 }

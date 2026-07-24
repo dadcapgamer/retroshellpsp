@@ -18,6 +18,7 @@ Palette blend(const Palette& a, const Palette& b, float t) {
     p.tileFocusBg   = rsLerpColor(a.tileFocusBg, b.tileFocusBg, t);
     p.panelBg       = rsLerpColor(a.panelBg, b.panelBg, t);
     p.panelOutline  = rsLerpColor(a.panelOutline, b.panelOutline, t);
+    p.menuBg        = rsLerpColor(a.menuBg, b.menuBg, t);
     p.shadow        = rsLerpColor(a.shadow, b.shadow, t);
     p.scrim         = rsLerpColor(a.scrim, b.scrim, t);
     p.dark          = t < 0.5f ? a.dark : b.dark;

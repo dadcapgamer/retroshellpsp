@@ -1,0 +1,5 @@
+{
+  "name": "dummy",
+  "version": "1.0",
+  "systems": "gb|gbc|gba|nes|snes|md|sms|gg|pce"
+}

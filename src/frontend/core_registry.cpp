@@ -1,0 +1,126 @@
+#include "frontend/core_registry.h"
+
+#include "runtime/config.h"
+#include "runtime/log.h"
+
+#include <cstdio>
+#include <cstring>
+
+#ifdef RS_STATIC_CORES
+#include "frontend/core_manager.h"
+#else
+#include "platform/psp/fs_psp.h"
+#include "runtime/jsonfile.h"
+#endif
+
+namespace rs {
+
+bool CoreInfo::serves(db::System s) const {
+    return db::extMatches(systems.c_str(), db::systemInfo(s).coreId);
+}
+
+const CoreInfo* CoreRegistry::find(const char* name) const {
+    for (const auto& c : m_cores)
+        if (c.name == name) return &c;
+    return nullptr;
+}
+
+std::vector<const CoreInfo*> CoreRegistry::coresFor(db::System s) const {
+    std::vector<const CoreInfo*> out;
+    for (const auto& c : m_cores)
+        if (c.serves(s)) out.push_back(&c);
+    return out;
+}
+
+int CoreRegistry::countFor(db::System s) const {
+    int n = 0;
+    for (const auto& c : m_cores)
+        if (c.serves(s)) n++;
+    return n;
+}
+
+const CoreInfo* CoreRegistry::resolve(const db::GameEntry& game) const {
+    const std::string remembered = cfg::gameOption(game.pathHash, "core");
+    if (!remembered.empty()) {
+        const CoreInfo* c = find(remembered.c_str());
+        if (c && c->serves(game.system)) return c;
+        /* A remembered core that vanished falls through to the default. */
+    }
+    for (const auto& c : m_cores)
+        if (c.serves(game.system)) return &c;
+    return nullptr;
+}
+
+bool CoreRegistry::needsChoice(const db::GameEntry& game) const {
+    if (!hasChoice(game.system)) return false;
+    return cfg::gameOption(game.pathHash, "core").empty();
+}
+
+#ifdef RS_STATIC_CORES
+
+void CoreRegistry::discover() {
+    m_cores.clear();
+    for (int i = 0; i < CoreManager::staticCoreCount(); i++) {
+        const RSCoreAPI* api = CoreManager::staticCoreApi(i);
+        if (!api || api->api_version != RS_CORE_API_VERSION) continue;
+        m_cores.push_back({api->name, api->version, api->systems, true});
+    }
+    RS_LOGI("cores: %d linked in", int(m_cores.size()));
+}
+
+#else
+
+void CoreRegistry::discover() {
+    m_cores.clear();
+
+    char dir[64];
+    std::snprintf(dir, sizeof dir, "%s/cores", fs::ROOT);
+    std::vector<fs::DirEntry> entries;
+    if (!fs::listDir(dir, entries)) {
+        RS_LOGW("cores: %s missing", dir);
+        return;
+    }
+
+    for (const auto& e : entries) {
+        const size_t dot = e.name.rfind(".json");
+        if (e.isDir || dot == std::string::npos ||
+            dot + 5 != e.name.size())
+            continue;
+
+        char path[128];
+        std::snprintf(path, sizeof path, "%s/%s", dir, e.name.c_str());
+        cJSON* root = json::parseFile(path);
+        if (!root) {
+            RS_LOGW("cores: %s unreadable or not valid JSON", e.name.c_str());
+            continue;
+        }
+
+        const cJSON* name = cJSON_GetObjectItem(root, "name");
+        const cJSON* ver = cJSON_GetObjectItem(root, "version");
+        const cJSON* systems = cJSON_GetObjectItem(root, "systems");
+        if (cJSON_IsString(name) && cJSON_IsString(systems)) {
+            /* The module itself must be present, not just its manifest. */
+            std::snprintf(path, sizeof path, "%s/%s.prx", dir,
+                          name->valuestring);
+            if (fs::exists(path)) {
+                m_cores.push_back({name->valuestring,
+                                   cJSON_IsString(ver) ? ver->valuestring : "",
+                                   systems->valuestring, false});
+            } else {
+                RS_LOGW("cores: manifest %s has no %s.prx", e.name.c_str(),
+                        name->valuestring);
+            }
+        } else {
+            RS_LOGW("cores: %s lacks name/systems", e.name.c_str());
+        }
+        cJSON_Delete(root);
+    }
+
+    for (const auto& c : m_cores)
+        RS_LOGI("cores: found '%s' %s (%s)", c.name.c_str(),
+                c.version.c_str(), c.systems.c_str());
+}
+
+#endif  /* RS_STATIC_CORES */
+
+}  // namespace rs

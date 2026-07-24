@@ -1,4 +1,5 @@
 #include "frontend/themes/theme.h"
+#include "runtime/jsonfile.h"
 #include "platform/psp/fs_psp.h"
 #include "runtime/log.h"
 
@@ -42,6 +43,7 @@ void applyColors(Palette& p, const cJSON* colors) {
         {"textDim", &p.textDim},       {"accent", &p.accent},
         {"tileBg", &p.tileBg},         {"tileFocusBg", &p.tileFocusBg},
         {"panelBg", &p.panelBg},       {"panelOutline", &p.panelOutline},
+        {"menuBg", &p.menuBg},
         {"shadow", &p.shadow},         {"scrim", &p.scrim},
     };
     for (auto& m : MAP) {
@@ -67,15 +69,9 @@ Theme loadTheme(const std::string& id) {
     char path[256];
     std::snprintf(path, sizeof path, "%s/themes/%s/theme.json", fs::ROOT,
                   id.c_str());
-    std::vector<u8> buf;
-    if (!fs::readFile(path, buf)) {
-        RS_LOGW("theme: %s missing, using dark", id.c_str());
-        return builtin(true);
-    }
-    buf.push_back(0);
-    cJSON* root = cJSON_Parse(reinterpret_cast<const char*>(buf.data()));
+    cJSON* root = json::parseFile(path);
     if (!root) {
-        RS_LOGW("theme: %s has invalid json, using dark", id.c_str());
+        RS_LOGW("theme: %s missing or invalid, using dark", id.c_str());
         return builtin(true);
     }
 

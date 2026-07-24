@@ -15,7 +15,8 @@ struct Palette {
     u32 textPrimary, textSecondary, textDim;
     u32 accent;
     u32 tileBg, tileFocusBg;      /* category tiles */
-    u32 panelBg, panelOutline;    /* content cards */
+    u32 panelBg, panelOutline;    /* content cards (translucent frosted tint) */
+    u32 menuBg;                   /* opaque surface for modal dialogs */
     u32 shadow;                   /* text shadow */
     u32 scrim;                    /* scene-transition overlay base (alpha set live) */
     bool dark;
@@ -29,6 +30,7 @@ inline const Palette& light() {
         /* accent    */ rsHex(0x2E7CF6),
         /* tiles     */ rsHex(0xFFFFFF, 216), rsHex(0xFFFFFF),
         /* panel     */ rsHex(0xFFFFFF, 190), rsHex(0x1A1E26, 26),
+        /* menu      */ rsHex(0xFDFEFF),
         /* shadow    */ rsHex(0x39496B, 46),
         /* scrim     */ rsHex(0xEDF1F7),
         false,
@@ -44,6 +46,7 @@ inline const Palette& dark() {
         /* accent    */ rsHex(0x4C9AFF),
         /* tiles     */ rsHex(0xFFFFFF, 22), rsHex(0xFFFFFF, 46),
         /* panel     */ rsHex(0xFFFFFF, 14), rsHex(0xFFFFFF, 26),
+        /* menu      */ rsHex(0x1C2534),
         /* shadow    */ rsHex(0x000000, 110),
         /* scrim     */ rsHex(0x0B0E13),
         true,

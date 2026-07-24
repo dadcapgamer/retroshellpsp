@@ -4,5 +4,6 @@
 # in README.md).
 
 add_subdirectory(dummy)
+add_subdirectory(gambatte)
 
 rs_finalize_static_cores()

@@ -62,6 +62,7 @@ bool App::init() {
 
     m_library.load();
     if (!m_index.loadCache()) RS_LOGI("index: no cache yet");
+    m_cores.discover();
     m_scanner.start();
 
     m_lastUs = sceKernelGetSystemTimeLow();
@@ -70,9 +71,19 @@ bool App::init() {
     return true;
 }
 
-void App::launchGame(const db::GameEntry& game) {
-    RS_LOGI("app: launching '%s'", game.name.c_str());
-    switchScene(std::make_unique<GameSession>(game));
+void App::launchGame(const db::GameEntry& game, const CoreInfo* core) {
+    if (!core) core = m_cores.resolve(game);
+    if (!core) {
+        char msg[64];
+        std::snprintf(msg, sizeof msg, "No core installed for %s",
+                      db::systemInfo(game.system).displayName);
+        toast(msg);
+        RS_LOGW("app: %s", msg);
+        return;
+    }
+    RS_LOGI("app: launching '%s' via %s", game.name.c_str(),
+            core->name.c_str());
+    switchScene(std::make_unique<GameSession>(game, core->name));
 }
 
 void App::evictForCore() {

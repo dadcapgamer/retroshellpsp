@@ -20,42 +20,57 @@ struct Step {
     const char* capture;   /* shot name, or nullptr */
 };
 
-/* Boot → GB list → launch first game through the dummy core (from a ZIP)
- * → verify video/audio/input → in-game menu → save then load a state →
- * exit back to the browser → confirm Recently Played picked it up. */
+/* Phase 4 flow: boot → GBC list (Cave Dave, a real ROM) → Cross triggers
+ * the adaptive core picker (dummy + gambatte both claim gbc) → pick
+ * gambatte → real emulation → save/load a state → exit → relaunch, which
+ * must now SKIP the picker (core remembered per game) → exit → the
+ * detail panel reads "via gambatte". */
 constexpr Step SCRIPT[] = {
     {30,   0,                 "boot"},
     {150,  0,                 "home"},
-    {170,  PSP_CTRL_DOWN,     nullptr},   /* enter GB game list */
-    {230,  0,                 "list_gb"},
-    {250,  PSP_CTRL_CROSS,    nullptr},   /* launch! */
-    {400,  0,                 "game_running"},
-    {420,  PSP_CTRL_CROSS,    nullptr},   /* held button lights indicator */
-    {421,  PSP_CTRL_CROSS,    nullptr},
-    {422,  PSP_CTRL_CROSS,    "game_input"},
-    {460,  PSP_CTRL_LTRIGGER | PSP_CTRL_RTRIGGER, nullptr},
-    {461,  PSP_CTRL_LTRIGGER | PSP_CTRL_RTRIGGER | PSP_CTRL_START, nullptr},
-    {530,  0,                 "game_menu"},
-    {545,  PSP_CTRL_DOWN,     nullptr},   /* → Save state */
-    {560,  PSP_CTRL_CROSS,    nullptr},   /* save slot 1 */
-    {640,  0,                 "menu_saved"},
-    {655,  PSP_CTRL_DOWN,     nullptr},   /* → Load state */
-    {670,  PSP_CTRL_CROSS,    nullptr},   /* load slot 1, resumes */
-    {740,  0,                 "game_loaded"},
-    {760,  PSP_CTRL_LTRIGGER | PSP_CTRL_RTRIGGER, nullptr},
-    {761,  PSP_CTRL_LTRIGGER | PSP_CTRL_RTRIGGER | PSP_CTRL_START, nullptr},
-    {790,  PSP_CTRL_DOWN,     nullptr},
-    {798,  PSP_CTRL_DOWN,     nullptr},
-    {806,  PSP_CTRL_DOWN,     nullptr},
-    {814,  PSP_CTRL_DOWN,     nullptr},
-    {822,  PSP_CTRL_DOWN,     nullptr},   /* → Exit game */
-    {840,  PSP_CTRL_CROSS,    nullptr},
-    {940,  0,                 "home_back"},
-    {960,  PSP_CTRL_CIRCLE,   nullptr},   /* leave list */
-    {975,  PSP_CTRL_LEFT,     nullptr},   /* GB → Favorites → Recent */
-    {983,  PSP_CTRL_LEFT,     nullptr},
-    {1000, PSP_CTRL_DOWN,     nullptr},   /* into Recent list */
-    {1060, 0,                 "recent_list"},
+    {165,  PSP_CTRL_RIGHT,    nullptr},   /* Game Boy → Game Boy Color */
+    {185,  PSP_CTRL_DOWN,     nullptr},   /* into the game list */
+    {240,  0,                 "list_gbc"},
+    {260,  PSP_CTRL_CROSS,    nullptr},   /* launch → adaptive core step */
+    {330,  0,                 "core_picker"},
+    {345,  PSP_CTRL_DOWN,     nullptr},   /* focus the gambatte row */
+    {370,  0,                 "core_picker_gambatte"},
+    {390,  PSP_CTRL_CROSS,    nullptr},   /* run with gambatte */
+    {650,  0,                 "game_title"},
+    {670,  PSP_CTRL_START,    nullptr},   /* past the title screen */
+    {671,  PSP_CTRL_START,    nullptr},
+    {672,  PSP_CTRL_START,    nullptr},
+    {900,  0,                 "game_playing"},
+    {920,  PSP_CTRL_LTRIGGER | PSP_CTRL_RTRIGGER, nullptr},
+    {921,  PSP_CTRL_LTRIGGER | PSP_CTRL_RTRIGGER | PSP_CTRL_START, nullptr},
+    {990,  0,                 "game_menu"},
+    {1005, PSP_CTRL_DOWN,     nullptr},   /* → Save state */
+    {1020, PSP_CTRL_CROSS,    nullptr},   /* save slot 1 */
+    {1100, 0,                 "menu_saved"},
+    {1115, PSP_CTRL_DOWN,     nullptr},   /* → Load state */
+    {1130, PSP_CTRL_CROSS,    nullptr},   /* load slot 1, resumes */
+    {1200, 0,                 "game_loaded"},
+    {1220, PSP_CTRL_LTRIGGER | PSP_CTRL_RTRIGGER, nullptr},
+    {1221, PSP_CTRL_LTRIGGER | PSP_CTRL_RTRIGGER | PSP_CTRL_START, nullptr},
+    {1250, PSP_CTRL_DOWN,     nullptr},
+    {1258, PSP_CTRL_DOWN,     nullptr},
+    {1266, PSP_CTRL_DOWN,     nullptr},
+    {1274, PSP_CTRL_DOWN,     nullptr},
+    {1282, PSP_CTRL_DOWN,     nullptr},   /* → Exit game */
+    {1300, PSP_CTRL_CROSS,    nullptr},
+    {1400, 0,                 "home_back"},
+    /* Relaunch: same game, no picker this time — gambatte is remembered. */
+    {1420, PSP_CTRL_CROSS,    nullptr},
+    {1560, 0,                 "game_direct_relaunch"},
+    {1580, PSP_CTRL_LTRIGGER | PSP_CTRL_RTRIGGER, nullptr},
+    {1581, PSP_CTRL_LTRIGGER | PSP_CTRL_RTRIGGER | PSP_CTRL_START, nullptr},
+    {1610, PSP_CTRL_DOWN,     nullptr},
+    {1618, PSP_CTRL_DOWN,     nullptr},
+    {1626, PSP_CTRL_DOWN,     nullptr},
+    {1634, PSP_CTRL_DOWN,     nullptr},
+    {1642, PSP_CTRL_DOWN,     nullptr},
+    {1660, PSP_CTRL_CROSS,    nullptr},
+    {1770, 0,                 "detail_via_core"},
 };
 constexpr int STEPS = int(sizeof(SCRIPT) / sizeof(SCRIPT[0]));
 

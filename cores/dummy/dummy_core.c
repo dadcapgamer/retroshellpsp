@@ -20,6 +20,8 @@
 
 #ifndef RS_STATIC_BUILD
 #include <pspkernel.h>
+/* Quoted: the C variant of PSP_MODULE_INFO takes a string (only the C++
+ * variant stringifies its argument). */
 PSP_MODULE_INFO("rs_core_dummy", 0, 1, 0);
 #endif
 
@@ -226,7 +228,7 @@ static const RSCoreAPI g_api = {
     RS_CORE_API_VERSION,
     "dummy",
     "1.0",
-    "gb|gbc|gba|nes|sfc|md|sms|gg|pce",
+    "gb|gbc|gba|nes|snes|md|sms|gg|pce",
     "*",
     60.0,
     AUDIO_RATE,

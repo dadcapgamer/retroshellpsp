@@ -12,5 +12,6 @@ void clockNow(int& hour, int& minute);
 
 /* 222 for menus (battery-friendly), 333 for demanding cores. */
 void setCpuMhz(int mhz);
+int  cpuMhz();            /* actual current CPU clock, for diagnostics */
 
 }  // namespace rs::power

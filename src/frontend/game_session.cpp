@@ -14,6 +14,7 @@
 
 #include <pspctrl.h>
 #include <pspgu.h>
+#include <pspkernel.h>
 
 #include <cstdio>
 #include <cstring>
@@ -23,6 +24,9 @@ namespace rs {
 namespace {
 constexpr u32 MENU_COMBO = PSP_CTRL_LTRIGGER | PSP_CTRL_RTRIGGER;
 constexpr float SRAM_FLUSH_SECONDS = 10.f;
+/* Most emulation frames to run in one display frame before conceding the
+ * game must slow down — bounds catch-up so a slow frame can't spiral. */
+constexpr int MAX_CATCHUP = 4;
 
 const char* MENU_LABELS[] = {
     "Resume", "Save state", "Load state", "Reset", "Screenshot", "Exit game",
@@ -34,6 +38,13 @@ const char* MENU_LABELS[] = {
 /* ---------------------------------------------------------------------- */
 
 bool GameSession::startCore(App& app) {
+    const CoreInfo* info = app.cores().find(m_coreName.c_str());
+    if (!info) {
+        std::snprintf(m_error, sizeof m_error, "core '%s' not installed",
+                      m_coreName.c_str());
+        return false;
+    }
+
     /* 1. Evict frontend caches (the arena/vram space becomes the core's). */
     app.evictForCore();
 
@@ -42,8 +53,7 @@ bool GameSession::startCore(App& app) {
      * is released around the load and re-reserved afterwards. */
     mem::shutdown();
 #endif
-    const char* coreName = CoreManager::coreForSystem(m_game.system);
-    const bool loaded = m_cores.loadCore(coreName);
+    const bool loaded = m_cores.loadCore(*info);
 #ifndef RS_STATIC_CORES
     if (!mem::init()) {
         std::snprintf(m_error, sizeof m_error, "arena re-reserve failed");
@@ -113,8 +123,18 @@ bool GameSession::startCore(App& app) {
     save::loadSram(m_game, m_cores.core());
     audio::clear();
 
+    /* Resolve per-game video options once, here, not per frame. */
+    const std::string scale = cfg::gameOption(m_game.pathHash, "scale");
+    m_scaleMode = scale == "1:1"     ? ScaleMode::OneToOne
+                : scale == "stretch" ? ScaleMode::Stretch
+                                     : ScaleMode::Fit;
+    m_nearestFilter = cfg::gameOption(m_game.pathHash, "filter") == "nearest";
+
     power::setCpuMhz(cfg::get().cpuGameMhz);
     app.library().notePlayed(m_game.pathHash);
+    /* Pin the game to this core from now on: its save states and SRAM
+     * belong to this core's format. */
+    cfg::setGameOption(m_game.pathHash, "core", m_coreName.c_str());
     RS_LOGI("session: '%s' running (%u KB arena free)", m_game.name.c_str(),
             unsigned(mem::available() / 1024));
     return true;
@@ -193,7 +213,38 @@ void GameSession::updateRunning(App& app, float dt) {
 
     const u32 buttons = mapButtons(pad);
     host::setInputState(buttons);
-    m_cores.core().runFrame(buttons);
+
+    /* Pace emulation by wall clock at the core's native rate, decoupled
+     * from the vsync'd display. If the display drops to 30fps, we run the
+     * two emulation frames that 33ms represents rather than let the game
+     * clock — and its audio — run at half speed. Video may skip; game
+     * speed stays correct. MAX_CATCHUP bounds the work so a machine that
+     * genuinely can't keep up slows down gracefully instead of spiralling. */
+    const float period = 1.f / float(m_cores.core().fps());
+    m_emuAccum += dt;
+    int ran = 0;
+    const u32 emuStart = sceKernelGetSystemTimeLow();
+    while (m_emuAccum >= period && ran < MAX_CATCHUP) {
+        m_cores.core().runFrame(buttons);
+        m_emuAccum -= period;
+        ran++;
+    }
+    if (ran >= MAX_CATCHUP) m_emuAccum = 0.f;
+    m_perfEmuUs += sceKernelGetSystemTimeLow() - emuStart;
+
+    /* Timing report once per second. m_perfFrames counts emulated frames,
+     * so it reads ~60 when the game is running at full speed. */
+    m_perfFrames += ran;
+    m_perfElapsed += dt;
+    if (m_perfElapsed >= 1.f) {
+        RS_LOGI("perf: %d emu-fps | emu %u us/frame | cpu %d MHz | audio buf %u",
+                m_perfFrames,
+                unsigned(m_perfEmuUs / u32(m_perfFrames > 0 ? m_perfFrames : 1)),
+                power::cpuMhz(), unsigned(audio::buffered()));
+        m_perfElapsed = 0.f;
+        m_perfEmuUs = 0;
+        m_perfFrames = 0;
+    }
 
     /* Periodic battery-save flush. */
     m_sramTimer += dt;
@@ -341,13 +392,12 @@ void GameSession::drawFrame(App& app) {
     }
     gfx::Renderer::updateTexture(m_frameTex, f.pixels, f.pitch);
 
-    /* Scale mode: fit (default), stretch, or 1:1 via per-game option. */
+    /* Scale mode resolved at launch (see m_scaleMode). */
     float dw, dh;
-    const std::string mode = cfg::gameOption(m_game.pathHash, "scale");
-    if (mode == "1:1") {
+    if (m_scaleMode == ScaleMode::OneToOne) {
         dw = f.width;
         dh = f.height;
-    } else if (mode == "stretch") {
+    } else if (m_scaleMode == ScaleMode::Stretch) {
         dw = RS_SCREEN_W;
         dh = RS_SCREEN_H;
     } else {
@@ -356,9 +406,8 @@ void GameSession::drawFrame(App& app) {
         dw = f.width * s;
         dh = f.height * s;
     }
-    r.setTexFilter(cfg::gameOption(m_game.pathHash, "filter") == "nearest"
-                       ? gfx::TexFilter::Nearest
-                       : gfx::TexFilter::Linear);
+    r.setTexFilter(m_nearestFilter ? gfx::TexFilter::Nearest
+                                   : gfx::TexFilter::Linear);
     r.sprite(m_frameTex, 0, 0, f.width, f.height, (RS_SCREEN_W - dw) / 2.f,
              (RS_SCREEN_H - dh) / 2.f, dw, dh, rsHex(0xFFFFFF));
     r.setTexFilter(gfx::TexFilter::Linear);
@@ -385,9 +434,8 @@ void GameSession::drawMenu(App& app) {
 
     const float listY = py + 26.f;
     const float hy = listY + m_menuPos.v * rowH;
-    ui::prim::roundedRect(r, px + 8.f, hy, pw - 16.f, rowH - 3.f, 8.f,
-                          rsHex(0xFFFFFF, a / 9u));
-    r.rect(px + 12.f, hy + 5.f, 3.f, rowH - 13.f, rsWithAlpha(pal.accent, a));
+    ui::prim::focusRow(r, px + 8.f, hy, pw - 16.f, rowH - 3.f,
+                       rsHex(0xFFFFFF, a / 9u), rsWithAlpha(pal.accent, a));
 
     for (int i = 0; i < MENU_COUNT; i++) {
         const bool sel = i == m_menuRow;

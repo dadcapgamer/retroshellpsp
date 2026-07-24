@@ -24,7 +24,8 @@ namespace rs {
 
 class GameSession : public Scene {
 public:
-    explicit GameSession(db::GameEntry game) : m_game(std::move(game)) {}
+    GameSession(db::GameEntry game, std::string coreName)
+        : m_game(std::move(game)), m_coreName(std::move(coreName)) {}
 
     void enter(App& app) override;
     void update(App& app, float dt) override;
@@ -53,8 +54,16 @@ private:
     u32  mapButtons(const input::Pad& pad) const;
 
     db::GameEntry m_game;
+    std::string m_coreName;
     CoreManager m_cores;
     State m_state = State::Starting;
+
+    /* Video options resolved once at launch — reading them per frame means
+     * a Memory Stick read + JSON parse every frame, which is invisible in
+     * PPSSPP but drops real hardware to a couple of fps. */
+    enum class ScaleMode { Fit, Stretch, OneToOne };
+    ScaleMode m_scaleMode = ScaleMode::Fit;
+    bool m_nearestFilter = false;
 
     gfx::Texture m_frameTex;
     u16 m_frameW = 0, m_frameH = 0;
@@ -68,7 +77,18 @@ private:
     int m_thumbSlot = -1;          /* slot currently in m_thumbTex */
 
     float m_sramTimer = 0.f;
-    char m_error[96] = {};
+
+    /* Wall-clock accumulator that paces emulation at the core's native
+     * frame rate, decoupled from the display refresh (see updateRunning). */
+    float m_emuAccum = 0.f;
+
+    /* Once-per-second performance sample written to the log — the only way
+     * to see real-hardware timing, which PPSSPP can't reproduce. */
+    float m_perfElapsed = 0.f;
+    u32   m_perfEmuUs   = 0;
+    int   m_perfFrames  = 0;
+
+    char m_error[160] = {};    /* sized to relay CoreManager::error() */
 };
 
 }  // namespace rs

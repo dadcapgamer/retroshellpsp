@@ -14,6 +14,8 @@ add_executable(retrosuite
   runtime/save_manager.cpp
   frontend/app.cpp
   frontend/core_manager.cpp
+  frontend/core_registry.cpp
+  runtime/jsonfile.cpp
   frontend/game_session.cpp
   frontend/autopilot.cpp
   frontend/text/font.cpp

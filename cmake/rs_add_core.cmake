@@ -20,6 +20,13 @@ execute_process(COMMAND psp-config --pspsdk-path
                 OUTPUT_VARIABLE RS_PSPSDK_PATH
                 OUTPUT_STRIP_TRAILING_WHITESPACE)
 
+foreach(crt crti crtbegin crtend crtn)
+  string(TOUPPER ${crt} crt_upper)
+  execute_process(COMMAND psp-gcc -print-file-name=${crt}.o
+                  OUTPUT_VARIABLE RS_${crt_upper}_O
+                  OUTPUT_STRIP_TRAILING_WHITESPACE)
+endforeach()
+
 function(rs_add_core name)
   cmake_parse_arguments(ARG "" "" "SOURCES;LIBS" ${ARGN})
   set(target rs_core_${name})
@@ -44,11 +51,23 @@ function(rs_add_core name)
     set_target_properties(${target} PROPERTIES
       OUTPUT_NAME ${name}
       SUFFIX .elf)
+    # PSP_MODULE_INFO stringifies its first argument, so this must be an
+    # unquoted token, not a string.
+    target_compile_definitions(${target} PRIVATE
+      RS_CORE_MODULE_ID=rs_core_${name})
+    # -nostartfiles drops crt0 (a plugin must not own module_start or spawn
+    # a main thread), but C++ cores still need the ctor/dtor machinery from
+    # the crt objects: crti+crtbegin ahead of our objects, crtend+crtn
+    # after (CMake puts link *options* before objects and link *libraries*
+    # after, which yields exactly that order). The shim then runs
+    # constructors by calling _init(). crtbegin also provides __dso_handle.
     target_link_options(${target} PRIVATE
       -Wl,-q
       -T${RS_PSPSDK_PATH}/lib/linkfile.prx
       -nostartfiles
-      -Wl,-zmax-page-size=128)
+      -Wl,-zmax-page-size=128
+      ${RS_CRTI_O} ${RS_CRTBEGIN_O})
+    target_link_libraries(${target} PRIVATE ${RS_CRTEND_O} ${RS_CRTN_O})
 
     add_custom_command(
       TARGET ${target} POST_BUILD
@@ -60,6 +79,21 @@ function(rs_add_core name)
               ${CMAKE_BINARY_DIR}/cores/${name}.prx
       COMMENT "Packaging core ${name}.prx"
       VERBATIM)
+
+    # The manifest ships beside the .prx so CoreRegistry can list the core
+    # without loading it (see src/frontend/core_registry.h).
+    if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/manifest.json)
+      add_custom_command(
+        TARGET ${target} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                ${CMAKE_CURRENT_SOURCE_DIR}/manifest.json
+                ${CMAKE_BINARY_DIR}/cores/${name}.json
+        VERBATIM)
+    else()
+      message(WARNING
+        "core '${name}' has no manifest.json — it will not be discovered "
+        "in PRX builds")
+    endif()
   endif()
 
   target_include_directories(${target} PRIVATE ${CMAKE_SOURCE_DIR}/src)

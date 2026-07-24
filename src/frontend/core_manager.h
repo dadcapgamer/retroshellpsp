@@ -11,25 +11,26 @@
  */
 #pragma once
 
-#include "frontend/database/systems.h"
+#include "frontend/core_registry.h"
 #include "frontend/emulator_core.h"
 #include "rs_common.h"
-
-#include <string>
 
 namespace rs {
 
 class CoreManager {
 public:
-    /* Which core serves this system (Phase 3: the dummy core for all). */
-    static const char* coreForSystem(db::System s);
-
     /* Loads the module and adopts its API table. The caller must still run
      * core().initialize(host::table()) — after the memory arena is back in
      * place, since cores may allocate during init. On failure the manager
      * is left empty and error() explains why. */
-    bool loadCore(const char* name);
+    bool loadCore(const CoreInfo& info);
     void unloadCore();
+
+#ifdef RS_STATIC_CORES
+    /* The linked-in cores, for CoreRegistry::discover(). */
+    static int staticCoreCount();
+    static const RSCoreAPI* staticCoreApi(int i);
+#endif
 
     bool loaded() const { return m_core.valid(); }
     EmulatorCore& core() { return m_core; }
@@ -38,7 +39,7 @@ public:
 private:
     EmulatorCore m_core;
     int  m_moduleId = -1;      /* PRX SceUID, or -1 when static/unloaded */
-    char m_error[96] = {};
+    char m_error[160] = {};    /* roomy enough for a full module path */
 };
 
 }  // namespace rs

@@ -24,4 +24,6 @@ void setCpuMhz(int mhz) {
     scePowerSetClockFrequency(mhz, mhz, mhz / 2);
 }
 
+int cpuMhz() { return scePowerGetCpuClockFrequency(); }
+
 }  // namespace rs::power

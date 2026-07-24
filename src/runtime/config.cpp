@@ -1,4 +1,5 @@
 #include "runtime/config.h"
+#include "runtime/jsonfile.h"
 #include "platform/psp/fs_psp.h"
 #include "runtime/log.h"
 
@@ -17,26 +18,12 @@ void gamePath(char* buf, size_t n, u32 hash) {
     std::snprintf(buf, n, "ms0:/RETROSUITE/pergame/%08x.json", unsigned(hash));
 }
 
-cJSON* parseFile(const char* path) {
-    std::vector<u8> buf;
-    if (!fs::readFile(path, buf)) return nullptr;
-    buf.push_back(0);
-    return cJSON_Parse(reinterpret_cast<const char*>(buf.data()));
-}
-
-bool writeJson(const char* path, cJSON* root) {
-    char* text = cJSON_Print(root);
-    if (!text) return false;
-    const bool ok = fs::writeFile(path, text, u32(std::strlen(text)));
-    cJSON_free(text);
-    return ok;
-}
 }  // namespace
 
 Config& get() { return s_cfg; }
 
 void load() {
-    cJSON* root = parseFile(CFG_PATH);
+    cJSON* root = json::parseFile(CFG_PATH);
     if (!root) return;
     if (const cJSON* v = cJSON_GetObjectItemCaseSensitive(root, "theme");
         cJSON_IsString(v))
@@ -68,14 +55,14 @@ void save() {
     cJSON_AddBoolToObject(root, "showFps", s_cfg.showFps);
     cJSON_AddBoolToObject(root, "autosave", s_cfg.autosave);
     fs::mkdirs(fs::ROOT);
-    if (!writeJson(CFG_PATH, root)) RS_LOGW("config: save failed");
+    if (!json::writeFile(CFG_PATH, root)) RS_LOGW("config: save failed");
     cJSON_Delete(root);
 }
 
 std::string gameOption(u32 pathHash, const char* key) {
     char path[96];
     gamePath(path, sizeof path, pathHash);
-    cJSON* root = parseFile(path);
+    cJSON* root = json::parseFile(path);
     if (!root) return {};
     std::string out;
     if (const cJSON* v = cJSON_GetObjectItemCaseSensitive(root, key);
@@ -88,12 +75,12 @@ std::string gameOption(u32 pathHash, const char* key) {
 void setGameOption(u32 pathHash, const char* key, const char* value) {
     char path[96];
     gamePath(path, sizeof path, pathHash);
-    cJSON* root = parseFile(path);
+    cJSON* root = json::parseFile(path);
     if (!root) root = cJSON_CreateObject();
     cJSON_DeleteItemFromObjectCaseSensitive(root, key);
     cJSON_AddStringToObject(root, key, value);
     fs::mkdirs("ms0:/RETROSUITE/pergame");
-    writeJson(path, root);
+    json::writeFile(path, root);
     cJSON_Delete(root);
 }
 

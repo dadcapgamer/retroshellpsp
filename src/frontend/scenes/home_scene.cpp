@@ -93,6 +93,17 @@ void HomeScene::rebuildList(App& app) {
             if (const auto* g = app.index().byHash(h)) m_visible.push_back(g);
     }
     m_lastIndexCount = u32(app.index().totalCount());
+    refreshSelection(app);
+}
+
+void HomeScene::refreshSelection(App& app) {
+    m_selCore = nullptr;
+    m_selMultiCore = false;
+    if (m_visible.empty()) return;
+    const auto& g =
+        *m_visible[size_t(rsClamp(m_listIdx, 0, int(m_visible.size()) - 1))];
+    m_selCore = app.cores().resolve(g);
+    m_selMultiCore = app.cores().hasChoice(g.system);
 }
 
 void HomeScene::updateCats(App& app) {
@@ -125,6 +136,7 @@ void HomeScene::updateCats(App& app) {
 
 void HomeScene::updateList(App& app) {
     const auto& pad = app.pad();
+    const int prevIdx = m_listIdx;
     if (pad.navPressed(PSP_CTRL_UP)) {
         if (m_listIdx > 0) m_listIdx--;
         else m_inList = false;
@@ -132,6 +144,7 @@ void HomeScene::updateList(App& app) {
     if (pad.navPressed(PSP_CTRL_DOWN) &&
         m_listIdx < int(m_visible.size()) - 1)
         m_listIdx++;
+    if (m_listIdx != prevIdx) refreshSelection(app);
     if (pad.isPressed(PSP_CTRL_CIRCLE)) m_inList = false;
 
     if (pad.isPressed(PSP_CTRL_TRIANGLE) && !m_visible.empty()) {
@@ -148,8 +161,103 @@ void HomeScene::updateList(App& app) {
         }
     }
 
+    if (pad.isPressed(PSP_CTRL_SQUARE) && !m_visible.empty()) {
+        openCorePicker(app, *m_visible[size_t(m_listIdx)]);
+    }
+
     if (pad.isPressed(PSP_CTRL_CROSS) && !m_visible.empty()) {
-        app.launchGame(*m_visible[size_t(m_listIdx)]);
+        const auto& game = *m_visible[size_t(m_listIdx)];
+        if (app.cores().needsChoice(game))
+            openCorePicker(app, game);
+        else
+            app.launchGame(game);
+    }
+}
+
+/* ---------------------------------------------------------------------- */
+/* Core picker                                                             */
+/* ---------------------------------------------------------------------- */
+
+void HomeScene::openCorePicker(App& app, const db::GameEntry& game) {
+    m_pickerCores = app.cores().coresFor(game.system);
+    if (m_pickerCores.empty()) {
+        app.launchGame(game);   /* reuses its "no core installed" toast */
+        return;
+    }
+    m_pickerGame = game;
+    m_pickerCurrent = app.cores().resolve(game);
+    m_pickerOpen = true;
+    m_pickerFade.start(0.18f);
+
+    /* Preselect what a plain launch would use. */
+    m_pickerIdx = 0;
+    for (size_t i = 0; i < m_pickerCores.size(); i++)
+        if (m_pickerCores[i] == m_pickerCurrent) m_pickerIdx = int(i);
+}
+
+void HomeScene::updatePicker(App& app) {
+    const auto& pad = app.pad();
+    if (pad.navPressed(PSP_CTRL_UP) && m_pickerIdx > 0) m_pickerIdx--;
+    if (pad.navPressed(PSP_CTRL_DOWN) &&
+        m_pickerIdx < int(m_pickerCores.size()) - 1)
+        m_pickerIdx++;
+
+    if (pad.isPressed(PSP_CTRL_CIRCLE)) m_pickerOpen = false;
+
+    if (pad.isPressed(PSP_CTRL_CROSS)) {
+        m_pickerOpen = false;
+        /* GameSession persists the pick once the core actually boots. */
+        app.launchGame(m_pickerGame, m_pickerCores[size_t(m_pickerIdx)]);
+    }
+}
+
+void HomeScene::drawPicker(App& app) {
+    auto& r = app.renderer();
+    const auto& pal = app.pal();
+    const auto& fonts = app.fonts();
+    const float t = ui::easeOutCubic(m_pickerFade.t);
+    const u32 a = u32(t * 255.f);
+
+    r.rect(0, 0, RS_SCREEN_W, RS_SCREEN_H,
+           rsWithAlpha(pal.scrim, a * 130u / 255u));
+
+    const float rowH = 28.f;
+    const float pw = 250.f;
+    const float ph = 58.f + rowH * float(m_pickerCores.size());
+    const float px = (RS_SCREEN_W - pw) / 2.f;
+    const float py = (RS_SCREEN_H - ph) / 2.f - (1.f - t) * 10.f;
+
+    ui::prim::roundedRect(r, px, py, pw, ph, 12.f,
+                          rsWithAlpha(pal.menuBg, a));
+    ui::prim::roundedOutline(r, px, py, pw, ph, 12.f,
+                             rsWithAlpha(pal.panelOutline, a));
+
+    fonts.small.draw(r, px + 16.f, py + 12.f, "RUN WITH",
+                     rsWithAlpha(pal.accent, a), text::Align::Left);
+    fonts.small.draw(r, px + pw - 16.f, py + 12.f,
+                     m_pickerGame.name.c_str(),
+                     rsWithAlpha(pal.textDim, a), text::Align::Right);
+
+    float ry = py + 36.f;
+    for (size_t i = 0; i < m_pickerCores.size(); i++, ry += rowH) {
+        const CoreInfo& c = *m_pickerCores[i];
+        const bool focused = int(i) == m_pickerIdx;
+        if (focused)
+            ui::prim::focusRow(r, px + 8.f, ry, pw - 16.f, rowH - 4.f,
+                               rsWithAlpha(pal.tileFocusBg,
+                                           rsAlphaOf(pal.tileFocusBg) * a /
+                                               255u),
+                               rsWithAlpha(pal.accent, a));
+        fonts.body.draw(r, px + 22.f, ry + 3.f, c.name.c_str(),
+                        rsWithAlpha(focused ? pal.textPrimary : pal.textDim, a),
+                        text::Align::Left);
+        /* Right column: version, plus a marker on the game's current core. */
+        char right[32];
+        std::snprintf(right, sizeof right, "%s%s", c.version.c_str(),
+                      (&c == m_pickerCurrent) ? "  \xE2\x80\xA2" : "");
+        fonts.small.draw(r, px + pw - 18.f, ry + 5.f, right,
+                         rsWithAlpha(pal.textDim, a * 3u / 4u),
+                         text::Align::Right);
     }
 }
 
@@ -162,7 +270,8 @@ void HomeScene::update(App& app, float dt) {
         if (m_visible.empty()) m_inList = false;
     }
 
-    if (m_inList) updateList(app);
+    if (m_pickerOpen) updatePicker(app);
+    else if (m_inList) updateList(app);
     else updateCats(app);
 
     app.snapshot().catIdx  = m_catIdx;
@@ -177,6 +286,7 @@ void HomeScene::update(App& app, float dt) {
     m_scroll.update(dt, 13.f);
     m_entrance.update(dt);
     m_pulse.update(dt);
+    m_pickerFade.update(dt);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -404,6 +514,15 @@ void HomeScene::drawGameList(App& app, float focus) {
                       unsigned(g->size / 1024));
     fonts.small.draw(r, px + pw / 2.f, ty, facts,
                      rsWithAlpha(pal.textDim, a), text::Align::Center);
+
+    if (m_selCore) {
+        ty += 13.f;
+        char via[40];
+        std::snprintf(via, sizeof via, "via %s", m_selCore->name.c_str());
+        fonts.small.draw(r, px + pw / 2.f, ty, via,
+                         rsWithAlpha(pal.textDim, a * 3u / 5u),
+                         text::Align::Center);
+    }
 }
 
 void HomeScene::draw(App& app) {
@@ -422,13 +541,22 @@ void HomeScene::draw(App& app) {
         drawEmptyPanel(app, enterA);
     drawGameList(app, focus);
 
-    if (m_inList) {
+    if (m_pickerOpen) {
         const App::Hint hints[] = {
             {ui::prim::Button::Cross, "Play"},
-            {ui::prim::Button::Triangle, "Favorite"},
-            {ui::prim::Button::Circle, "Back"},
+            {ui::prim::Button::Circle, "Cancel"},
         };
-        app.drawHintBar(hints, 3);
+        app.drawHintBar(hints, 2);
+        drawPicker(app);
+    } else if (m_inList) {
+        /* Advertise the core switcher only where it has something to
+         * switch between. */
+        App::Hint hints[4] = {{ui::prim::Button::Cross, "Play"},
+                              {ui::prim::Button::Triangle, "Favorite"}};
+        int n = 2;
+        if (m_selMultiCore) hints[n++] = {ui::prim::Button::Square, "Core"};
+        hints[n++] = {ui::prim::Button::Circle, "Back"};
+        app.drawHintBar(hints, n);
     } else {
         const App::Hint hints[] = {
             {ui::prim::Button::Cross, "Open"},

@@ -4,6 +4,7 @@
  */
 #pragma once
 
+#include "frontend/core_registry.h"
 #include "frontend/database/game_index.h"
 #include "frontend/database/library.h"
 #include "frontend/database/metadata.h"
@@ -45,6 +46,7 @@ public:
     db::Library&      library()        { return m_library; }
     db::BoxartCache&  boxart()         { return m_boxart; }
     db::RomScanner&   scanner()        { return m_scanner; }
+    CoreRegistry&     cores()          { return m_cores; }
     FrontendSnapshot& snapshot()       { return m_snapshot; }
 
     struct Fonts {
@@ -66,8 +68,12 @@ public:
     /* Takes ownership; transitions through a brief scrim fade. */
     void switchScene(std::unique_ptr<Scene> next, bool instant = false);
 
-    /* Starts a GameSession for this library entry. */
-    void launchGame(const db::GameEntry& game);
+    /* Starts a GameSession. `core` is the picker's explicit choice; by
+     * default the game's core comes from CoreRegistry::resolve. Callers
+     * that want the adaptive core step check cores().needsChoice() first
+     * and open the picker instead. Toasts and stays put when no core
+     * serves the game. */
+    void launchGame(const db::GameEntry& game, const CoreInfo* core = nullptr);
 
     /* Bi-layer launch protocol (called by GameSession):
      * evictForCore drops every large frontend resource — box art, theme
@@ -104,6 +110,7 @@ private:
     db::RomScanner  m_scanner;
     db::Library     m_library;
     db::BoxartCache m_boxart;
+    CoreRegistry    m_cores;
     FrontendSnapshot m_snapshot;
 
     std::unique_ptr<Scene> m_scene;

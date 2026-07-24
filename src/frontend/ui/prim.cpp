@@ -145,6 +145,12 @@ void roundedOutline(gfx::Renderer& r, float x, float y, float w, float h,
     nineSlice(r, s_roundRing, x, y, w, h, c, color);
 }
 
+void focusRow(gfx::Renderer& r, float x, float y, float w, float h,
+              u32 fill, u32 bar) {
+    roundedRect(r, x, y, w, h, 8.f, fill);
+    r.rect(x + 4.f, y + 4.f, 3.f, h - 8.f, bar);
+}
+
 void circle(gfx::Renderer& r, float cx, float cy, float radius, u32 color) {
     r.sprite(s_disc, 0, 0, TILE, TILE, cx - radius, cy - radius, radius * 2.f,
              radius * 2.f, color);
