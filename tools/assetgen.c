@@ -150,11 +150,16 @@ static Canvas canvas_new(int w, int h) {
 }
 
 static void canvas_vgradient(Canvas* c, uint32_t top, uint32_t bottom) {
+    /* Signed component math — unsigned deltas underflow when the gradient
+     * gets darker. */
+    const int tr = (top >> 16) & 0xFF, tg = (top >> 8) & 0xFF, tb = top & 0xFF;
+    const int br = (bottom >> 16) & 0xFF, bg = (bottom >> 8) & 0xFF,
+              bb = bottom & 0xFF;
     for (int y = 0; y < c->h; y++) {
         float t = (float)y / (float)(c->h - 1);
-        unsigned char r = (unsigned char)(((top >> 16) & 0xFF) + t * (((bottom >> 16) & 0xFF) - ((top >> 16) & 0xFF)));
-        unsigned char g = (unsigned char)(((top >> 8) & 0xFF) + t * (((bottom >> 8) & 0xFF) - ((top >> 8) & 0xFF)));
-        unsigned char b = (unsigned char)((top & 0xFF) + t * ((bottom & 0xFF) - (top & 0xFF)));
+        unsigned char r = (unsigned char)(tr + t * (br - tr));
+        unsigned char g = (unsigned char)(tg + t * (bg - tg));
+        unsigned char b = (unsigned char)(tb + t * (bb - tb));
         for (int x = 0; x < c->w; x++) {
             unsigned char* p = c->px + (y * c->w + x) * 4;
             p[0] = r; p[1] = g; p[2] = b; p[3] = 0xFF;
@@ -195,9 +200,9 @@ static int canvas_text(Canvas* c, const stbtt_fontinfo* font, float px,
                         if (pxx < 0 || pxx >= c->w) continue;
                         float a = alpha * bmp[yy * gw + xx] / 255.0f;
                         unsigned char* p = c->px + (py * c->w + pxx) * 4;
-                        p[0] = (unsigned char)(p[0] + a * (((rgb >> 16) & 0xFF) - p[0]));
-                        p[1] = (unsigned char)(p[1] + a * (((rgb >> 8) & 0xFF) - p[1]));
-                        p[2] = (unsigned char)(p[2] + a * ((rgb & 0xFF) - p[2]));
+                        p[0] = (unsigned char)(p[0] + a * ((int)((rgb >> 16) & 0xFF) - p[0]));
+                        p[1] = (unsigned char)(p[1] + a * ((int)((rgb >> 8) & 0xFF) - p[1]));
+                        p[2] = (unsigned char)(p[2] + a * ((int)(rgb & 0xFF) - p[2]));
                     }
                 }
                 free(bmp);

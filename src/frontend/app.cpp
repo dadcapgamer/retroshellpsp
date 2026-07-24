@@ -1,7 +1,9 @@
 #include "frontend/app.h"
 #include "frontend/autopilot.h"
 #include "frontend/scenes/boot_scene.h"
+#include "platform/psp/fs_psp.h"
 #include "platform/psp/power.h"
+#include "runtime/config.h"
 #include "runtime/log.h"
 
 #include <pspkernel.h>
@@ -41,10 +43,19 @@ bool App::init() {
     }
 
     m_pad.init();
-    m_pal = m_darkTheme ? theme::dark() : theme::light();
-    m_themeFrom = m_pal;
-    m_lastUs = sceKernelGetSystemTimeLow();
 
+    cfg::load();
+    power::setCpuMhz(cfg::get().cpuMenuMhz);
+
+    m_theme = theme::loadTheme(cfg::get().theme);
+    m_pal = m_theme.palette;
+    m_themeFrom = m_pal;
+
+    m_library.load();
+    if (!m_index.loadCache()) RS_LOGI("index: no cache yet");
+    m_scanner.start();
+
+    m_lastUs = sceKernelGetSystemTimeLow();
     switchScene(std::make_unique<BootScene>(), /*instant=*/true);
     RS_LOGI("app: init complete");
     return true;
@@ -53,6 +64,8 @@ bool App::init() {
 void App::shutdown() {
     m_scene.reset();
     m_pending.reset();
+    m_boxart.clear();
+    m_theme.freeAssets();
     m_fonts.title.unload();
     m_fonts.large.unload();
     m_fonts.body.unload();
@@ -60,11 +73,19 @@ void App::shutdown() {
     m_renderer.shutdown();
 }
 
-void App::setTheme(bool dark) {
-    if (dark == m_darkTheme) return;
+void App::setThemeById(const std::string& id) {
+    if (id == m_theme.id) return;
     m_themeFrom = m_pal;
-    m_darkTheme = dark;
+    m_theme.freeAssets();
+    m_boxart.clear();   /* texture VRAM may be reshuffled by new theme */
+    m_theme = theme::loadTheme(id);
     m_themeFade.start(0.3f);
+    cfg::get().theme = m_theme.id;
+    cfg::save();
+}
+
+void App::toggleTheme() {
+    setThemeById(darkTheme() ? "light" : "dark");
 }
 
 void App::switchScene(std::unique_ptr<Scene> next, bool instant) {
@@ -78,6 +99,11 @@ void App::switchScene(std::unique_ptr<Scene> next, bool instant) {
     m_pending = std::move(next);
     m_fadingOut = true;
     m_sceneFade.start(0.15f);
+}
+
+void App::toast(const char* msg) {
+    std::snprintf(m_toastMsg, sizeof m_toastMsg, "%s", msg);
+    m_toastTween.start(2.4f);
 }
 
 void App::run() {
@@ -94,6 +120,8 @@ void App::run() {
         update(dt);
         draw();
     }
+    /* Persist small state on the way out. */
+    m_library.save();
 }
 
 void App::update(float dt) {
@@ -102,8 +130,9 @@ void App::update(float dt) {
     /* Theme crossfade. */
     if (m_themeFade.running()) {
         const float t = ui::easeInOutQuad(m_themeFade.update(dt));
-        m_pal = theme::blend(m_themeFrom,
-                             m_darkTheme ? theme::dark() : theme::light(), t);
+        m_pal = theme::blend(m_themeFrom, m_theme.palette, t);
+    } else {
+        m_pal = m_theme.palette;
     }
 
     /* Scene transition: fade out, swap, fade back in. */
@@ -117,12 +146,22 @@ void App::update(float dt) {
         }
     }
 
+    /* Fold in finished scans. */
+    std::vector<db::GameEntry> results;
+    if (m_scanner.takeResults(results)) {
+        m_index.replaceAll(std::move(results));
+        m_index.saveCache();
+        RS_LOGI("index: refreshed, %d games", m_index.totalCount());
+    }
+
     /* Battery/clock polling is cheap but not free — every ~2s. */
     if (--m_batteryPoll <= 0) {
         m_batteryPoll = 120;
         m_batteryPct = power::batteryPercent();
         m_batteryChg = power::batteryCharging();
     }
+
+    m_toastTween.update(dt);
 
 #ifdef RS_DEBUG_OVERLAY
     if (m_pad.isPressed(PSP_CTRL_TRIANGLE) && m_pad.isHeld(PSP_CTRL_LTRIGGER))
@@ -136,6 +175,9 @@ void App::draw() {
     m_renderer.beginFrame(m_pal.bgBottom);
     if (m_scene) m_scene->draw(*this);
 
+    drawScanStatus();
+    drawToast();
+
     /* Scene-transition scrim on top of everything. */
     if (m_sceneFade.running() || m_fadingOut) {
         const float t = m_sceneFade.t;
@@ -145,7 +187,7 @@ void App::draw() {
     }
 
 #ifdef RS_DEBUG_OVERLAY
-    if (m_showOverlay) drawDebugOverlay();
+    if (m_showOverlay || cfg::get().showFps) drawDebugOverlay();
 #endif
     m_renderer.endFrame();
 }
@@ -174,10 +216,18 @@ void App::drawWave(float baseY, float amp, float freq, float speed,
 }
 
 void App::drawBackground() {
-    m_renderer.rectV(0, 0, RS_SCREEN_W, RS_SCREEN_H, m_pal.bgTop,
-                     m_pal.bgBottom);
-    drawWave(158.f, 16.f, 1.0f, 0.45f, 0.0f, 130.f, m_pal.waveA);
-    drawWave(186.f, 12.f, 1.4f, 0.32f, 2.1f, 100.f, m_pal.waveB);
+    if (m_theme.background.valid()) {
+        m_renderer.sprite(m_theme.background, 0, 0,
+                          m_theme.background.width, m_theme.background.height,
+                          0, 0, RS_SCREEN_W, RS_SCREEN_H, rsHex(0xFFFFFF));
+    } else {
+        m_renderer.rectV(0, 0, RS_SCREEN_W, RS_SCREEN_H, m_pal.bgTop,
+                         m_pal.bgBottom);
+    }
+    if (m_theme.waves) {
+        drawWave(158.f, 16.f, 1.0f, 0.45f, 0.0f, 130.f, m_pal.waveA);
+        drawWave(186.f, 12.f, 1.4f, 0.32f, 2.1f, 100.f, m_pal.waveB);
+    }
 }
 
 void App::drawTopBar() {
@@ -208,6 +258,40 @@ void App::drawHintBar(const Hint* hints, int count) {
                               RS_SCREEN_H - 13.f, 6.f, m_pal.textSecondary);
         x -= 18.f;
     }
+}
+
+void App::drawToast() {
+    if (!m_toastTween.running() || !m_toastMsg[0]) return;
+    const float t = m_toastTween.t;
+    /* Quick fade in, hold, fade out. */
+    float a = 1.f;
+    if (t < 0.1f) a = t / 0.1f;
+    else if (t > 0.8f) a = (1.f - t) / 0.2f;
+    const u32 alpha = u32(a * 235.f);
+
+    const float w = m_fonts.body.measure(m_toastMsg) + 36.f;
+    const float x = (RS_SCREEN_W - w) / 2.f;
+    const float y = RS_SCREEN_H - 46.f;
+    ui::prim::roundedRect(m_renderer, x, y, w, 26.f, 12.f,
+                          rsWithAlpha(darkTheme() ? rsHex(0x2A3242)
+                                                  : rsHex(0x353C4A),
+                                      alpha));
+    m_fonts.body.draw(m_renderer, RS_SCREEN_W / 2.f, y + 4.f, m_toastMsg,
+                      rsWithAlpha(rsHex(0xF2F5FA), alpha),
+                      text::Align::Center);
+}
+
+void App::drawScanStatus() {
+    if (!m_scanner.running()) return;
+    /* Spinner: orbiting dot. */
+    const float cx = 22.f, cy = RS_SCREEN_H - 14.f;
+    ui::prim::ring(m_renderer, cx, cy, 7.f, rsWithAlpha(m_pal.textDim, 120));
+    const float a = m_time * 5.f;
+    ui::prim::circle(m_renderer, cx + std::cos(a) * 7.f,
+                     cy + std::sin(a) * 7.f, 2.2f, m_pal.accent);
+    char buf[40];
+    std::snprintf(buf, sizeof buf, "Scanning… %d", m_scanner.progress());
+    m_fonts.small.draw(m_renderer, cx + 14.f, cy - 7.f, buf, m_pal.textDim);
 }
 
 #ifdef RS_DEBUG_OVERLAY

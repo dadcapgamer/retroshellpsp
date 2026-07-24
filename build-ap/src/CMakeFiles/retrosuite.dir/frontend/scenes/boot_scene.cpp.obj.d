@@ -71,54 +71,89 @@ src/CMakeFiles/retrosuite.dir/frontend/scenes/boot_scene.cpp.obj: \
  /Users/jump/pspdev/psp/include/c++/15.2.0/tr1/poly_laguerre.tcc \
  /Users/jump/pspdev/psp/include/c++/15.2.0/tr1/riemann_zeta.tcc \
  /Users/jump/PSP\ EMU/src/frontend/app.h \
- /Users/jump/PSP\ EMU/src/frontend/themes/palette.h \
- /Users/jump/PSP\ EMU/src/frontend/text/font.h \
- /Users/jump/PSP\ EMU/src/platform/psp/gu_renderer.h \
- /Users/jump/PSP\ EMU/src/frontend/ui/prim.h \
- /Users/jump/PSP\ EMU/src/platform/psp/input_pad.h \
- /Users/jump/pspdev/psp/sdk/include/pspctrl.h \
- /Users/jump/pspdev/psp/include/c++/15.2.0/memory \
- /Users/jump/pspdev/psp/include/c++/15.2.0/bits/memoryfwd.h \
- /Users/jump/pspdev/psp/include/c++/15.2.0/bits/allocator.h \
- /Users/jump/pspdev/psp/include/c++/15.2.0/psp/bits/c++allocator.h \
- /Users/jump/pspdev/psp/include/c++/15.2.0/bits/new_allocator.h \
- /Users/jump/pspdev/psp/include/c++/15.2.0/new \
- /Users/jump/pspdev/psp/include/c++/15.2.0/bits/exception.h \
- /Users/jump/pspdev/psp/include/c++/15.2.0/bits/stl_tempbuf.h \
- /Users/jump/pspdev/psp/include/c++/15.2.0/bits/stl_construct.h \
- /Users/jump/pspdev/psp/include/c++/15.2.0/bits/stl_uninitialized.h \
- /Users/jump/pspdev/psp/include/c++/15.2.0/ext/alloc_traits.h \
- /Users/jump/pspdev/psp/include/c++/15.2.0/bits/alloc_traits.h \
- /Users/jump/pspdev/psp/include/c++/15.2.0/bits/stl_raw_storage_iter.h \
- /Users/jump/pspdev/psp/include/c++/15.2.0/bits/align.h \
- /Users/jump/pspdev/psp/include/c++/15.2.0/bits/uses_allocator.h \
- /Users/jump/pspdev/psp/include/c++/15.2.0/bits/unique_ptr.h \
- /Users/jump/pspdev/psp/include/c++/15.2.0/tuple \
- /Users/jump/pspdev/psp/include/c++/15.2.0/bits/invoke.h \
- /Users/jump/pspdev/psp/include/c++/15.2.0/bits/stl_function.h \
- /Users/jump/pspdev/psp/include/c++/15.2.0/backward/binders.h \
- /Users/jump/pspdev/psp/include/c++/15.2.0/bits/functional_hash.h \
- /Users/jump/pspdev/psp/include/c++/15.2.0/bits/hash_bytes.h \
- /Users/jump/pspdev/psp/include/c++/15.2.0/bits/shared_ptr.h \
- /Users/jump/pspdev/psp/include/c++/15.2.0/iosfwd \
+ /Users/jump/PSP\ EMU/src/frontend/database/game_index.h \
+ /Users/jump/PSP\ EMU/src/frontend/database/systems.h \
+ /Users/jump/pspdev/psp/include/c++/15.2.0/string \
  /Users/jump/pspdev/psp/include/c++/15.2.0/bits/stringfwd.h \
+ /Users/jump/pspdev/psp/include/c++/15.2.0/bits/memoryfwd.h \
+ /Users/jump/pspdev/psp/include/c++/15.2.0/bits/char_traits.h \
  /Users/jump/pspdev/psp/include/c++/15.2.0/bits/postypes.h \
  /Users/jump/pspdev/psp/include/c++/15.2.0/cwchar \
  /Users/jump/pspdev/psp/include/wchar.h \
  /Users/jump/pspdev/lib/gcc/psp/15.2.0/include/stdarg.h \
  /Users/jump/pspdev/psp/include/sys/_locale.h \
+ /Users/jump/pspdev/psp/include/c++/15.2.0/bits/allocator.h \
+ /Users/jump/pspdev/psp/include/c++/15.2.0/psp/bits/c++allocator.h \
+ /Users/jump/pspdev/psp/include/c++/15.2.0/bits/new_allocator.h \
+ /Users/jump/pspdev/psp/include/c++/15.2.0/new \
+ /Users/jump/pspdev/psp/include/c++/15.2.0/bits/exception.h \
+ /Users/jump/pspdev/psp/include/c++/15.2.0/bits/localefwd.h \
+ /Users/jump/pspdev/psp/include/c++/15.2.0/psp/bits/c++locale.h \
+ /Users/jump/pspdev/psp/include/c++/15.2.0/clocale \
+ /Users/jump/pspdev/psp/include/locale.h \
+ /Users/jump/pspdev/psp/include/c++/15.2.0/iosfwd \
+ /Users/jump/pspdev/psp/include/c++/15.2.0/cctype \
+ /Users/jump/pspdev/psp/include/ctype.h \
+ /Users/jump/pspdev/psp/include/c++/15.2.0/bits/ostream_insert.h \
+ /Users/jump/pspdev/psp/include/c++/15.2.0/bits/cxxabi_forced.h \
+ /Users/jump/pspdev/psp/include/c++/15.2.0/bits/stl_function.h \
+ /Users/jump/pspdev/psp/include/c++/15.2.0/backward/binders.h \
+ /Users/jump/pspdev/psp/include/c++/15.2.0/bits/refwrap.h \
+ /Users/jump/pspdev/psp/include/c++/15.2.0/bits/invoke.h \
+ /Users/jump/pspdev/psp/include/c++/15.2.0/bits/range_access.h \
+ /Users/jump/pspdev/psp/include/c++/15.2.0/initializer_list \
+ /Users/jump/pspdev/psp/include/c++/15.2.0/bits/basic_string.h \
+ /Users/jump/pspdev/psp/include/c++/15.2.0/ext/alloc_traits.h \
+ /Users/jump/pspdev/psp/include/c++/15.2.0/bits/alloc_traits.h \
+ /Users/jump/pspdev/psp/include/c++/15.2.0/bits/stl_construct.h \
+ /Users/jump/pspdev/psp/include/c++/15.2.0/string_view \
+ /Users/jump/pspdev/psp/include/c++/15.2.0/bits/functional_hash.h \
+ /Users/jump/pspdev/psp/include/c++/15.2.0/bits/hash_bytes.h \
+ /Users/jump/pspdev/psp/include/c++/15.2.0/bits/string_view.tcc \
+ /Users/jump/pspdev/psp/include/c++/15.2.0/ext/string_conversions.h \
+ /Users/jump/pspdev/psp/include/c++/15.2.0/cstdlib \
+ /Users/jump/pspdev/psp/include/c++/15.2.0/cstdio \
+ /Users/jump/pspdev/psp/include/stdio.h \
+ /Users/jump/pspdev/psp/include/sys/stdio.h \
+ /Users/jump/pspdev/psp/include/c++/15.2.0/cerrno \
+ /Users/jump/pspdev/psp/include/errno.h \
+ /Users/jump/pspdev/psp/include/sys/errno.h \
+ /Users/jump/pspdev/psp/include/c++/15.2.0/bits/charconv.h \
+ /Users/jump/pspdev/psp/include/c++/15.2.0/bits/basic_string.tcc \
+ /Users/jump/pspdev/psp/include/c++/15.2.0/bits/memory_resource.h \
+ /Users/jump/pspdev/psp/include/c++/15.2.0/bits/uses_allocator.h \
+ /Users/jump/pspdev/psp/include/c++/15.2.0/bits/uses_allocator_args.h \
+ /Users/jump/pspdev/psp/include/c++/15.2.0/tuple \
+ /Users/jump/pspdev/psp/include/c++/15.2.0/vector \
+ /Users/jump/pspdev/psp/include/c++/15.2.0/bits/stl_uninitialized.h \
+ /Users/jump/pspdev/psp/include/c++/15.2.0/bits/stl_vector.h \
+ /Users/jump/pspdev/psp/include/c++/15.2.0/bits/stl_bvector.h \
+ /Users/jump/pspdev/psp/include/c++/15.2.0/bits/vector.tcc \
+ /Users/jump/PSP\ EMU/src/frontend/database/library.h \
+ /Users/jump/PSP\ EMU/src/frontend/database/metadata.h \
+ /Users/jump/PSP\ EMU/src/platform/psp/gu_renderer.h \
+ /Users/jump/PSP\ EMU/src/frontend/database/rom_scanner.h \
+ /Users/jump/PSP\ EMU/src/frontend/text/font.h \
+ /Users/jump/PSP\ EMU/src/frontend/themes/theme.h \
+ /Users/jump/PSP\ EMU/src/frontend/themes/palette.h \
+ /Users/jump/PSP\ EMU/src/frontend/ui/prim.h \
+ /Users/jump/PSP\ EMU/src/platform/psp/input_pad.h \
+ /Users/jump/pspdev/psp/sdk/include/pspctrl.h \
+ /Users/jump/pspdev/psp/include/c++/15.2.0/memory \
+ /Users/jump/pspdev/psp/include/c++/15.2.0/bits/stl_tempbuf.h \
+ /Users/jump/pspdev/psp/include/c++/15.2.0/bits/stl_raw_storage_iter.h \
+ /Users/jump/pspdev/psp/include/c++/15.2.0/bits/align.h \
+ /Users/jump/pspdev/psp/include/c++/15.2.0/bits/unique_ptr.h \
+ /Users/jump/pspdev/psp/include/c++/15.2.0/bits/shared_ptr.h \
  /Users/jump/pspdev/psp/include/c++/15.2.0/bits/shared_ptr_base.h \
  /Users/jump/pspdev/psp/include/c++/15.2.0/typeinfo \
  /Users/jump/pspdev/psp/include/c++/15.2.0/bits/allocated_ptr.h \
- /Users/jump/pspdev/psp/include/c++/15.2.0/bits/refwrap.h \
  /Users/jump/pspdev/psp/include/c++/15.2.0/ext/aligned_buffer.h \
  /Users/jump/pspdev/psp/include/c++/15.2.0/ext/atomicity.h \
  /Users/jump/pspdev/psp/include/c++/15.2.0/psp/bits/gthr.h \
  /Users/jump/pspdev/psp/include/c++/15.2.0/psp/bits/gthr-default.h \
  /Users/jump/pspdev/psp/include/pthread.h \
  /Users/jump/pspdev/psp/include/pte_types.h \
- /Users/jump/pspdev/psp/include/errno.h \
- /Users/jump/pspdev/psp/include/sys/errno.h \
  /Users/jump/pspdev/psp/include/sys/types.h \
  /Users/jump/pspdev/psp/include/machine/endian.h \
  /Users/jump/pspdev/psp/include/machine/_endian.h \

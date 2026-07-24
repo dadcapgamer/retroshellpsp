@@ -274,6 +274,102 @@ frontend/autopilot.cpp.s:
 	cd "/Users/jump/PSP EMU/build-ap" && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/retrosuite.dir/build.make src/CMakeFiles/retrosuite.dir/frontend/autopilot.cpp.s
 .PHONY : frontend/autopilot.cpp.s
 
+frontend/database/game_index.obj: frontend/database/game_index.cpp.obj
+.PHONY : frontend/database/game_index.obj
+
+# target to build an object file
+frontend/database/game_index.cpp.obj:
+	cd "/Users/jump/PSP EMU/build-ap" && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/retrosuite.dir/build.make src/CMakeFiles/retrosuite.dir/frontend/database/game_index.cpp.obj
+.PHONY : frontend/database/game_index.cpp.obj
+
+frontend/database/game_index.i: frontend/database/game_index.cpp.i
+.PHONY : frontend/database/game_index.i
+
+# target to preprocess a source file
+frontend/database/game_index.cpp.i:
+	cd "/Users/jump/PSP EMU/build-ap" && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/retrosuite.dir/build.make src/CMakeFiles/retrosuite.dir/frontend/database/game_index.cpp.i
+.PHONY : frontend/database/game_index.cpp.i
+
+frontend/database/game_index.s: frontend/database/game_index.cpp.s
+.PHONY : frontend/database/game_index.s
+
+# target to generate assembly for a file
+frontend/database/game_index.cpp.s:
+	cd "/Users/jump/PSP EMU/build-ap" && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/retrosuite.dir/build.make src/CMakeFiles/retrosuite.dir/frontend/database/game_index.cpp.s
+.PHONY : frontend/database/game_index.cpp.s
+
+frontend/database/library.obj: frontend/database/library.cpp.obj
+.PHONY : frontend/database/library.obj
+
+# target to build an object file
+frontend/database/library.cpp.obj:
+	cd "/Users/jump/PSP EMU/build-ap" && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/retrosuite.dir/build.make src/CMakeFiles/retrosuite.dir/frontend/database/library.cpp.obj
+.PHONY : frontend/database/library.cpp.obj
+
+frontend/database/library.i: frontend/database/library.cpp.i
+.PHONY : frontend/database/library.i
+
+# target to preprocess a source file
+frontend/database/library.cpp.i:
+	cd "/Users/jump/PSP EMU/build-ap" && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/retrosuite.dir/build.make src/CMakeFiles/retrosuite.dir/frontend/database/library.cpp.i
+.PHONY : frontend/database/library.cpp.i
+
+frontend/database/library.s: frontend/database/library.cpp.s
+.PHONY : frontend/database/library.s
+
+# target to generate assembly for a file
+frontend/database/library.cpp.s:
+	cd "/Users/jump/PSP EMU/build-ap" && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/retrosuite.dir/build.make src/CMakeFiles/retrosuite.dir/frontend/database/library.cpp.s
+.PHONY : frontend/database/library.cpp.s
+
+frontend/database/metadata.obj: frontend/database/metadata.cpp.obj
+.PHONY : frontend/database/metadata.obj
+
+# target to build an object file
+frontend/database/metadata.cpp.obj:
+	cd "/Users/jump/PSP EMU/build-ap" && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/retrosuite.dir/build.make src/CMakeFiles/retrosuite.dir/frontend/database/metadata.cpp.obj
+.PHONY : frontend/database/metadata.cpp.obj
+
+frontend/database/metadata.i: frontend/database/metadata.cpp.i
+.PHONY : frontend/database/metadata.i
+
+# target to preprocess a source file
+frontend/database/metadata.cpp.i:
+	cd "/Users/jump/PSP EMU/build-ap" && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/retrosuite.dir/build.make src/CMakeFiles/retrosuite.dir/frontend/database/metadata.cpp.i
+.PHONY : frontend/database/metadata.cpp.i
+
+frontend/database/metadata.s: frontend/database/metadata.cpp.s
+.PHONY : frontend/database/metadata.s
+
+# target to generate assembly for a file
+frontend/database/metadata.cpp.s:
+	cd "/Users/jump/PSP EMU/build-ap" && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/retrosuite.dir/build.make src/CMakeFiles/retrosuite.dir/frontend/database/metadata.cpp.s
+.PHONY : frontend/database/metadata.cpp.s
+
+frontend/database/rom_scanner.obj: frontend/database/rom_scanner.cpp.obj
+.PHONY : frontend/database/rom_scanner.obj
+
+# target to build an object file
+frontend/database/rom_scanner.cpp.obj:
+	cd "/Users/jump/PSP EMU/build-ap" && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/retrosuite.dir/build.make src/CMakeFiles/retrosuite.dir/frontend/database/rom_scanner.cpp.obj
+.PHONY : frontend/database/rom_scanner.cpp.obj
+
+frontend/database/rom_scanner.i: frontend/database/rom_scanner.cpp.i
+.PHONY : frontend/database/rom_scanner.i
+
+# target to preprocess a source file
+frontend/database/rom_scanner.cpp.i:
+	cd "/Users/jump/PSP EMU/build-ap" && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/retrosuite.dir/build.make src/CMakeFiles/retrosuite.dir/frontend/database/rom_scanner.cpp.i
+.PHONY : frontend/database/rom_scanner.cpp.i
+
+frontend/database/rom_scanner.s: frontend/database/rom_scanner.cpp.s
+.PHONY : frontend/database/rom_scanner.s
+
+# target to generate assembly for a file
+frontend/database/rom_scanner.cpp.s:
+	cd "/Users/jump/PSP EMU/build-ap" && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/retrosuite.dir/build.make src/CMakeFiles/retrosuite.dir/frontend/database/rom_scanner.cpp.s
+.PHONY : frontend/database/rom_scanner.cpp.s
+
 frontend/scenes/boot_scene.obj: frontend/scenes/boot_scene.cpp.obj
 .PHONY : frontend/scenes/boot_scene.obj
 
@@ -321,6 +417,30 @@ frontend/scenes/home_scene.s: frontend/scenes/home_scene.cpp.s
 frontend/scenes/home_scene.cpp.s:
 	cd "/Users/jump/PSP EMU/build-ap" && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/retrosuite.dir/build.make src/CMakeFiles/retrosuite.dir/frontend/scenes/home_scene.cpp.s
 .PHONY : frontend/scenes/home_scene.cpp.s
+
+frontend/scenes/settings_scene.obj: frontend/scenes/settings_scene.cpp.obj
+.PHONY : frontend/scenes/settings_scene.obj
+
+# target to build an object file
+frontend/scenes/settings_scene.cpp.obj:
+	cd "/Users/jump/PSP EMU/build-ap" && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/retrosuite.dir/build.make src/CMakeFiles/retrosuite.dir/frontend/scenes/settings_scene.cpp.obj
+.PHONY : frontend/scenes/settings_scene.cpp.obj
+
+frontend/scenes/settings_scene.i: frontend/scenes/settings_scene.cpp.i
+.PHONY : frontend/scenes/settings_scene.i
+
+# target to preprocess a source file
+frontend/scenes/settings_scene.cpp.i:
+	cd "/Users/jump/PSP EMU/build-ap" && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/retrosuite.dir/build.make src/CMakeFiles/retrosuite.dir/frontend/scenes/settings_scene.cpp.i
+.PHONY : frontend/scenes/settings_scene.cpp.i
+
+frontend/scenes/settings_scene.s: frontend/scenes/settings_scene.cpp.s
+.PHONY : frontend/scenes/settings_scene.s
+
+# target to generate assembly for a file
+frontend/scenes/settings_scene.cpp.s:
+	cd "/Users/jump/PSP EMU/build-ap" && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/retrosuite.dir/build.make src/CMakeFiles/retrosuite.dir/frontend/scenes/settings_scene.cpp.s
+.PHONY : frontend/scenes/settings_scene.cpp.s
 
 frontend/text/font.obj: frontend/text/font.cpp.obj
 .PHONY : frontend/text/font.obj
@@ -370,6 +490,30 @@ frontend/themes/palette.cpp.s:
 	cd "/Users/jump/PSP EMU/build-ap" && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/retrosuite.dir/build.make src/CMakeFiles/retrosuite.dir/frontend/themes/palette.cpp.s
 .PHONY : frontend/themes/palette.cpp.s
 
+frontend/themes/theme.obj: frontend/themes/theme.cpp.obj
+.PHONY : frontend/themes/theme.obj
+
+# target to build an object file
+frontend/themes/theme.cpp.obj:
+	cd "/Users/jump/PSP EMU/build-ap" && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/retrosuite.dir/build.make src/CMakeFiles/retrosuite.dir/frontend/themes/theme.cpp.obj
+.PHONY : frontend/themes/theme.cpp.obj
+
+frontend/themes/theme.i: frontend/themes/theme.cpp.i
+.PHONY : frontend/themes/theme.i
+
+# target to preprocess a source file
+frontend/themes/theme.cpp.i:
+	cd "/Users/jump/PSP EMU/build-ap" && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/retrosuite.dir/build.make src/CMakeFiles/retrosuite.dir/frontend/themes/theme.cpp.i
+.PHONY : frontend/themes/theme.cpp.i
+
+frontend/themes/theme.s: frontend/themes/theme.cpp.s
+.PHONY : frontend/themes/theme.s
+
+# target to generate assembly for a file
+frontend/themes/theme.cpp.s:
+	cd "/Users/jump/PSP EMU/build-ap" && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/retrosuite.dir/build.make src/CMakeFiles/retrosuite.dir/frontend/themes/theme.cpp.s
+.PHONY : frontend/themes/theme.cpp.s
+
 frontend/ui/prim.obj: frontend/ui/prim.cpp.obj
 .PHONY : frontend/ui/prim.obj
 
@@ -417,6 +561,30 @@ main.s: main.cpp.s
 main.cpp.s:
 	cd "/Users/jump/PSP EMU/build-ap" && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/retrosuite.dir/build.make src/CMakeFiles/retrosuite.dir/main.cpp.s
 .PHONY : main.cpp.s
+
+platform/psp/fs_psp.obj: platform/psp/fs_psp.cpp.obj
+.PHONY : platform/psp/fs_psp.obj
+
+# target to build an object file
+platform/psp/fs_psp.cpp.obj:
+	cd "/Users/jump/PSP EMU/build-ap" && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/retrosuite.dir/build.make src/CMakeFiles/retrosuite.dir/platform/psp/fs_psp.cpp.obj
+.PHONY : platform/psp/fs_psp.cpp.obj
+
+platform/psp/fs_psp.i: platform/psp/fs_psp.cpp.i
+.PHONY : platform/psp/fs_psp.i
+
+# target to preprocess a source file
+platform/psp/fs_psp.cpp.i:
+	cd "/Users/jump/PSP EMU/build-ap" && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/retrosuite.dir/build.make src/CMakeFiles/retrosuite.dir/platform/psp/fs_psp.cpp.i
+.PHONY : platform/psp/fs_psp.cpp.i
+
+platform/psp/fs_psp.s: platform/psp/fs_psp.cpp.s
+.PHONY : platform/psp/fs_psp.s
+
+# target to generate assembly for a file
+platform/psp/fs_psp.cpp.s:
+	cd "/Users/jump/PSP EMU/build-ap" && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/retrosuite.dir/build.make src/CMakeFiles/retrosuite.dir/platform/psp/fs_psp.cpp.s
+.PHONY : platform/psp/fs_psp.cpp.s
 
 platform/psp/gu_renderer.obj: platform/psp/gu_renderer.cpp.obj
 .PHONY : platform/psp/gu_renderer.obj
@@ -490,6 +658,30 @@ platform/psp/power.cpp.s:
 	cd "/Users/jump/PSP EMU/build-ap" && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/retrosuite.dir/build.make src/CMakeFiles/retrosuite.dir/platform/psp/power.cpp.s
 .PHONY : platform/psp/power.cpp.s
 
+platform/psp/threading.obj: platform/psp/threading.cpp.obj
+.PHONY : platform/psp/threading.obj
+
+# target to build an object file
+platform/psp/threading.cpp.obj:
+	cd "/Users/jump/PSP EMU/build-ap" && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/retrosuite.dir/build.make src/CMakeFiles/retrosuite.dir/platform/psp/threading.cpp.obj
+.PHONY : platform/psp/threading.cpp.obj
+
+platform/psp/threading.i: platform/psp/threading.cpp.i
+.PHONY : platform/psp/threading.i
+
+# target to preprocess a source file
+platform/psp/threading.cpp.i:
+	cd "/Users/jump/PSP EMU/build-ap" && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/retrosuite.dir/build.make src/CMakeFiles/retrosuite.dir/platform/psp/threading.cpp.i
+.PHONY : platform/psp/threading.cpp.i
+
+platform/psp/threading.s: platform/psp/threading.cpp.s
+.PHONY : platform/psp/threading.s
+
+# target to generate assembly for a file
+platform/psp/threading.cpp.s:
+	cd "/Users/jump/PSP EMU/build-ap" && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/retrosuite.dir/build.make src/CMakeFiles/retrosuite.dir/platform/psp/threading.cpp.s
+.PHONY : platform/psp/threading.cpp.s
+
 platform/psp/vram.obj: platform/psp/vram.cpp.obj
 .PHONY : platform/psp/vram.obj
 
@@ -537,6 +729,30 @@ runtime/arena.s: runtime/arena.cpp.s
 runtime/arena.cpp.s:
 	cd "/Users/jump/PSP EMU/build-ap" && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/retrosuite.dir/build.make src/CMakeFiles/retrosuite.dir/runtime/arena.cpp.s
 .PHONY : runtime/arena.cpp.s
+
+runtime/config.obj: runtime/config.cpp.obj
+.PHONY : runtime/config.obj
+
+# target to build an object file
+runtime/config.cpp.obj:
+	cd "/Users/jump/PSP EMU/build-ap" && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/retrosuite.dir/build.make src/CMakeFiles/retrosuite.dir/runtime/config.cpp.obj
+.PHONY : runtime/config.cpp.obj
+
+runtime/config.i: runtime/config.cpp.i
+.PHONY : runtime/config.i
+
+# target to preprocess a source file
+runtime/config.cpp.i:
+	cd "/Users/jump/PSP EMU/build-ap" && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/retrosuite.dir/build.make src/CMakeFiles/retrosuite.dir/runtime/config.cpp.i
+.PHONY : runtime/config.cpp.i
+
+runtime/config.s: runtime/config.cpp.s
+.PHONY : runtime/config.s
+
+# target to generate assembly for a file
+runtime/config.cpp.s:
+	cd "/Users/jump/PSP EMU/build-ap" && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/retrosuite.dir/build.make src/CMakeFiles/retrosuite.dir/runtime/config.cpp.s
+.PHONY : runtime/config.cpp.s
 
 runtime/log.obj: runtime/log.cpp.obj
 .PHONY : runtime/log.obj
@@ -589,24 +805,45 @@ help:
 	@echo "... frontend/autopilot.obj"
 	@echo "... frontend/autopilot.i"
 	@echo "... frontend/autopilot.s"
+	@echo "... frontend/database/game_index.obj"
+	@echo "... frontend/database/game_index.i"
+	@echo "... frontend/database/game_index.s"
+	@echo "... frontend/database/library.obj"
+	@echo "... frontend/database/library.i"
+	@echo "... frontend/database/library.s"
+	@echo "... frontend/database/metadata.obj"
+	@echo "... frontend/database/metadata.i"
+	@echo "... frontend/database/metadata.s"
+	@echo "... frontend/database/rom_scanner.obj"
+	@echo "... frontend/database/rom_scanner.i"
+	@echo "... frontend/database/rom_scanner.s"
 	@echo "... frontend/scenes/boot_scene.obj"
 	@echo "... frontend/scenes/boot_scene.i"
 	@echo "... frontend/scenes/boot_scene.s"
 	@echo "... frontend/scenes/home_scene.obj"
 	@echo "... frontend/scenes/home_scene.i"
 	@echo "... frontend/scenes/home_scene.s"
+	@echo "... frontend/scenes/settings_scene.obj"
+	@echo "... frontend/scenes/settings_scene.i"
+	@echo "... frontend/scenes/settings_scene.s"
 	@echo "... frontend/text/font.obj"
 	@echo "... frontend/text/font.i"
 	@echo "... frontend/text/font.s"
 	@echo "... frontend/themes/palette.obj"
 	@echo "... frontend/themes/palette.i"
 	@echo "... frontend/themes/palette.s"
+	@echo "... frontend/themes/theme.obj"
+	@echo "... frontend/themes/theme.i"
+	@echo "... frontend/themes/theme.s"
 	@echo "... frontend/ui/prim.obj"
 	@echo "... frontend/ui/prim.i"
 	@echo "... frontend/ui/prim.s"
 	@echo "... main.obj"
 	@echo "... main.i"
 	@echo "... main.s"
+	@echo "... platform/psp/fs_psp.obj"
+	@echo "... platform/psp/fs_psp.i"
+	@echo "... platform/psp/fs_psp.s"
 	@echo "... platform/psp/gu_renderer.obj"
 	@echo "... platform/psp/gu_renderer.i"
 	@echo "... platform/psp/gu_renderer.s"
@@ -616,12 +853,18 @@ help:
 	@echo "... platform/psp/power.obj"
 	@echo "... platform/psp/power.i"
 	@echo "... platform/psp/power.s"
+	@echo "... platform/psp/threading.obj"
+	@echo "... platform/psp/threading.i"
+	@echo "... platform/psp/threading.s"
 	@echo "... platform/psp/vram.obj"
 	@echo "... platform/psp/vram.i"
 	@echo "... platform/psp/vram.s"
 	@echo "... runtime/arena.obj"
 	@echo "... runtime/arena.i"
 	@echo "... runtime/arena.s"
+	@echo "... runtime/config.obj"
+	@echo "... runtime/config.i"
+	@echo "... runtime/config.s"
 	@echo "... runtime/log.obj"
 	@echo "... runtime/log.i"
 	@echo "... runtime/log.s"

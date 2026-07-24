@@ -4,15 +4,24 @@ add_executable(retrosuite
   platform/psp/vram.cpp
   platform/psp/input_pad.cpp
   platform/psp/power.cpp
+  platform/psp/fs_psp.cpp
+  platform/psp/threading.cpp
   runtime/log.cpp
   runtime/arena.cpp
+  runtime/config.cpp
   frontend/app.cpp
   frontend/autopilot.cpp
   frontend/text/font.cpp
   frontend/ui/prim.cpp
   frontend/themes/palette.cpp
+  frontend/themes/theme.cpp
+  frontend/database/game_index.cpp
+  frontend/database/rom_scanner.cpp
+  frontend/database/library.cpp
+  frontend/database/metadata.cpp
   frontend/scenes/boot_scene.cpp
-  frontend/scenes/home_scene.cpp)
+  frontend/scenes/home_scene.cpp
+  frontend/scenes/settings_scene.cpp)
 
 target_include_directories(retrosuite PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 

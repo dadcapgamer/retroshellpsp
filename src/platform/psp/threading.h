@@ -1,0 +1,38 @@
+/** Thin wrappers over PSP kernel threads and semaphores.
+ *
+ * RetroSuite uses exactly one background worker (the library scanner /
+ * asset loader); emulation itself always runs on the main thread.
+ */
+#pragma once
+
+#include "rs_common.h"
+
+namespace rs::thread {
+
+/* Runs fn(arg) once on a low-priority kernel thread. */
+using Fn = int (*)(void* arg);
+bool spawn(const char* name, Fn fn, void* arg, int stackKb = 64);
+
+class Mutex {
+public:
+    Mutex();
+    ~Mutex();
+    void lock();
+    void unlock();
+
+private:
+    int m_sema = -1;
+};
+
+class ScopedLock {
+public:
+    explicit ScopedLock(Mutex& m) : m_m(m) { m_m.lock(); }
+    ~ScopedLock() { m_m.unlock(); }
+
+private:
+    Mutex& m_m;
+};
+
+void sleepMs(int ms);
+
+}  // namespace rs::thread

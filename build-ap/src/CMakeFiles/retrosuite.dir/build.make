@@ -174,10 +174,38 @@ src/CMakeFiles/retrosuite.dir/platform/psp/power.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/retrosuite.dir/platform/psp/power.cpp.s"
 	cd "/Users/jump/PSP EMU/build-ap/src" && /Users/jump/pspdev/bin/psp-g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/jump/PSP EMU/src/platform/psp/power.cpp" -o CMakeFiles/retrosuite.dir/platform/psp/power.cpp.s
 
+src/CMakeFiles/retrosuite.dir/platform/psp/fs_psp.cpp.obj: src/CMakeFiles/retrosuite.dir/flags.make
+src/CMakeFiles/retrosuite.dir/platform/psp/fs_psp.cpp.obj: /Users/jump/PSP\ EMU/src/platform/psp/fs_psp.cpp
+src/CMakeFiles/retrosuite.dir/platform/psp/fs_psp.cpp.obj: src/CMakeFiles/retrosuite.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/jump/PSP EMU/build-ap/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_10) "Building CXX object src/CMakeFiles/retrosuite.dir/platform/psp/fs_psp.cpp.obj"
+	cd "/Users/jump/PSP EMU/build-ap/src" && /Users/jump/pspdev/bin/psp-g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT src/CMakeFiles/retrosuite.dir/platform/psp/fs_psp.cpp.obj -MF CMakeFiles/retrosuite.dir/platform/psp/fs_psp.cpp.obj.d -o CMakeFiles/retrosuite.dir/platform/psp/fs_psp.cpp.obj -c "/Users/jump/PSP EMU/src/platform/psp/fs_psp.cpp"
+
+src/CMakeFiles/retrosuite.dir/platform/psp/fs_psp.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/retrosuite.dir/platform/psp/fs_psp.cpp.i"
+	cd "/Users/jump/PSP EMU/build-ap/src" && /Users/jump/pspdev/bin/psp-g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E "/Users/jump/PSP EMU/src/platform/psp/fs_psp.cpp" > CMakeFiles/retrosuite.dir/platform/psp/fs_psp.cpp.i
+
+src/CMakeFiles/retrosuite.dir/platform/psp/fs_psp.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/retrosuite.dir/platform/psp/fs_psp.cpp.s"
+	cd "/Users/jump/PSP EMU/build-ap/src" && /Users/jump/pspdev/bin/psp-g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/jump/PSP EMU/src/platform/psp/fs_psp.cpp" -o CMakeFiles/retrosuite.dir/platform/psp/fs_psp.cpp.s
+
+src/CMakeFiles/retrosuite.dir/platform/psp/threading.cpp.obj: src/CMakeFiles/retrosuite.dir/flags.make
+src/CMakeFiles/retrosuite.dir/platform/psp/threading.cpp.obj: /Users/jump/PSP\ EMU/src/platform/psp/threading.cpp
+src/CMakeFiles/retrosuite.dir/platform/psp/threading.cpp.obj: src/CMakeFiles/retrosuite.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/jump/PSP EMU/build-ap/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_11) "Building CXX object src/CMakeFiles/retrosuite.dir/platform/psp/threading.cpp.obj"
+	cd "/Users/jump/PSP EMU/build-ap/src" && /Users/jump/pspdev/bin/psp-g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT src/CMakeFiles/retrosuite.dir/platform/psp/threading.cpp.obj -MF CMakeFiles/retrosuite.dir/platform/psp/threading.cpp.obj.d -o CMakeFiles/retrosuite.dir/platform/psp/threading.cpp.obj -c "/Users/jump/PSP EMU/src/platform/psp/threading.cpp"
+
+src/CMakeFiles/retrosuite.dir/platform/psp/threading.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/retrosuite.dir/platform/psp/threading.cpp.i"
+	cd "/Users/jump/PSP EMU/build-ap/src" && /Users/jump/pspdev/bin/psp-g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E "/Users/jump/PSP EMU/src/platform/psp/threading.cpp" > CMakeFiles/retrosuite.dir/platform/psp/threading.cpp.i
+
+src/CMakeFiles/retrosuite.dir/platform/psp/threading.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/retrosuite.dir/platform/psp/threading.cpp.s"
+	cd "/Users/jump/PSP EMU/build-ap/src" && /Users/jump/pspdev/bin/psp-g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/jump/PSP EMU/src/platform/psp/threading.cpp" -o CMakeFiles/retrosuite.dir/platform/psp/threading.cpp.s
+
 src/CMakeFiles/retrosuite.dir/runtime/log.cpp.obj: src/CMakeFiles/retrosuite.dir/flags.make
 src/CMakeFiles/retrosuite.dir/runtime/log.cpp.obj: /Users/jump/PSP\ EMU/src/runtime/log.cpp
 src/CMakeFiles/retrosuite.dir/runtime/log.cpp.obj: src/CMakeFiles/retrosuite.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/jump/PSP EMU/build-ap/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_10) "Building CXX object src/CMakeFiles/retrosuite.dir/runtime/log.cpp.obj"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/jump/PSP EMU/build-ap/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_12) "Building CXX object src/CMakeFiles/retrosuite.dir/runtime/log.cpp.obj"
 	cd "/Users/jump/PSP EMU/build-ap/src" && /Users/jump/pspdev/bin/psp-g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT src/CMakeFiles/retrosuite.dir/runtime/log.cpp.obj -MF CMakeFiles/retrosuite.dir/runtime/log.cpp.obj.d -o CMakeFiles/retrosuite.dir/runtime/log.cpp.obj -c "/Users/jump/PSP EMU/src/runtime/log.cpp"
 
 src/CMakeFiles/retrosuite.dir/runtime/log.cpp.i: cmake_force
@@ -191,7 +219,7 @@ src/CMakeFiles/retrosuite.dir/runtime/log.cpp.s: cmake_force
 src/CMakeFiles/retrosuite.dir/runtime/arena.cpp.obj: src/CMakeFiles/retrosuite.dir/flags.make
 src/CMakeFiles/retrosuite.dir/runtime/arena.cpp.obj: /Users/jump/PSP\ EMU/src/runtime/arena.cpp
 src/CMakeFiles/retrosuite.dir/runtime/arena.cpp.obj: src/CMakeFiles/retrosuite.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/jump/PSP EMU/build-ap/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_11) "Building CXX object src/CMakeFiles/retrosuite.dir/runtime/arena.cpp.obj"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/jump/PSP EMU/build-ap/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_13) "Building CXX object src/CMakeFiles/retrosuite.dir/runtime/arena.cpp.obj"
 	cd "/Users/jump/PSP EMU/build-ap/src" && /Users/jump/pspdev/bin/psp-g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT src/CMakeFiles/retrosuite.dir/runtime/arena.cpp.obj -MF CMakeFiles/retrosuite.dir/runtime/arena.cpp.obj.d -o CMakeFiles/retrosuite.dir/runtime/arena.cpp.obj -c "/Users/jump/PSP EMU/src/runtime/arena.cpp"
 
 src/CMakeFiles/retrosuite.dir/runtime/arena.cpp.i: cmake_force
@@ -202,10 +230,24 @@ src/CMakeFiles/retrosuite.dir/runtime/arena.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/retrosuite.dir/runtime/arena.cpp.s"
 	cd "/Users/jump/PSP EMU/build-ap/src" && /Users/jump/pspdev/bin/psp-g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/jump/PSP EMU/src/runtime/arena.cpp" -o CMakeFiles/retrosuite.dir/runtime/arena.cpp.s
 
+src/CMakeFiles/retrosuite.dir/runtime/config.cpp.obj: src/CMakeFiles/retrosuite.dir/flags.make
+src/CMakeFiles/retrosuite.dir/runtime/config.cpp.obj: /Users/jump/PSP\ EMU/src/runtime/config.cpp
+src/CMakeFiles/retrosuite.dir/runtime/config.cpp.obj: src/CMakeFiles/retrosuite.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/jump/PSP EMU/build-ap/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_14) "Building CXX object src/CMakeFiles/retrosuite.dir/runtime/config.cpp.obj"
+	cd "/Users/jump/PSP EMU/build-ap/src" && /Users/jump/pspdev/bin/psp-g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT src/CMakeFiles/retrosuite.dir/runtime/config.cpp.obj -MF CMakeFiles/retrosuite.dir/runtime/config.cpp.obj.d -o CMakeFiles/retrosuite.dir/runtime/config.cpp.obj -c "/Users/jump/PSP EMU/src/runtime/config.cpp"
+
+src/CMakeFiles/retrosuite.dir/runtime/config.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/retrosuite.dir/runtime/config.cpp.i"
+	cd "/Users/jump/PSP EMU/build-ap/src" && /Users/jump/pspdev/bin/psp-g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E "/Users/jump/PSP EMU/src/runtime/config.cpp" > CMakeFiles/retrosuite.dir/runtime/config.cpp.i
+
+src/CMakeFiles/retrosuite.dir/runtime/config.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/retrosuite.dir/runtime/config.cpp.s"
+	cd "/Users/jump/PSP EMU/build-ap/src" && /Users/jump/pspdev/bin/psp-g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/jump/PSP EMU/src/runtime/config.cpp" -o CMakeFiles/retrosuite.dir/runtime/config.cpp.s
+
 src/CMakeFiles/retrosuite.dir/frontend/app.cpp.obj: src/CMakeFiles/retrosuite.dir/flags.make
 src/CMakeFiles/retrosuite.dir/frontend/app.cpp.obj: /Users/jump/PSP\ EMU/src/frontend/app.cpp
 src/CMakeFiles/retrosuite.dir/frontend/app.cpp.obj: src/CMakeFiles/retrosuite.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/jump/PSP EMU/build-ap/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_12) "Building CXX object src/CMakeFiles/retrosuite.dir/frontend/app.cpp.obj"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/jump/PSP EMU/build-ap/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_15) "Building CXX object src/CMakeFiles/retrosuite.dir/frontend/app.cpp.obj"
 	cd "/Users/jump/PSP EMU/build-ap/src" && /Users/jump/pspdev/bin/psp-g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT src/CMakeFiles/retrosuite.dir/frontend/app.cpp.obj -MF CMakeFiles/retrosuite.dir/frontend/app.cpp.obj.d -o CMakeFiles/retrosuite.dir/frontend/app.cpp.obj -c "/Users/jump/PSP EMU/src/frontend/app.cpp"
 
 src/CMakeFiles/retrosuite.dir/frontend/app.cpp.i: cmake_force
@@ -219,7 +261,7 @@ src/CMakeFiles/retrosuite.dir/frontend/app.cpp.s: cmake_force
 src/CMakeFiles/retrosuite.dir/frontend/autopilot.cpp.obj: src/CMakeFiles/retrosuite.dir/flags.make
 src/CMakeFiles/retrosuite.dir/frontend/autopilot.cpp.obj: /Users/jump/PSP\ EMU/src/frontend/autopilot.cpp
 src/CMakeFiles/retrosuite.dir/frontend/autopilot.cpp.obj: src/CMakeFiles/retrosuite.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/jump/PSP EMU/build-ap/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_13) "Building CXX object src/CMakeFiles/retrosuite.dir/frontend/autopilot.cpp.obj"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/jump/PSP EMU/build-ap/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_16) "Building CXX object src/CMakeFiles/retrosuite.dir/frontend/autopilot.cpp.obj"
 	cd "/Users/jump/PSP EMU/build-ap/src" && /Users/jump/pspdev/bin/psp-g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT src/CMakeFiles/retrosuite.dir/frontend/autopilot.cpp.obj -MF CMakeFiles/retrosuite.dir/frontend/autopilot.cpp.obj.d -o CMakeFiles/retrosuite.dir/frontend/autopilot.cpp.obj -c "/Users/jump/PSP EMU/src/frontend/autopilot.cpp"
 
 src/CMakeFiles/retrosuite.dir/frontend/autopilot.cpp.i: cmake_force
@@ -233,7 +275,7 @@ src/CMakeFiles/retrosuite.dir/frontend/autopilot.cpp.s: cmake_force
 src/CMakeFiles/retrosuite.dir/frontend/text/font.cpp.obj: src/CMakeFiles/retrosuite.dir/flags.make
 src/CMakeFiles/retrosuite.dir/frontend/text/font.cpp.obj: /Users/jump/PSP\ EMU/src/frontend/text/font.cpp
 src/CMakeFiles/retrosuite.dir/frontend/text/font.cpp.obj: src/CMakeFiles/retrosuite.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/jump/PSP EMU/build-ap/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_14) "Building CXX object src/CMakeFiles/retrosuite.dir/frontend/text/font.cpp.obj"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/jump/PSP EMU/build-ap/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_17) "Building CXX object src/CMakeFiles/retrosuite.dir/frontend/text/font.cpp.obj"
 	cd "/Users/jump/PSP EMU/build-ap/src" && /Users/jump/pspdev/bin/psp-g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT src/CMakeFiles/retrosuite.dir/frontend/text/font.cpp.obj -MF CMakeFiles/retrosuite.dir/frontend/text/font.cpp.obj.d -o CMakeFiles/retrosuite.dir/frontend/text/font.cpp.obj -c "/Users/jump/PSP EMU/src/frontend/text/font.cpp"
 
 src/CMakeFiles/retrosuite.dir/frontend/text/font.cpp.i: cmake_force
@@ -247,7 +289,7 @@ src/CMakeFiles/retrosuite.dir/frontend/text/font.cpp.s: cmake_force
 src/CMakeFiles/retrosuite.dir/frontend/ui/prim.cpp.obj: src/CMakeFiles/retrosuite.dir/flags.make
 src/CMakeFiles/retrosuite.dir/frontend/ui/prim.cpp.obj: /Users/jump/PSP\ EMU/src/frontend/ui/prim.cpp
 src/CMakeFiles/retrosuite.dir/frontend/ui/prim.cpp.obj: src/CMakeFiles/retrosuite.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/jump/PSP EMU/build-ap/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_15) "Building CXX object src/CMakeFiles/retrosuite.dir/frontend/ui/prim.cpp.obj"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/jump/PSP EMU/build-ap/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_18) "Building CXX object src/CMakeFiles/retrosuite.dir/frontend/ui/prim.cpp.obj"
 	cd "/Users/jump/PSP EMU/build-ap/src" && /Users/jump/pspdev/bin/psp-g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT src/CMakeFiles/retrosuite.dir/frontend/ui/prim.cpp.obj -MF CMakeFiles/retrosuite.dir/frontend/ui/prim.cpp.obj.d -o CMakeFiles/retrosuite.dir/frontend/ui/prim.cpp.obj -c "/Users/jump/PSP EMU/src/frontend/ui/prim.cpp"
 
 src/CMakeFiles/retrosuite.dir/frontend/ui/prim.cpp.i: cmake_force
@@ -261,7 +303,7 @@ src/CMakeFiles/retrosuite.dir/frontend/ui/prim.cpp.s: cmake_force
 src/CMakeFiles/retrosuite.dir/frontend/themes/palette.cpp.obj: src/CMakeFiles/retrosuite.dir/flags.make
 src/CMakeFiles/retrosuite.dir/frontend/themes/palette.cpp.obj: /Users/jump/PSP\ EMU/src/frontend/themes/palette.cpp
 src/CMakeFiles/retrosuite.dir/frontend/themes/palette.cpp.obj: src/CMakeFiles/retrosuite.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/jump/PSP EMU/build-ap/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_16) "Building CXX object src/CMakeFiles/retrosuite.dir/frontend/themes/palette.cpp.obj"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/jump/PSP EMU/build-ap/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_19) "Building CXX object src/CMakeFiles/retrosuite.dir/frontend/themes/palette.cpp.obj"
 	cd "/Users/jump/PSP EMU/build-ap/src" && /Users/jump/pspdev/bin/psp-g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT src/CMakeFiles/retrosuite.dir/frontend/themes/palette.cpp.obj -MF CMakeFiles/retrosuite.dir/frontend/themes/palette.cpp.obj.d -o CMakeFiles/retrosuite.dir/frontend/themes/palette.cpp.obj -c "/Users/jump/PSP EMU/src/frontend/themes/palette.cpp"
 
 src/CMakeFiles/retrosuite.dir/frontend/themes/palette.cpp.i: cmake_force
@@ -272,10 +314,80 @@ src/CMakeFiles/retrosuite.dir/frontend/themes/palette.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/retrosuite.dir/frontend/themes/palette.cpp.s"
 	cd "/Users/jump/PSP EMU/build-ap/src" && /Users/jump/pspdev/bin/psp-g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/jump/PSP EMU/src/frontend/themes/palette.cpp" -o CMakeFiles/retrosuite.dir/frontend/themes/palette.cpp.s
 
+src/CMakeFiles/retrosuite.dir/frontend/themes/theme.cpp.obj: src/CMakeFiles/retrosuite.dir/flags.make
+src/CMakeFiles/retrosuite.dir/frontend/themes/theme.cpp.obj: /Users/jump/PSP\ EMU/src/frontend/themes/theme.cpp
+src/CMakeFiles/retrosuite.dir/frontend/themes/theme.cpp.obj: src/CMakeFiles/retrosuite.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/jump/PSP EMU/build-ap/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_20) "Building CXX object src/CMakeFiles/retrosuite.dir/frontend/themes/theme.cpp.obj"
+	cd "/Users/jump/PSP EMU/build-ap/src" && /Users/jump/pspdev/bin/psp-g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT src/CMakeFiles/retrosuite.dir/frontend/themes/theme.cpp.obj -MF CMakeFiles/retrosuite.dir/frontend/themes/theme.cpp.obj.d -o CMakeFiles/retrosuite.dir/frontend/themes/theme.cpp.obj -c "/Users/jump/PSP EMU/src/frontend/themes/theme.cpp"
+
+src/CMakeFiles/retrosuite.dir/frontend/themes/theme.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/retrosuite.dir/frontend/themes/theme.cpp.i"
+	cd "/Users/jump/PSP EMU/build-ap/src" && /Users/jump/pspdev/bin/psp-g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E "/Users/jump/PSP EMU/src/frontend/themes/theme.cpp" > CMakeFiles/retrosuite.dir/frontend/themes/theme.cpp.i
+
+src/CMakeFiles/retrosuite.dir/frontend/themes/theme.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/retrosuite.dir/frontend/themes/theme.cpp.s"
+	cd "/Users/jump/PSP EMU/build-ap/src" && /Users/jump/pspdev/bin/psp-g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/jump/PSP EMU/src/frontend/themes/theme.cpp" -o CMakeFiles/retrosuite.dir/frontend/themes/theme.cpp.s
+
+src/CMakeFiles/retrosuite.dir/frontend/database/game_index.cpp.obj: src/CMakeFiles/retrosuite.dir/flags.make
+src/CMakeFiles/retrosuite.dir/frontend/database/game_index.cpp.obj: /Users/jump/PSP\ EMU/src/frontend/database/game_index.cpp
+src/CMakeFiles/retrosuite.dir/frontend/database/game_index.cpp.obj: src/CMakeFiles/retrosuite.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/jump/PSP EMU/build-ap/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_21) "Building CXX object src/CMakeFiles/retrosuite.dir/frontend/database/game_index.cpp.obj"
+	cd "/Users/jump/PSP EMU/build-ap/src" && /Users/jump/pspdev/bin/psp-g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT src/CMakeFiles/retrosuite.dir/frontend/database/game_index.cpp.obj -MF CMakeFiles/retrosuite.dir/frontend/database/game_index.cpp.obj.d -o CMakeFiles/retrosuite.dir/frontend/database/game_index.cpp.obj -c "/Users/jump/PSP EMU/src/frontend/database/game_index.cpp"
+
+src/CMakeFiles/retrosuite.dir/frontend/database/game_index.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/retrosuite.dir/frontend/database/game_index.cpp.i"
+	cd "/Users/jump/PSP EMU/build-ap/src" && /Users/jump/pspdev/bin/psp-g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E "/Users/jump/PSP EMU/src/frontend/database/game_index.cpp" > CMakeFiles/retrosuite.dir/frontend/database/game_index.cpp.i
+
+src/CMakeFiles/retrosuite.dir/frontend/database/game_index.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/retrosuite.dir/frontend/database/game_index.cpp.s"
+	cd "/Users/jump/PSP EMU/build-ap/src" && /Users/jump/pspdev/bin/psp-g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/jump/PSP EMU/src/frontend/database/game_index.cpp" -o CMakeFiles/retrosuite.dir/frontend/database/game_index.cpp.s
+
+src/CMakeFiles/retrosuite.dir/frontend/database/rom_scanner.cpp.obj: src/CMakeFiles/retrosuite.dir/flags.make
+src/CMakeFiles/retrosuite.dir/frontend/database/rom_scanner.cpp.obj: /Users/jump/PSP\ EMU/src/frontend/database/rom_scanner.cpp
+src/CMakeFiles/retrosuite.dir/frontend/database/rom_scanner.cpp.obj: src/CMakeFiles/retrosuite.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/jump/PSP EMU/build-ap/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_22) "Building CXX object src/CMakeFiles/retrosuite.dir/frontend/database/rom_scanner.cpp.obj"
+	cd "/Users/jump/PSP EMU/build-ap/src" && /Users/jump/pspdev/bin/psp-g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT src/CMakeFiles/retrosuite.dir/frontend/database/rom_scanner.cpp.obj -MF CMakeFiles/retrosuite.dir/frontend/database/rom_scanner.cpp.obj.d -o CMakeFiles/retrosuite.dir/frontend/database/rom_scanner.cpp.obj -c "/Users/jump/PSP EMU/src/frontend/database/rom_scanner.cpp"
+
+src/CMakeFiles/retrosuite.dir/frontend/database/rom_scanner.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/retrosuite.dir/frontend/database/rom_scanner.cpp.i"
+	cd "/Users/jump/PSP EMU/build-ap/src" && /Users/jump/pspdev/bin/psp-g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E "/Users/jump/PSP EMU/src/frontend/database/rom_scanner.cpp" > CMakeFiles/retrosuite.dir/frontend/database/rom_scanner.cpp.i
+
+src/CMakeFiles/retrosuite.dir/frontend/database/rom_scanner.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/retrosuite.dir/frontend/database/rom_scanner.cpp.s"
+	cd "/Users/jump/PSP EMU/build-ap/src" && /Users/jump/pspdev/bin/psp-g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/jump/PSP EMU/src/frontend/database/rom_scanner.cpp" -o CMakeFiles/retrosuite.dir/frontend/database/rom_scanner.cpp.s
+
+src/CMakeFiles/retrosuite.dir/frontend/database/library.cpp.obj: src/CMakeFiles/retrosuite.dir/flags.make
+src/CMakeFiles/retrosuite.dir/frontend/database/library.cpp.obj: /Users/jump/PSP\ EMU/src/frontend/database/library.cpp
+src/CMakeFiles/retrosuite.dir/frontend/database/library.cpp.obj: src/CMakeFiles/retrosuite.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/jump/PSP EMU/build-ap/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_23) "Building CXX object src/CMakeFiles/retrosuite.dir/frontend/database/library.cpp.obj"
+	cd "/Users/jump/PSP EMU/build-ap/src" && /Users/jump/pspdev/bin/psp-g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT src/CMakeFiles/retrosuite.dir/frontend/database/library.cpp.obj -MF CMakeFiles/retrosuite.dir/frontend/database/library.cpp.obj.d -o CMakeFiles/retrosuite.dir/frontend/database/library.cpp.obj -c "/Users/jump/PSP EMU/src/frontend/database/library.cpp"
+
+src/CMakeFiles/retrosuite.dir/frontend/database/library.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/retrosuite.dir/frontend/database/library.cpp.i"
+	cd "/Users/jump/PSP EMU/build-ap/src" && /Users/jump/pspdev/bin/psp-g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E "/Users/jump/PSP EMU/src/frontend/database/library.cpp" > CMakeFiles/retrosuite.dir/frontend/database/library.cpp.i
+
+src/CMakeFiles/retrosuite.dir/frontend/database/library.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/retrosuite.dir/frontend/database/library.cpp.s"
+	cd "/Users/jump/PSP EMU/build-ap/src" && /Users/jump/pspdev/bin/psp-g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/jump/PSP EMU/src/frontend/database/library.cpp" -o CMakeFiles/retrosuite.dir/frontend/database/library.cpp.s
+
+src/CMakeFiles/retrosuite.dir/frontend/database/metadata.cpp.obj: src/CMakeFiles/retrosuite.dir/flags.make
+src/CMakeFiles/retrosuite.dir/frontend/database/metadata.cpp.obj: /Users/jump/PSP\ EMU/src/frontend/database/metadata.cpp
+src/CMakeFiles/retrosuite.dir/frontend/database/metadata.cpp.obj: src/CMakeFiles/retrosuite.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/jump/PSP EMU/build-ap/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_24) "Building CXX object src/CMakeFiles/retrosuite.dir/frontend/database/metadata.cpp.obj"
+	cd "/Users/jump/PSP EMU/build-ap/src" && /Users/jump/pspdev/bin/psp-g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT src/CMakeFiles/retrosuite.dir/frontend/database/metadata.cpp.obj -MF CMakeFiles/retrosuite.dir/frontend/database/metadata.cpp.obj.d -o CMakeFiles/retrosuite.dir/frontend/database/metadata.cpp.obj -c "/Users/jump/PSP EMU/src/frontend/database/metadata.cpp"
+
+src/CMakeFiles/retrosuite.dir/frontend/database/metadata.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/retrosuite.dir/frontend/database/metadata.cpp.i"
+	cd "/Users/jump/PSP EMU/build-ap/src" && /Users/jump/pspdev/bin/psp-g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E "/Users/jump/PSP EMU/src/frontend/database/metadata.cpp" > CMakeFiles/retrosuite.dir/frontend/database/metadata.cpp.i
+
+src/CMakeFiles/retrosuite.dir/frontend/database/metadata.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/retrosuite.dir/frontend/database/metadata.cpp.s"
+	cd "/Users/jump/PSP EMU/build-ap/src" && /Users/jump/pspdev/bin/psp-g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/jump/PSP EMU/src/frontend/database/metadata.cpp" -o CMakeFiles/retrosuite.dir/frontend/database/metadata.cpp.s
+
 src/CMakeFiles/retrosuite.dir/frontend/scenes/boot_scene.cpp.obj: src/CMakeFiles/retrosuite.dir/flags.make
 src/CMakeFiles/retrosuite.dir/frontend/scenes/boot_scene.cpp.obj: /Users/jump/PSP\ EMU/src/frontend/scenes/boot_scene.cpp
 src/CMakeFiles/retrosuite.dir/frontend/scenes/boot_scene.cpp.obj: src/CMakeFiles/retrosuite.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/jump/PSP EMU/build-ap/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_17) "Building CXX object src/CMakeFiles/retrosuite.dir/frontend/scenes/boot_scene.cpp.obj"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/jump/PSP EMU/build-ap/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_25) "Building CXX object src/CMakeFiles/retrosuite.dir/frontend/scenes/boot_scene.cpp.obj"
 	cd "/Users/jump/PSP EMU/build-ap/src" && /Users/jump/pspdev/bin/psp-g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT src/CMakeFiles/retrosuite.dir/frontend/scenes/boot_scene.cpp.obj -MF CMakeFiles/retrosuite.dir/frontend/scenes/boot_scene.cpp.obj.d -o CMakeFiles/retrosuite.dir/frontend/scenes/boot_scene.cpp.obj -c "/Users/jump/PSP EMU/src/frontend/scenes/boot_scene.cpp"
 
 src/CMakeFiles/retrosuite.dir/frontend/scenes/boot_scene.cpp.i: cmake_force
@@ -289,7 +401,7 @@ src/CMakeFiles/retrosuite.dir/frontend/scenes/boot_scene.cpp.s: cmake_force
 src/CMakeFiles/retrosuite.dir/frontend/scenes/home_scene.cpp.obj: src/CMakeFiles/retrosuite.dir/flags.make
 src/CMakeFiles/retrosuite.dir/frontend/scenes/home_scene.cpp.obj: /Users/jump/PSP\ EMU/src/frontend/scenes/home_scene.cpp
 src/CMakeFiles/retrosuite.dir/frontend/scenes/home_scene.cpp.obj: src/CMakeFiles/retrosuite.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/jump/PSP EMU/build-ap/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_18) "Building CXX object src/CMakeFiles/retrosuite.dir/frontend/scenes/home_scene.cpp.obj"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/jump/PSP EMU/build-ap/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_26) "Building CXX object src/CMakeFiles/retrosuite.dir/frontend/scenes/home_scene.cpp.obj"
 	cd "/Users/jump/PSP EMU/build-ap/src" && /Users/jump/pspdev/bin/psp-g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT src/CMakeFiles/retrosuite.dir/frontend/scenes/home_scene.cpp.obj -MF CMakeFiles/retrosuite.dir/frontend/scenes/home_scene.cpp.obj.d -o CMakeFiles/retrosuite.dir/frontend/scenes/home_scene.cpp.obj -c "/Users/jump/PSP EMU/src/frontend/scenes/home_scene.cpp"
 
 src/CMakeFiles/retrosuite.dir/frontend/scenes/home_scene.cpp.i: cmake_force
@@ -300,10 +412,24 @@ src/CMakeFiles/retrosuite.dir/frontend/scenes/home_scene.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/retrosuite.dir/frontend/scenes/home_scene.cpp.s"
 	cd "/Users/jump/PSP EMU/build-ap/src" && /Users/jump/pspdev/bin/psp-g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/jump/PSP EMU/src/frontend/scenes/home_scene.cpp" -o CMakeFiles/retrosuite.dir/frontend/scenes/home_scene.cpp.s
 
+src/CMakeFiles/retrosuite.dir/frontend/scenes/settings_scene.cpp.obj: src/CMakeFiles/retrosuite.dir/flags.make
+src/CMakeFiles/retrosuite.dir/frontend/scenes/settings_scene.cpp.obj: /Users/jump/PSP\ EMU/src/frontend/scenes/settings_scene.cpp
+src/CMakeFiles/retrosuite.dir/frontend/scenes/settings_scene.cpp.obj: src/CMakeFiles/retrosuite.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/jump/PSP EMU/build-ap/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_27) "Building CXX object src/CMakeFiles/retrosuite.dir/frontend/scenes/settings_scene.cpp.obj"
+	cd "/Users/jump/PSP EMU/build-ap/src" && /Users/jump/pspdev/bin/psp-g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT src/CMakeFiles/retrosuite.dir/frontend/scenes/settings_scene.cpp.obj -MF CMakeFiles/retrosuite.dir/frontend/scenes/settings_scene.cpp.obj.d -o CMakeFiles/retrosuite.dir/frontend/scenes/settings_scene.cpp.obj -c "/Users/jump/PSP EMU/src/frontend/scenes/settings_scene.cpp"
+
+src/CMakeFiles/retrosuite.dir/frontend/scenes/settings_scene.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/retrosuite.dir/frontend/scenes/settings_scene.cpp.i"
+	cd "/Users/jump/PSP EMU/build-ap/src" && /Users/jump/pspdev/bin/psp-g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E "/Users/jump/PSP EMU/src/frontend/scenes/settings_scene.cpp" > CMakeFiles/retrosuite.dir/frontend/scenes/settings_scene.cpp.i
+
+src/CMakeFiles/retrosuite.dir/frontend/scenes/settings_scene.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/retrosuite.dir/frontend/scenes/settings_scene.cpp.s"
+	cd "/Users/jump/PSP EMU/build-ap/src" && /Users/jump/pspdev/bin/psp-g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/jump/PSP EMU/src/frontend/scenes/settings_scene.cpp" -o CMakeFiles/retrosuite.dir/frontend/scenes/settings_scene.cpp.s
+
 src/CMakeFiles/retrosuite.dir/__/embedded_assets/rs_asset_font_title_rsf.c.obj: src/CMakeFiles/retrosuite.dir/flags.make
 src/CMakeFiles/retrosuite.dir/__/embedded_assets/rs_asset_font_title_rsf.c.obj: embedded_assets/rs_asset_font_title_rsf.c
 src/CMakeFiles/retrosuite.dir/__/embedded_assets/rs_asset_font_title_rsf.c.obj: src/CMakeFiles/retrosuite.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/jump/PSP EMU/build-ap/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_19) "Building C object src/CMakeFiles/retrosuite.dir/__/embedded_assets/rs_asset_font_title_rsf.c.obj"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/jump/PSP EMU/build-ap/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_28) "Building C object src/CMakeFiles/retrosuite.dir/__/embedded_assets/rs_asset_font_title_rsf.c.obj"
 	cd "/Users/jump/PSP EMU/build-ap/src" && /Users/jump/pspdev/bin/psp-gcc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -MD -MT src/CMakeFiles/retrosuite.dir/__/embedded_assets/rs_asset_font_title_rsf.c.obj -MF CMakeFiles/retrosuite.dir/__/embedded_assets/rs_asset_font_title_rsf.c.obj.d -o CMakeFiles/retrosuite.dir/__/embedded_assets/rs_asset_font_title_rsf.c.obj -c "/Users/jump/PSP EMU/build-ap/embedded_assets/rs_asset_font_title_rsf.c"
 
 src/CMakeFiles/retrosuite.dir/__/embedded_assets/rs_asset_font_title_rsf.c.i: cmake_force
@@ -317,7 +443,7 @@ src/CMakeFiles/retrosuite.dir/__/embedded_assets/rs_asset_font_title_rsf.c.s: cm
 src/CMakeFiles/retrosuite.dir/__/embedded_assets/rs_asset_font_large_rsf.c.obj: src/CMakeFiles/retrosuite.dir/flags.make
 src/CMakeFiles/retrosuite.dir/__/embedded_assets/rs_asset_font_large_rsf.c.obj: embedded_assets/rs_asset_font_large_rsf.c
 src/CMakeFiles/retrosuite.dir/__/embedded_assets/rs_asset_font_large_rsf.c.obj: src/CMakeFiles/retrosuite.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/jump/PSP EMU/build-ap/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_20) "Building C object src/CMakeFiles/retrosuite.dir/__/embedded_assets/rs_asset_font_large_rsf.c.obj"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/jump/PSP EMU/build-ap/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_29) "Building C object src/CMakeFiles/retrosuite.dir/__/embedded_assets/rs_asset_font_large_rsf.c.obj"
 	cd "/Users/jump/PSP EMU/build-ap/src" && /Users/jump/pspdev/bin/psp-gcc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -MD -MT src/CMakeFiles/retrosuite.dir/__/embedded_assets/rs_asset_font_large_rsf.c.obj -MF CMakeFiles/retrosuite.dir/__/embedded_assets/rs_asset_font_large_rsf.c.obj.d -o CMakeFiles/retrosuite.dir/__/embedded_assets/rs_asset_font_large_rsf.c.obj -c "/Users/jump/PSP EMU/build-ap/embedded_assets/rs_asset_font_large_rsf.c"
 
 src/CMakeFiles/retrosuite.dir/__/embedded_assets/rs_asset_font_large_rsf.c.i: cmake_force
@@ -331,7 +457,7 @@ src/CMakeFiles/retrosuite.dir/__/embedded_assets/rs_asset_font_large_rsf.c.s: cm
 src/CMakeFiles/retrosuite.dir/__/embedded_assets/rs_asset_font_body_rsf.c.obj: src/CMakeFiles/retrosuite.dir/flags.make
 src/CMakeFiles/retrosuite.dir/__/embedded_assets/rs_asset_font_body_rsf.c.obj: embedded_assets/rs_asset_font_body_rsf.c
 src/CMakeFiles/retrosuite.dir/__/embedded_assets/rs_asset_font_body_rsf.c.obj: src/CMakeFiles/retrosuite.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/jump/PSP EMU/build-ap/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_21) "Building C object src/CMakeFiles/retrosuite.dir/__/embedded_assets/rs_asset_font_body_rsf.c.obj"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/jump/PSP EMU/build-ap/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_30) "Building C object src/CMakeFiles/retrosuite.dir/__/embedded_assets/rs_asset_font_body_rsf.c.obj"
 	cd "/Users/jump/PSP EMU/build-ap/src" && /Users/jump/pspdev/bin/psp-gcc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -MD -MT src/CMakeFiles/retrosuite.dir/__/embedded_assets/rs_asset_font_body_rsf.c.obj -MF CMakeFiles/retrosuite.dir/__/embedded_assets/rs_asset_font_body_rsf.c.obj.d -o CMakeFiles/retrosuite.dir/__/embedded_assets/rs_asset_font_body_rsf.c.obj -c "/Users/jump/PSP EMU/build-ap/embedded_assets/rs_asset_font_body_rsf.c"
 
 src/CMakeFiles/retrosuite.dir/__/embedded_assets/rs_asset_font_body_rsf.c.i: cmake_force
@@ -345,7 +471,7 @@ src/CMakeFiles/retrosuite.dir/__/embedded_assets/rs_asset_font_body_rsf.c.s: cma
 src/CMakeFiles/retrosuite.dir/__/embedded_assets/rs_asset_font_small_rsf.c.obj: src/CMakeFiles/retrosuite.dir/flags.make
 src/CMakeFiles/retrosuite.dir/__/embedded_assets/rs_asset_font_small_rsf.c.obj: embedded_assets/rs_asset_font_small_rsf.c
 src/CMakeFiles/retrosuite.dir/__/embedded_assets/rs_asset_font_small_rsf.c.obj: src/CMakeFiles/retrosuite.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/jump/PSP EMU/build-ap/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_22) "Building C object src/CMakeFiles/retrosuite.dir/__/embedded_assets/rs_asset_font_small_rsf.c.obj"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/jump/PSP EMU/build-ap/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_31) "Building C object src/CMakeFiles/retrosuite.dir/__/embedded_assets/rs_asset_font_small_rsf.c.obj"
 	cd "/Users/jump/PSP EMU/build-ap/src" && /Users/jump/pspdev/bin/psp-gcc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -MD -MT src/CMakeFiles/retrosuite.dir/__/embedded_assets/rs_asset_font_small_rsf.c.obj -MF CMakeFiles/retrosuite.dir/__/embedded_assets/rs_asset_font_small_rsf.c.obj.d -o CMakeFiles/retrosuite.dir/__/embedded_assets/rs_asset_font_small_rsf.c.obj -c "/Users/jump/PSP EMU/build-ap/embedded_assets/rs_asset_font_small_rsf.c"
 
 src/CMakeFiles/retrosuite.dir/__/embedded_assets/rs_asset_font_small_rsf.c.i: cmake_force
@@ -363,15 +489,24 @@ retrosuite_OBJECTS = \
 "CMakeFiles/retrosuite.dir/platform/psp/vram.cpp.obj" \
 "CMakeFiles/retrosuite.dir/platform/psp/input_pad.cpp.obj" \
 "CMakeFiles/retrosuite.dir/platform/psp/power.cpp.obj" \
+"CMakeFiles/retrosuite.dir/platform/psp/fs_psp.cpp.obj" \
+"CMakeFiles/retrosuite.dir/platform/psp/threading.cpp.obj" \
 "CMakeFiles/retrosuite.dir/runtime/log.cpp.obj" \
 "CMakeFiles/retrosuite.dir/runtime/arena.cpp.obj" \
+"CMakeFiles/retrosuite.dir/runtime/config.cpp.obj" \
 "CMakeFiles/retrosuite.dir/frontend/app.cpp.obj" \
 "CMakeFiles/retrosuite.dir/frontend/autopilot.cpp.obj" \
 "CMakeFiles/retrosuite.dir/frontend/text/font.cpp.obj" \
 "CMakeFiles/retrosuite.dir/frontend/ui/prim.cpp.obj" \
 "CMakeFiles/retrosuite.dir/frontend/themes/palette.cpp.obj" \
+"CMakeFiles/retrosuite.dir/frontend/themes/theme.cpp.obj" \
+"CMakeFiles/retrosuite.dir/frontend/database/game_index.cpp.obj" \
+"CMakeFiles/retrosuite.dir/frontend/database/rom_scanner.cpp.obj" \
+"CMakeFiles/retrosuite.dir/frontend/database/library.cpp.obj" \
+"CMakeFiles/retrosuite.dir/frontend/database/metadata.cpp.obj" \
 "CMakeFiles/retrosuite.dir/frontend/scenes/boot_scene.cpp.obj" \
 "CMakeFiles/retrosuite.dir/frontend/scenes/home_scene.cpp.obj" \
+"CMakeFiles/retrosuite.dir/frontend/scenes/settings_scene.cpp.obj" \
 "CMakeFiles/retrosuite.dir/__/embedded_assets/rs_asset_font_title_rsf.c.obj" \
 "CMakeFiles/retrosuite.dir/__/embedded_assets/rs_asset_font_large_rsf.c.obj" \
 "CMakeFiles/retrosuite.dir/__/embedded_assets/rs_asset_font_body_rsf.c.obj" \
@@ -385,15 +520,24 @@ src/retrosuite: src/CMakeFiles/retrosuite.dir/platform/psp/gu_renderer.cpp.obj
 src/retrosuite: src/CMakeFiles/retrosuite.dir/platform/psp/vram.cpp.obj
 src/retrosuite: src/CMakeFiles/retrosuite.dir/platform/psp/input_pad.cpp.obj
 src/retrosuite: src/CMakeFiles/retrosuite.dir/platform/psp/power.cpp.obj
+src/retrosuite: src/CMakeFiles/retrosuite.dir/platform/psp/fs_psp.cpp.obj
+src/retrosuite: src/CMakeFiles/retrosuite.dir/platform/psp/threading.cpp.obj
 src/retrosuite: src/CMakeFiles/retrosuite.dir/runtime/log.cpp.obj
 src/retrosuite: src/CMakeFiles/retrosuite.dir/runtime/arena.cpp.obj
+src/retrosuite: src/CMakeFiles/retrosuite.dir/runtime/config.cpp.obj
 src/retrosuite: src/CMakeFiles/retrosuite.dir/frontend/app.cpp.obj
 src/retrosuite: src/CMakeFiles/retrosuite.dir/frontend/autopilot.cpp.obj
 src/retrosuite: src/CMakeFiles/retrosuite.dir/frontend/text/font.cpp.obj
 src/retrosuite: src/CMakeFiles/retrosuite.dir/frontend/ui/prim.cpp.obj
 src/retrosuite: src/CMakeFiles/retrosuite.dir/frontend/themes/palette.cpp.obj
+src/retrosuite: src/CMakeFiles/retrosuite.dir/frontend/themes/theme.cpp.obj
+src/retrosuite: src/CMakeFiles/retrosuite.dir/frontend/database/game_index.cpp.obj
+src/retrosuite: src/CMakeFiles/retrosuite.dir/frontend/database/rom_scanner.cpp.obj
+src/retrosuite: src/CMakeFiles/retrosuite.dir/frontend/database/library.cpp.obj
+src/retrosuite: src/CMakeFiles/retrosuite.dir/frontend/database/metadata.cpp.obj
 src/retrosuite: src/CMakeFiles/retrosuite.dir/frontend/scenes/boot_scene.cpp.obj
 src/retrosuite: src/CMakeFiles/retrosuite.dir/frontend/scenes/home_scene.cpp.obj
+src/retrosuite: src/CMakeFiles/retrosuite.dir/frontend/scenes/settings_scene.cpp.obj
 src/retrosuite: src/CMakeFiles/retrosuite.dir/__/embedded_assets/rs_asset_font_title_rsf.c.obj
 src/retrosuite: src/CMakeFiles/retrosuite.dir/__/embedded_assets/rs_asset_font_large_rsf.c.obj
 src/retrosuite: src/CMakeFiles/retrosuite.dir/__/embedded_assets/rs_asset_font_body_rsf.c.obj
@@ -401,7 +545,7 @@ src/retrosuite: src/CMakeFiles/retrosuite.dir/__/embedded_assets/rs_asset_font_s
 src/retrosuite: src/CMakeFiles/retrosuite.dir/build.make
 src/retrosuite: external/librs_external.a
 src/retrosuite: src/CMakeFiles/retrosuite.dir/link.txt
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir="/Users/jump/PSP EMU/build-ap/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_23) "Linking CXX executable retrosuite"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir="/Users/jump/PSP EMU/build-ap/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_32) "Linking CXX executable retrosuite"
 	cd "/Users/jump/PSP EMU/build-ap/src" && $(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/retrosuite.dir/link.txt --verbose=$(VERBOSE)
 	cd "/Users/jump/PSP EMU/build-ap/src" && /opt/homebrew/bin/cmake -E cmake_echo_color --cyan Not\ stripping\ binary\ for\ target\ retrosuite,\ build\ type\ is\ .
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --blue --bold "Calling psp-fixup-imports for target retrosuite"

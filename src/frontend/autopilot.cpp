@@ -20,23 +20,37 @@ struct Step {
     const char* capture;   /* shot name, or nullptr */
 };
 
-/* Boot → home entrance → navigate right twice → open pulse → theme toggle
- * to light → navigate to the far left (Recent). */
+/* Boot → GB list (boxart, metadata, zip entry) → favorite → back →
+ * Settings (theme cycle incl. a custom Memory Stick theme) → home. */
 constexpr Step SCRIPT[] = {
-    {30,   0,               "boot"},
-    {120,  0,               "home_dark"},
-    {140,  PSP_CTRL_RIGHT,  nullptr},
-    {160,  PSP_CTRL_RIGHT,  nullptr},
-    {200,  0,               "home_nav"},
-    {210,  PSP_CTRL_CROSS,  nullptr},
-    {220,  0,               "home_pulse"},
-    {240,  PSP_CTRL_SQUARE, nullptr},
-    {300,  0,               "home_light"},
-    {310,  PSP_CTRL_LEFT,   nullptr},
-    {318,  PSP_CTRL_LEFT,   nullptr},
-    {326,  PSP_CTRL_LEFT,   nullptr},
-    {334,  PSP_CTRL_LEFT,   nullptr},
-    {380,  0,               "home_first"},
+    {30,   0,                 "boot"},
+    {150,  0,                 "home"},
+    {170,  PSP_CTRL_DOWN,     nullptr},   /* enter GB game list */
+    {230,  0,                 "list_gb"},
+    {245,  PSP_CTRL_DOWN,     nullptr},
+    {260,  PSP_CTRL_DOWN,     nullptr},
+    {320,  0,                 "list_nav"},
+    {335,  PSP_CTRL_TRIANGLE, nullptr},   /* toggle favorite */
+    {380,  0,                 "list_fav"},
+    {400,  PSP_CTRL_CIRCLE,   nullptr},   /* back to categories */
+    {420,  PSP_CTRL_RIGHT,    nullptr},   /* GB → ... → Settings (9x) */
+    {428,  PSP_CTRL_RIGHT,    nullptr},
+    {436,  PSP_CTRL_RIGHT,    nullptr},
+    {444,  PSP_CTRL_RIGHT,    nullptr},
+    {452,  PSP_CTRL_RIGHT,    nullptr},
+    {460,  PSP_CTRL_RIGHT,    nullptr},
+    {468,  PSP_CTRL_RIGHT,    nullptr},
+    {476,  PSP_CTRL_RIGHT,    nullptr},
+    {484,  PSP_CTRL_RIGHT,    nullptr},
+    {540,  0,                 "home_settings"},
+    {555,  PSP_CTRL_CROSS,    nullptr},   /* open settings */
+    {640,  0,                 "settings"},
+    {655,  PSP_CTRL_RIGHT,    nullptr},   /* theme: dark → light */
+    {720,  0,                 "settings_light"},
+    {735,  PSP_CTRL_RIGHT,    nullptr},   /* light → midnight (custom) */
+    {800,  0,                 "settings_midnight"},
+    {820,  PSP_CTRL_CIRCLE,   nullptr},   /* back home */
+    {880,  0,                 "home_final"},
 };
 constexpr int STEPS = int(sizeof(SCRIPT) / sizeof(SCRIPT[0]));
 
