@@ -122,6 +122,7 @@ bool GameSession::startCore(App& app) {
     }
     save::loadSram(m_game, m_cores.core());
     audio::clear();
+    m_romLoaded = true;   /* only now is it safe to persist SRAM on exit */
 
     /* Resolve per-game video options once, here, not per frame. */
     const std::string scale = cfg::gameOption(m_game.pathHash, "scale");
@@ -151,16 +152,22 @@ void GameSession::enter(App& app) {
 }
 
 void GameSession::exitToHome(App& app) {
-    if (m_cores.loaded()) {
+    /* Persist SRAM only if a ROM actually loaded and ran. A failed launch
+     * leaves the core "loaded" (module up) but with default/empty SRAM —
+     * saving that would clobber the user's real .srm. */
+    if (m_romLoaded) {
         save::saveSram(m_game, m_cores.core());
         m_cores.core().unloadROM();
     }
     gfx::Renderer::freeTexture(m_frameTex);
     gfx::Renderer::freeTexture(m_thumbTex);
 
+    /* Unload the core BEFORE releasing the arena: the core's shutdown()
+     * touches state it allocated from the arena, so freeing the partition
+     * first would be a use-after-free. */
 #ifndef RS_STATIC_CORES
-    mem::shutdown();
     m_cores.unloadCore();
+    mem::shutdown();
     mem::init();
 #else
     m_cores.unloadCore();

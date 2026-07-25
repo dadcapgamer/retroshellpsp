@@ -150,14 +150,25 @@ bool environment(unsigned cmd, void* data) {
             *static_cast<unsigned*>(data) = 2;
             return true;
         /* Option/descriptor registration is metadata we don't render yet;
-         * acknowledging it keeps cores on their happy path. */
+         * acknowledging it keeps cores on their happy path. The V2 cases
+         * are #ifdef'd because cores ship different libretro.h vintages —
+         * an unknown value simply falls through to default and returns
+         * false, which is a valid "not handled" answer. */
         case RETRO_ENVIRONMENT_SET_VARIABLES:
-        case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2:
-        case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2_INTL:
-        case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY:
         case RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS:
         case RETRO_ENVIRONMENT_SET_CONTROLLER_INFO:
+#ifdef RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2
+        case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2:
+#endif
+#ifdef RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2_INTL
+        case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2_INTL:
+#endif
+#ifdef RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY
+        case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY:
+#endif
+#ifdef RETRO_ENVIRONMENT_SET_SUPPORT_ACHIEVEMENTS
         case RETRO_ENVIRONMENT_SET_SUPPORT_ACHIEVEMENTS:
+#endif
             return true;
         default:
             return false;
@@ -165,6 +176,30 @@ bool environment(unsigned cmd, void* data) {
 }
 
 void videoRefresh(const void* data, unsigned w, unsigned h, size_t pitch) {
+#ifdef RS_SHIM_DIAG
+    /* One-shot video diagnostic: report the first ~90 frames' worth of
+     * calls so we can see whether a "black/blank" core is actually
+     * delivering frames, duping (NULL), or sending odd geometry. */
+    static int s_diagCalls = 0, s_diagNull = 0;
+    s_diagCalls++;
+    if (!data) s_diagNull++;
+    if (s_diagCalls == 300) {   /* ~5s in, past a game's black boot */
+        uint32_t nonzero = 0;
+        if (data) {
+            const uint8_t* p = static_cast<const uint8_t*>(data);
+            for (unsigned y = 0; y < h; y++) {
+                const uint16_t* row = reinterpret_cast<const uint16_t*>(p + y * pitch);
+                for (unsigned x = 0; x < w; x++)
+                    if (row[x]) nonzero++;
+            }
+        }
+        g_host->log(RS_LOG_INFO,
+                    "shim DIAG: %d calls, %d null | %ux%u pitch=%u fmt=%d | "
+                    "nonblack px this frame: %u / %u",
+                    s_diagCalls, s_diagNull, w, h, unsigned(pitch),
+                    int(g_srcFormat), nonzero, w * h);
+    }
+#endif
     if (!data || !g_frame) return;   /* NULL = duped frame, keep the last */
 
     const unsigned bpp = (g_srcFormat == RETRO_PIXEL_FORMAT_XRGB8888) ? 4 : 2;
@@ -251,7 +286,20 @@ static void runStaticCtors();
 #endif
 
 static int coreInit(const RSHostAPI* host) {
+    /* api_version is the first field of RSHostAPI and never moves, so it is
+     * safe to read even if the rest of the table was reordered by a newer
+     * host. Refuse a mismatch instead of calling through wrong slots. */
+    if (!host || host->api_version != RS_HOST_API_VERSION) return -1;
     g_host = host;
+
+    /* Guard construction: static ctors and retro_init may fault, and a
+     * fault here must unwind to the host, not kill its main thread. */
+    g_faultArmed = true;
+    if (setjmp(g_faultJmp) != 0) {
+        g_faultArmed = false;
+        g_host->log(RS_LOG_ERROR, "libretro shim: core faulted during init");
+        return -1;
+    }
 #ifndef RS_STATIC_BUILD
     /* Deferred from module_start: constructors may allocate, and the
      * arena-backed heap below needs g_host first. */
@@ -264,6 +312,7 @@ static int coreInit(const RSHostAPI* host) {
     retro_set_input_poll(inputPoll);
     retro_set_input_state(inputState);
     retro_init();
+    g_faultArmed = false;
 
     retro_system_info info = {};
     retro_get_system_info(&info);
@@ -276,12 +325,24 @@ static int coreInit(const RSHostAPI* host) {
 }
 
 static void coreShutdown(void) {
-    retro_deinit();
+    /* Guarded: deinit on an already-corrupt core (e.g. after a fault) can
+     * fault again; unwind rather than kill the host thread. */
+    g_faultArmed = true;
+    if (setjmp(g_faultJmp) == 0) retro_deinit();
+    g_faultArmed = false;
     g_frame = nullptr;
     g_frameCap = 0;
 }
 
-static void coreReset(void) { retro_reset(); }
+static void coreReset(void) {
+    /* Reset is a recovery action, so clear the fault latch: a successful
+     * reset un-freezes a core that faulted earlier. */
+    g_faulted = false;
+    g_faultArmed = true;
+    if (setjmp(g_faultJmp) != 0) g_faulted = true;   /* reset itself faulted */
+    else retro_reset();
+    g_faultArmed = false;
+}
 
 static void coreRunFrame(uint32_t buttons) {
     if (g_faulted) return;   /* frozen after a fault; user exits via menu */
@@ -357,6 +418,17 @@ static RSCoreAPI g_api = {
 };
 
 static int coreLoadRom(const char* path, const void* data, uint32_t size) {
+    /* The streaming contract (data == NULL, core reads via host file IO) is
+     * not wired up in this shim yet — no libretro VFS is exported and the
+     * cores' own fopen isn't backed. Fail clearly rather than hand the core
+     * a NULL buffer and let it fault. Large ROMs (e.g. big GBA carts) need
+     * this path implemented before they can stream. */
+    if (!data || size == 0) {
+        g_host->log(RS_LOG_ERROR,
+                    "libretro shim: ROM streaming (data=NULL) unsupported");
+        return -1;
+    }
+
     retro_game_info game = {};
     game.path = path;
     game.data = data;
@@ -483,6 +555,7 @@ void _exit(int) { abort(); }
 /* Each block is prefixed by a 16-byte header holding its size so
  * realloc can copy. Alignment stays at 16. */
 void* malloc(size_t size) {
+    if (size > 0xFFFFFFFFu - 16) return nullptr;   /* +16 header can't wrap */
     auto* p = static_cast<uint32_t*>(g_host->mem_alloc(uint32_t(size) + 16, 16));
     if (!p) return nullptr;
     p[0] = uint32_t(size);

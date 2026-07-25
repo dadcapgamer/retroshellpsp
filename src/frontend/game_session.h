@@ -76,6 +76,7 @@ private:
     gfx::Texture m_thumbTex;
     int m_thumbSlot = -1;          /* slot currently in m_thumbTex */
 
+    bool m_romLoaded = false;   /* true once the ROM+SRAM are in the core */
     float m_sramTimer = 0.f;
 
     /* Wall-clock accumulator that paces emulation at the core's native

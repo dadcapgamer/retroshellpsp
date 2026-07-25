@@ -35,6 +35,12 @@ public:
     }
     int totalCount() const;
 
+    /* Bumped on every replaceAll. Views holding GameEntry* (e.g. the home
+     * list) must invalidate on a generation change, NOT on a count change:
+     * a rescan can keep the count identical while freeing and rebuilding
+     * every entry, which would dangle their pointers. */
+    u32 generation() const { return m_generation; }
+
     const GameEntry* byHash(u32 pathHash) const;
 
     /* Wholesale replacement from a finished scan (main thread only). */
@@ -45,6 +51,7 @@ public:
 
 private:
     std::vector<GameEntry> m_bySystem[SYSTEM_COUNT];
+    u32 m_generation = 0;
 };
 
 }  // namespace rs::db

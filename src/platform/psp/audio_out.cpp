@@ -15,9 +15,10 @@ constexpr u32 RING_MASK   = RING_FRAMES - 1;
 constexpr int BLOCK_FRAMES = 1024;           /* sceAudio block size */
 
 s16 s_ring[RING_FRAMES * 2];
-volatile u32 s_write = 0;   /* in frames, free-running */
-volatile u32 s_read  = 0;
+volatile u32 s_write = 0;   /* in frames, free-running (producer writes) */
+volatile u32 s_read  = 0;   /* audio thread is the ONLY writer of s_read  */
 volatile bool s_running = false;
+volatile bool s_flush   = false;  /* producer asks consumer to drop the ring */
 
 int s_channel = -1;
 
@@ -31,6 +32,13 @@ alignas(64) s16 s_block[BLOCK_FRAMES * 2];
 
 int audioThread(SceSize, void*) {
     while (s_running) {
+        /* Honor a flush here so s_read is only ever written by this thread;
+         * clear() on the producer must not touch s_read or it can race this
+         * loop's read-modify-write and drive s_read past s_write. */
+        if (s_flush) {
+            s_read = s_write;
+            s_flush = false;
+        }
         const u32 avail = s_write - s_read;
         const u32 take = avail < u32(BLOCK_FRAMES) ? avail : u32(BLOCK_FRAMES);
         for (u32 i = 0; i < take; i++) {
@@ -87,6 +95,7 @@ void setSourceRate(u32 srcRate) {
     s_srcRate = srcRate;
     s_step = u32((u64(srcRate) << 16) / OUTPUT_RATE);
     s_frac = 0;
+    s_lastL = s_lastR = 0;   /* don't interpolate against the old game's tail */
 }
 
 void push(const s16* stereo, u32 frames) {
@@ -127,8 +136,12 @@ void push(const s16* stereo, u32 frames) {
 }
 
 void clear() {
-    s_read = s_write;
-    s_frac = 0;
+    /* Producer side: request a drain (consumer applies it) and reset the
+     * resampler carry, including the last-sample history so the first
+     * output after a load/reset doesn't click against a stale sample. */
+    s_flush  = true;
+    s_frac   = 0;
+    s_lastL  = s_lastR = 0;
 }
 
 u32 buffered() { return s_write - s_read; }

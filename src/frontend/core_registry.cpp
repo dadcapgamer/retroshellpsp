@@ -53,7 +53,13 @@ const CoreInfo* CoreRegistry::resolve(const db::GameEntry& game) const {
 
 bool CoreRegistry::needsChoice(const db::GameEntry& game) const {
     if (!hasChoice(game.system)) return false;
-    return cfg::gameOption(game.pathHash, "core").empty();
+    const std::string remembered = cfg::gameOption(game.pathHash, "core");
+    if (remembered.empty()) return true;
+    /* A remembered core that was since uninstalled must re-prompt rather
+     * than let resolve() silently substitute a different core (whose save
+     * states wouldn't match). */
+    const CoreInfo* c = find(remembered.c_str());
+    return !(c && c->serves(game.system));
 }
 
 #ifdef RS_STATIC_CORES

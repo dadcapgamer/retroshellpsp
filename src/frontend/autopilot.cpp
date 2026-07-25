@@ -28,19 +28,21 @@ struct Step {
 constexpr Step SCRIPT[] = {
     {30,   0,                 "boot"},
     {150,  0,                 "home"},
-    {165,  PSP_CTRL_RIGHT,    nullptr},   /* Game Boy → Game Boy Color */
-    {185,  PSP_CTRL_DOWN,     nullptr},   /* into the game list */
-    {240,  0,                 "list_gbc"},
-    {260,  PSP_CTRL_CROSS,    nullptr},   /* launch → adaptive core step */
-    {330,  0,                 "core_picker"},
-    {345,  PSP_CTRL_DOWN,     nullptr},   /* focus the gambatte row */
-    {370,  0,                 "core_picker_gambatte"},
-    {390,  PSP_CTRL_CROSS,    nullptr},   /* run with gambatte */
-    {650,  0,                 "game_title"},
-    {670,  PSP_CTRL_START,    nullptr},   /* past the title screen */
-    {671,  PSP_CTRL_START,    nullptr},
-    {672,  PSP_CTRL_START,    nullptr},
-    {900,  0,                 "game_playing"},
+    {165,  PSP_CTRL_RIGHT,    nullptr},   /* GB → GBC */
+    {173,  PSP_CTRL_RIGHT,    nullptr},   /* → GBA */
+    {181,  PSP_CTRL_RIGHT,    nullptr},   /* → NES */
+    {189,  PSP_CTRL_RIGHT,    nullptr},   /* → SNES */
+    {205,  PSP_CTRL_DOWN,     nullptr},   /* into the SNES game list */
+    {240,  0,                 "list_snes"},
+    {260,  PSP_CTRL_CROSS,    nullptr},   /* picker: dummy + snes9x2005 */
+    {345,  PSP_CTRL_DOWN,     nullptr},   /* → snes9x2005 */
+    {370,  0,                 "core_picker_snes"},
+    {390,  PSP_CTRL_CROSS,    nullptr},   /* run with snes9x2005 */
+    {700,  0,                 "game_title"},
+    {720,  PSP_CTRL_START,    nullptr},   /* past the title screen */
+    {721,  PSP_CTRL_START,    nullptr},
+    {722,  PSP_CTRL_START,    nullptr},
+    {950,  0,                 "game_playing"},
     {920,  PSP_CTRL_LTRIGGER | PSP_CTRL_RTRIGGER, nullptr},
     {921,  PSP_CTRL_LTRIGGER | PSP_CTRL_RTRIGGER | PSP_CTRL_START, nullptr},
     {990,  0,                 "game_menu"},

@@ -1,0 +1,183 @@
+/*
+ * Gearboy - Nintendo Game Boy Emulator
+ * Copyright (C) 2012  Ignacio Sanchez
+
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * any later version.
+
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see http://www.gnu.org/licenses/
+ *
+ */
+
+#ifndef CORE_H
+#define	CORE_H
+
+#include "definitions.h"
+#include "Cartridge.h"
+
+class Memory;
+class Processor;
+class Video;
+class Audio;
+class Input;
+class CommonMemoryRule;
+class IORegistersMemoryRule;
+class RomOnlyMemoryRule;
+class MBC1MemoryRule;
+class MBC2MemoryRule;
+class MBC3MemoryRule;
+class MBC5MemoryRule;
+class MultiMBC1MemoryRule;
+class HuC1MemoryRule;
+class HuC3MemoryRule;
+class MMM01MemoryRule;
+class CameraMemoryRule;
+class MBC7MemoryRule;
+class TAMA5MemoryRule;
+class WisdomTreeMemoryRule;
+class M161MemoryRule;
+class SachenMMC1MemoryRule;
+class SachenMMC2MemoryRule;
+class FlashcartMemoryRule;
+class MemoryRule;
+class TraceLogger;
+class SGB;
+
+class GearboyCore
+{
+public:
+    struct GB_Debug_Run
+    {
+        bool step_debugger;
+        bool stop_on_breakpoint;
+        bool stop_on_run_to_breakpoint;
+        bool stop_on_irq;
+    };
+
+    typedef GB_Debug_Run GS_Debug_Run;
+
+public:
+    GearboyCore();
+    ~GearboyCore();
+    void Init(GB_Color_Format pixelFormat = GB_PIXEL_RGB565);
+    bool RunToVBlank(u16* pFrameBuffer, s16* pSampleBuffer, int* pSampleCount, bool bDMGbuffer = false, GB_Debug_Run* debug = NULL);
+    bool LoadROM(const char* szFilePath, bool forceDMG, Cartridge::CartridgeTypes forceType = Cartridge::CartridgeNotSupported, bool forceGBA = false);
+    bool LoadROMFromBuffer(const u8* buffer, int size, bool forceDMG, Cartridge::CartridgeTypes forceType = Cartridge::CartridgeNotSupported, bool forceGBA = false);
+    bool GetRuntimeInfo(GB_RuntimeInfo& runtime_info);
+    void KeyPressed(Gameboy_Keys key);
+    void KeyReleased(Gameboy_Keys key);
+    void Pause(bool paused);
+    bool IsPaused();
+    void ResetROM(bool forceDMG, Cartridge::CartridgeTypes forceType = Cartridge::CartridgeNotSupported, bool forceGBA = false);
+    void ResetROMPreservingRAM(bool forceDMG, Cartridge::CartridgeTypes forceType = Cartridge::CartridgeNotSupported, bool forceGBA = false);
+    void ResetSound();
+    void SetSoundSampleRate(int rate);
+    void SetSoundMute(bool mute);
+    void SetSoundVolume(float volume);
+    void SetDMGPalette(GB_Color& color1, GB_Color& color2, GB_Color& color3, GB_Color& color4);
+    u16* GetDMGInternalPalette();
+    void EnableColorCorrection(bool enabled);
+    void SaveRam();
+    void SaveRam(const char* szPath, bool fullPath = false);
+    void LoadRam();
+    void LoadRam(const char* szPath, bool fullPath = false);
+    void SaveState(int index);
+    void SaveState(const char* szPath, int index);
+    bool SaveState(const char* path, int index, bool screenshot);
+    bool SaveState(u8* buffer, size_t& size, bool screenshot = false);
+    void LoadState(int index);
+    void LoadState(const char* szPath, int index);
+    bool LoadState(const char* path, int index, bool unused);
+    bool LoadState(const u8* buffer, size_t size);
+    bool GetSaveStateHeader(int index, const char* path, GB_SaveState_Header* header, bool* out_sgb = NULL);
+    bool GetSaveStateScreenshot(int index, const char* path, GB_SaveState_Screenshot* screenshot);
+    void RenderFrameBuffer(u16* frame_buffer);
+    void SetFrameBuffer(u8* frame_buffer);
+    void SetCheat(const char* szCheat);
+    void ClearCheats();
+    void SetRamModificationCallback(RamChangedCallback callback);
+    bool IsCGB();
+    bool IsGBA();
+    bool IsSGB();
+    void SetSGBEnabled(bool enabled);
+    void SetSGBBorder(bool enabled);
+    Memory* GetMemory();
+    Cartridge* GetCartridge();
+    Processor* GetProcessor();
+    Audio* GetAudio();
+    Video* GetVideo();
+    Input* GetInput();
+    SGB* GetSGB();
+    TraceLogger* GetTraceLogger();
+    u64 GetMasterClockCycles();
+    void SetAccelerometer(double x, double y);
+
+private:
+    void RenderDMGFrame(u16* pFrameBuffer) const;
+    void RenderSGBFrame(u16* pFrameBuffer);
+    void ApplyColorCorrection(u16* pFrameBuffer, int size);
+    void BuildColorCorrectionLUT();
+    void InitDMGPalette();
+    void InitMemoryRules();
+    bool AddMemoryRules(Cartridge::CartridgeTypes forceType = Cartridge::CartridgeNotSupported);
+    void Reset(bool bCGB, bool bGBA);
+    bool SaveState(std::ostream& stream, size_t& size, bool screenshot);
+    bool LoadState(std::istream& stream);
+    bool LoadStateLegacy(std::istream& stream, size_t size);
+    std::string GetSaveStatePath(const char* path, int index);
+
+private:
+    Memory* m_pMemory;
+    Processor* m_pProcessor;
+    Video* m_pVideo;
+    Audio* m_pAudio;
+    Input* m_pInput;
+    Cartridge* m_pCartridge;
+    SGB* m_pSGB;
+    CommonMemoryRule* m_pCommonMemoryRule;
+    IORegistersMemoryRule* m_pIORegistersMemoryRule;
+    RomOnlyMemoryRule* m_pRomOnlyMemoryRule;
+    MBC1MemoryRule* m_pMBC1MemoryRule;
+    MBC2MemoryRule* m_pMBC2MemoryRule;
+    MBC3MemoryRule* m_pMBC3MemoryRule;
+    MBC5MemoryRule* m_pMBC5MemoryRule;
+    MultiMBC1MemoryRule* m_pMultiMBC1MemoryRule;
+    HuC1MemoryRule* m_pHuC1MemoryRule;
+    HuC3MemoryRule* m_pHuC3MemoryRule;
+    MMM01MemoryRule* m_pMMM01MemoryRule;
+    CameraMemoryRule* m_pCameraMemoryRule;
+    MBC7MemoryRule* m_pMBC7MemoryRule;
+    TAMA5MemoryRule* m_pTAMA5MemoryRule;
+    WisdomTreeMemoryRule* m_pWisdomTreeMemoryRule;
+    M161MemoryRule* m_pM161MemoryRule;
+    SachenMMC1MemoryRule* m_pSachenMMC1MemoryRule;
+    SachenMMC2MemoryRule* m_pSachenMMC2MemoryRule;
+    FlashcartMemoryRule* m_pFlashcartMemoryRule;
+    bool m_bCGB;
+    bool m_bGBA;
+    bool m_bSGB;
+    bool m_bPaused;
+    u16 m_DMGPalette[4];
+    bool m_bForceDMG;
+    bool m_bSGBEnabled;
+    bool m_bSGBBorder;
+    u16* m_pSGBFrameBuffer;
+    int m_iRTCUpdateCount;
+    RamChangedCallback m_pRamChangedCallback;
+    GB_Color_Format m_pixelFormat;
+    bool m_bColorCorrectionEnabled;
+    u16 m_ColorCorrectionLUT[65536];
+    u8* m_pSaveStateFrameBuffer;
+    TraceLogger* m_trace_logger;
+    u64 m_master_clock_cycles;
+};
+
+#endif /* CORE_H */

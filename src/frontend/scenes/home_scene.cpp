@@ -92,7 +92,7 @@ void HomeScene::rebuildList(App& app) {
         for (u32 h : app.library().favorites())
             if (const auto* g = app.index().byHash(h)) m_visible.push_back(g);
     }
-    m_lastIndexCount = u32(app.index().totalCount());
+    m_lastIndexGen = app.index().generation();
     refreshSelection(app);
 }
 
@@ -104,6 +104,7 @@ void HomeScene::refreshSelection(App& app) {
         *m_visible[size_t(rsClamp(m_listIdx, 0, int(m_visible.size()) - 1))];
     m_selCore = app.cores().resolve(g);
     m_selMultiCore = app.cores().hasChoice(g.system);
+    m_selMeta = db::loadMeta(g);   /* cached here, not re-read every frame */
 }
 
 void HomeScene::updateCats(App& app) {
@@ -263,7 +264,7 @@ void HomeScene::drawPicker(App& app) {
 
 void HomeScene::update(App& app, float dt) {
     /* A finished background scan invalidates the visible list. */
-    if (u32(app.index().totalCount()) != m_lastIndexCount) {
+    if (app.index().generation() != m_lastIndexGen) {
         rebuildList(app);
         m_listIdx = rsClamp(m_listIdx, 0, int(m_visible.size()) - 1);
         if (m_listIdx < 0) m_listIdx = 0;
@@ -495,8 +496,8 @@ void HomeScene::drawGameList(App& app, float focus) {
                          text::Align::Center);
     }
 
-    /* Name + facts. */
-    const db::GameMeta meta = db::loadMeta(*g);
+    /* Name + facts (metadata cached in refreshSelection, not read here). */
+    const db::GameMeta& meta = m_selMeta;
     float ty = ay + artBox + 8.f;
     fonts.small.draw(r, px + pw / 2.f, ty, g->name.c_str(),
                      rsWithAlpha(pal.textPrimary, a), text::Align::Center);

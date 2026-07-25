@@ -100,12 +100,19 @@ bool loadState(const db::GameEntry& game, EmulatorCore& core, int slot) {
     StateHeader h{};
     std::memcpy(&h, file.data(), sizeof h);
     if (h.magic != STATE_MAGIC || h.version != STATE_VERSION) return false;
+    h.coreName[sizeof h.coreName - 1] = 0;   /* a corrupt field may lack NUL */
     if (std::strncmp(h.coreName, core.name(), sizeof h.coreName) != 0) {
         RS_LOGW("save: state belongs to core '%s'", h.coreName);
         return false;
     }
-    const size_t off = sizeof h + size_t(h.thumbW) * h.thumbH * 2;
-    if (file.size() < off + h.payloadSize) return false;
+    /* Validate header fields with overflow-safe arithmetic: payloadSize and
+     * thumb dimensions come straight from the file and a corrupt state must
+     * not wrap the bounds check into an out-of-bounds read. */
+    const size_t total = file.size();
+    const size_t thumbBytes = size_t(h.thumbW) * h.thumbH * 2;
+    const size_t off = sizeof h + thumbBytes;
+    if (off < sizeof h || off > total) return false;          /* thumb overflow */
+    if (h.payloadSize > total - off) return false;            /* payload overflow */
     const bool ok = core.stateLoad(file.data() + off, h.payloadSize);
     RS_LOGI("save: state slot %d load %s", slot, ok ? "ok" : "FAILED");
     return ok;

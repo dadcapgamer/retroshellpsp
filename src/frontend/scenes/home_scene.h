@@ -10,6 +10,7 @@
 
 #include "frontend/core_registry.h"
 #include "frontend/database/game_index.h"
+#include "frontend/database/metadata.h"
 #include "frontend/scenes/scene.h"
 #include "frontend/ui/anim.h"
 #include "rs_common.h"
@@ -53,12 +54,15 @@ private:
     int        m_listIdx = 0;
     ui::Smooth m_scroll;
     std::vector<const db::GameEntry*> m_visible;
-    u32        m_lastIndexCount = 0;            /* refresh detection */
+    u32        m_lastIndexGen = 0;    /* index generation, not count — a
+                                       * count-preserving rescan still frees
+                                       * the GameEntry* held in m_visible */
 
     /* Core info for the focused game, cached because resolving reads the
      * per-game config file — too costly for the 60fps draw path. */
     const CoreInfo* m_selCore = nullptr;
     bool            m_selMultiCore = false;
+    db::GameMeta    m_selMeta;      /* cached; loadMeta reads the stick */
 
     /* Core picker state. The game is copied so a background scan can't
      * invalidate it while the modal is up; m_pickerCurrent marks the row

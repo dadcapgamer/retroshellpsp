@@ -5,5 +5,9 @@
 
 add_subdirectory(dummy)
 add_subdirectory(gambatte)
+add_subdirectory(gearboy)
+add_subdirectory(tgbdual)
+add_subdirectory(fceumm)
+add_subdirectory(snes9x2005)
 
 rs_finalize_static_cores()

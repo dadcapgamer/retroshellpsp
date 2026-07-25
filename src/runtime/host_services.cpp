@@ -8,6 +8,8 @@
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
+#include <map>
+#include <string>
 
 namespace rs::host {
 
@@ -16,10 +18,12 @@ namespace {
 u32 s_gameHash = 0;
 volatile u32 s_input = 0;
 
-/* get_option returns borrowed pointers; keep a small rotation of buffers
- * so a core can hold a few results at once. */
-char s_optBufs[4][64];
-int  s_optClock = 0;
+/* Options for the active game, resolved once each and cached in memory: a
+ * core may call get_option every frame, and cfg::gameOption reads+parses a
+ * Memory Stick file per call, which would stall real hardware. std::map
+ * gives stable storage so the borrowed const char* stays valid. Cleared
+ * when the active game changes. */
+std::map<std::string, std::string> s_optCache;
 
 void hostLog(int level, const char* fmt, ...) {
     char buf[256];
@@ -56,12 +60,10 @@ int32_t hostFileRead(const char* path, void* buf, uint32_t offset,
 }
 
 const char* hostGetOption(const char* key) {
-    const std::string v = cfg::gameOption(s_gameHash, key);
-    if (v.empty()) return nullptr;
-    char* buf = s_optBufs[s_optClock];
-    s_optClock = (s_optClock + 1) % 4;
-    std::snprintf(buf, sizeof s_optBufs[0], "%s", v.c_str());
-    return buf;
+    auto it = s_optCache.find(key);
+    if (it == s_optCache.end())   /* first query for this key: read once */
+        it = s_optCache.emplace(key, cfg::gameOption(s_gameHash, key)).first;
+    return it->second.empty() ? nullptr : it->second.c_str();
 }
 
 const RSHostAPI s_table = {
@@ -82,7 +84,10 @@ const RSHostAPI s_table = {
 
 const RSHostAPI* table() { return &s_table; }
 
-void setActiveGame(u32 pathHash) { s_gameHash = pathHash; }
+void setActiveGame(u32 pathHash) {
+    s_gameHash = pathHash;
+    s_optCache.clear();   /* options are per-game */
+}
 void setInputState(u32 rsButtons) { s_input = rsButtons; }
 
 }  // namespace rs::host

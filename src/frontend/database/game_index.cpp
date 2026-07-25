@@ -78,6 +78,7 @@ void GameIndex::replaceAll(std::vector<GameEntry> all) {
                   [](const GameEntry& a, const GameEntry& b) {
                       return a.name < b.name;
                   });
+    m_generation++;   /* every prior GameEntry* is now dangling */
 }
 
 bool GameIndex::saveCache() const {
