@@ -32,12 +32,12 @@ constexpr Step SCRIPT[] = {
     {30,   0,                 "boot"},
     {150,  0,                 "home"},
     {165,  PSP_CTRL_RIGHT,    nullptr},   /* GB → GBC */
-    {205,  PSP_CTRL_DOWN,     nullptr},   /* into the GBC list (Cave Dave) */
-    {240,  0,                 "list_gbc"},
-    {260,  PSP_CTRL_CROSS,    nullptr},   /* picker: gambatte/gearboy/tgbdual */
-    {345,  PSP_CTRL_DOWN,     nullptr},   /* → gearboy */
-    {353,  PSP_CTRL_DOWN,     nullptr},   /* → tgbdual */
-    {390,  PSP_CTRL_CROSS,    nullptr},   /* run with tgbdual */
+    {173,  PSP_CTRL_RIGHT,    nullptr},   /* → GBA */
+    {181,  PSP_CTRL_RIGHT,    nullptr},   /* → NES */
+    {189,  PSP_CTRL_RIGHT,    nullptr},   /* → SNES */
+    {205,  PSP_CTRL_DOWN,     nullptr},   /* into the SNES list */
+    {240,  0,                 "list_snes"},
+    {260,  PSP_CTRL_CROSS,    nullptr},   /* single SNES core → direct launch */
     {560,  0,                 "game_a"},
     {820,  0,                 "game_b"},
     {1080, 0,                 "game_c"},

@@ -33,6 +33,14 @@ RSVideoFrame g_frameInfo;
 
 retro_pixel_format g_srcFormat = RETRO_PIXEL_FORMAT_0RGB1555;
 
+/* The active ROM, remembered so the shim can answer both the classic
+ * retro_game_info path and the newer GET_GAME_INFO_EXT query — modern
+ * cores (e.g. FCEUmm) fetch the ROM buffer only via the EXT interface and
+ * fall back to broken file loading if it isn't answered. */
+const void* g_romData = nullptr;
+uint32_t    g_romSize = 0;
+char        g_romPath[256];
+
 char g_version[32] = "?";
 
 uint32_t g_sramHash;
@@ -146,6 +154,34 @@ bool environment(unsigned cmd, void* data) {
         case RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE:
             *static_cast<bool*>(data) = false;
             return true;
+#ifdef RETRO_ENVIRONMENT_GET_GAME_INFO_EXT
+        case RETRO_ENVIRONMENT_GET_GAME_INFO_EXT: {
+            /* Hand the core the in-RAM ROM buffer via the extended-info
+             * struct. Without this, modern cores never see `data` and try
+             * to read the file themselves, which the bare PRX can't do. */
+            static retro_game_info_ext ext;
+            static char dirBuf[256], nameBuf[128], extBuf[16];
+            const char* slash = std::strrchr(g_romPath, '/');
+            const char* base = slash ? slash + 1 : g_romPath;
+            const char* dot = std::strrchr(base, '.');
+            std::snprintf(dirBuf, sizeof dirBuf, "%.*s",
+                          slash ? int(slash - g_romPath) : 0, g_romPath);
+            std::snprintf(nameBuf, sizeof nameBuf, "%.*s",
+                          dot ? int(dot - base) : int(std::strlen(base)), base);
+            std::snprintf(extBuf, sizeof extBuf, "%s", dot ? dot + 1 : "");
+            ext = {};
+            ext.full_path = g_romPath;
+            ext.dir  = dirBuf;
+            ext.name = nameBuf;
+            ext.ext  = extBuf;
+            ext.data = g_romData;
+            ext.size = g_romSize;
+            ext.file_in_archive = false;
+            ext.persistent_data = true;   /* buffer lives in the arena */
+            *static_cast<const retro_game_info_ext**>(data) = &ext;
+            return true;
+        }
+#endif
         case RETRO_ENVIRONMENT_GET_CORE_OPTIONS_VERSION:
             *static_cast<unsigned*>(data) = 2;
             return true;
@@ -428,6 +464,10 @@ static int coreLoadRom(const char* path, const void* data, uint32_t size) {
                     "libretro shim: ROM streaming (data=NULL) unsupported");
         return -1;
     }
+
+    g_romData = data;
+    g_romSize = size;
+    std::snprintf(g_romPath, sizeof g_romPath, "%s", path ? path : "");
 
     retro_game_info game = {};
     game.path = path;
