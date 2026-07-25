@@ -25,54 +25,22 @@ struct Step {
  * gambatte → real emulation → save/load a state → exit → relaunch, which
  * must now SKIP the picker (core remembered per game) → exit → the
  * detail panel reads "via gambatte". */
+/* Clean render test: launch the SNES game via snes9x2005 (the only SNES
+ * core once dummy is removed → direct launch, no picker) and capture raw
+ * gameplay frames with NO input, so nothing opens the in-game menu. */
 constexpr Step SCRIPT[] = {
     {30,   0,                 "boot"},
     {150,  0,                 "home"},
     {165,  PSP_CTRL_RIGHT,    nullptr},   /* GB → GBC */
-    {173,  PSP_CTRL_RIGHT,    nullptr},   /* → GBA */
-    {181,  PSP_CTRL_RIGHT,    nullptr},   /* → NES */
-    {189,  PSP_CTRL_RIGHT,    nullptr},   /* → SNES */
-    {205,  PSP_CTRL_DOWN,     nullptr},   /* into the SNES game list */
-    {240,  0,                 "list_snes"},
-    {260,  PSP_CTRL_CROSS,    nullptr},   /* picker: dummy + snes9x2005 */
-    {345,  PSP_CTRL_DOWN,     nullptr},   /* → snes9x2005 */
-    {370,  0,                 "core_picker_snes"},
-    {390,  PSP_CTRL_CROSS,    nullptr},   /* run with snes9x2005 */
-    {700,  0,                 "game_title"},
-    {720,  PSP_CTRL_START,    nullptr},   /* past the title screen */
-    {721,  PSP_CTRL_START,    nullptr},
-    {722,  PSP_CTRL_START,    nullptr},
-    {950,  0,                 "game_playing"},
-    {920,  PSP_CTRL_LTRIGGER | PSP_CTRL_RTRIGGER, nullptr},
-    {921,  PSP_CTRL_LTRIGGER | PSP_CTRL_RTRIGGER | PSP_CTRL_START, nullptr},
-    {990,  0,                 "game_menu"},
-    {1005, PSP_CTRL_DOWN,     nullptr},   /* → Save state */
-    {1020, PSP_CTRL_CROSS,    nullptr},   /* save slot 1 */
-    {1100, 0,                 "menu_saved"},
-    {1115, PSP_CTRL_DOWN,     nullptr},   /* → Load state */
-    {1130, PSP_CTRL_CROSS,    nullptr},   /* load slot 1, resumes */
-    {1200, 0,                 "game_loaded"},
-    {1220, PSP_CTRL_LTRIGGER | PSP_CTRL_RTRIGGER, nullptr},
-    {1221, PSP_CTRL_LTRIGGER | PSP_CTRL_RTRIGGER | PSP_CTRL_START, nullptr},
-    {1250, PSP_CTRL_DOWN,     nullptr},
-    {1258, PSP_CTRL_DOWN,     nullptr},
-    {1266, PSP_CTRL_DOWN,     nullptr},
-    {1274, PSP_CTRL_DOWN,     nullptr},
-    {1282, PSP_CTRL_DOWN,     nullptr},   /* → Exit game */
-    {1300, PSP_CTRL_CROSS,    nullptr},
-    {1400, 0,                 "home_back"},
-    /* Relaunch: same game, no picker this time — gambatte is remembered. */
-    {1420, PSP_CTRL_CROSS,    nullptr},
-    {1560, 0,                 "game_direct_relaunch"},
-    {1580, PSP_CTRL_LTRIGGER | PSP_CTRL_RTRIGGER, nullptr},
-    {1581, PSP_CTRL_LTRIGGER | PSP_CTRL_RTRIGGER | PSP_CTRL_START, nullptr},
-    {1610, PSP_CTRL_DOWN,     nullptr},
-    {1618, PSP_CTRL_DOWN,     nullptr},
-    {1626, PSP_CTRL_DOWN,     nullptr},
-    {1634, PSP_CTRL_DOWN,     nullptr},
-    {1642, PSP_CTRL_DOWN,     nullptr},
-    {1660, PSP_CTRL_CROSS,    nullptr},
-    {1770, 0,                 "detail_via_core"},
+    {205,  PSP_CTRL_DOWN,     nullptr},   /* into the GBC list (Cave Dave) */
+    {240,  0,                 "list_gbc"},
+    {260,  PSP_CTRL_CROSS,    nullptr},   /* picker: gambatte/gearboy/tgbdual */
+    {345,  PSP_CTRL_DOWN,     nullptr},   /* → gearboy */
+    {353,  PSP_CTRL_DOWN,     nullptr},   /* → tgbdual */
+    {390,  PSP_CTRL_CROSS,    nullptr},   /* run with tgbdual */
+    {560,  0,                 "game_a"},
+    {820,  0,                 "game_b"},
+    {1080, 0,                 "game_c"},
 };
 constexpr int STEPS = int(sizeof(SCRIPT) / sizeof(SCRIPT[0]));
 

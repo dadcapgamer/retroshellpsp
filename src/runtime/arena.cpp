@@ -50,7 +50,9 @@ void shutdown() {
 void* alloc(u32 size, u32 align) {
     if (align == 0) align = 16;
     const u32 start = (s_cursor + align - 1) & ~(align - 1);
-    if (start + size > s_size) {
+    /* Overflow-safe: `start + size` could wrap for a huge (e.g. corrupt
+     * zip-declared) size and pass a naive `start + size > s_size` check. */
+    if (start > s_size || size > s_size - start) {
         RS_LOGW("arena: out of memory (want %u, have %u)", unsigned(size),
                 unsigned(s_size - s_cursor));
         return nullptr;

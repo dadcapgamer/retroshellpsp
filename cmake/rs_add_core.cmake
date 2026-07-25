@@ -97,6 +97,15 @@ function(rs_add_core name)
   endif()
 
   target_include_directories(${target} PRIVATE ${CMAKE_SOURCE_DIR}/src)
+
+  # Emulator cores rely on wrapping signed arithmetic and type-punning that
+  # GCC's default strict-overflow / strict-aliasing optimizations miscompile
+  # at -O2/-O3 — the classic "core runs but renders garbage/nothing" bug.
+  # Every upstream libretro Makefile builds with these; apply them to all
+  # cores so no future core has to remember.
+  target_compile_options(${target} PRIVATE
+    -fno-strict-overflow -fno-strict-aliasing)
+
   if(ARG_LIBS)
     target_link_libraries(${target} PRIVATE ${ARG_LIBS})
   endif()

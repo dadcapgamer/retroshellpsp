@@ -20,7 +20,7 @@ void init() {
 
 void* alloc(u32 size, u32 align) {
     u32 start = (s_cursor + align - 1) & ~(align - 1);
-    if (start + size > s_size) return nullptr;
+    if (start > s_size || size > s_size - start) return nullptr;  /* no wrap */
     s_cursor = start + size;
     if (s_cursor > s_high) s_high = s_cursor;
     return s_base + start;
