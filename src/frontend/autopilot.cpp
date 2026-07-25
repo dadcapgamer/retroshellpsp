@@ -35,9 +35,10 @@ constexpr Step SCRIPT[] = {
     {173,  PSP_CTRL_RIGHT,    nullptr},   /* → GBA */
     {181,  PSP_CTRL_RIGHT,    nullptr},   /* → NES */
     {189,  PSP_CTRL_RIGHT,    nullptr},   /* → SNES */
-    {205,  PSP_CTRL_DOWN,     nullptr},   /* into the SNES list */
-    {240,  0,                 "list_snes"},
-    {260,  PSP_CTRL_CROSS,    nullptr},   /* single SNES core → direct launch */
+    {197,  PSP_CTRL_RIGHT,    nullptr},   /* → Genesis/MD */
+    {205,  PSP_CTRL_DOWN,     nullptr},   /* into the MD list */
+    {240,  0,                 "list_md"},
+    {260,  PSP_CTRL_CROSS,    nullptr},   /* single MD core → direct launch */
     {560,  0,                 "game_a"},
     {820,  0,                 "game_b"},
     {1080, 0,                 "game_c"},
