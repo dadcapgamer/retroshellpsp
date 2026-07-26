@@ -1,0 +1,11 @@
+Sord M5 shares a lot in common with the SC-3000/SG-1000.
+
+It uses the same VDP chip (16KB of VRAM) and also the same RAM amount.
+There seems to be some conflict over the RAM memory : z88dk says it has 4K but someone else said it had 2k ??
+
+Sord M5 also uses a stock PSG soundchip, which is the same as the SG-1000/SC-3000.
+
+Some people reported that the PSG soundchip in the Sord M5 has subtle differences.
+
+http://www.smspower.org/forums/14468-SordM5Programming
+https://github.com/z88dk/z88dk/wiki/Platform---Sord-M5

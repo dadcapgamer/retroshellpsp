@@ -10,16 +10,20 @@
 
 #include "frontend/database/game_index.h"
 
+#include <atomic>
+
 namespace rs::db {
 
 class RomScanner {
 public:
     /* Kicks off the worker; no-op if already running. */
     void start();
+    /* Requests cancellation and joins the worker. Safe if already stopped. */
+    void stop();
 
-    bool running() const   { return m_running; }
+    bool running() const   { return m_running.load(); }
     /* Files inspected so far (progress feedback). */
-    int  progress() const  { return m_progress; }
+    int  progress() const  { return m_progress.load(); }
 
     /* Main-thread poll: returns true once per finished scan and moves the
      * results out. */
@@ -29,9 +33,11 @@ private:
     static int threadMain(void* self);
     void scan();
 
-    volatile bool m_running  = false;
-    volatile bool m_done     = false;
-    volatile int  m_progress = 0;
+    std::atomic<bool> m_running{false};
+    std::atomic<bool> m_done{false};
+    std::atomic<bool> m_stopRequested{false};
+    std::atomic<int>  m_progress{0};
+    int m_threadId = -1;
     std::vector<GameEntry> m_results;
 };
 

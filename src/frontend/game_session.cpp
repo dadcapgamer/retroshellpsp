@@ -6,6 +6,7 @@
 #include "platform/psp/power.h"
 #include "platform/psp/vram.h"
 #include "runtime/arena.h"
+#include "runtime/bounds.h"
 #include "runtime/config.h"
 #include "runtime/host_services.h"
 #include "runtime/log.h"
@@ -18,6 +19,7 @@
 
 #include <cstdio>
 #include <cstring>
+#include <algorithm>
 
 namespace rs {
 
@@ -27,11 +29,26 @@ constexpr float SRAM_FLUSH_SECONDS = 10.f;
 /* Most emulation frames to run in one display frame before conceding the
  * game must slow down — bounds catch-up so a slow frame can't spiral. */
 constexpr int MAX_CATCHUP = 4;
+constexpr u32 MIN_CORE_HEADROOM = 2u * 1024u * 1024u;
+constexpr u32 MIN_BUFFERED_CORE_HEADROOM = 1u * 1024u * 1024u;
+constexpr u32 MAX_ROM_BYTES = 16u * 1024u * 1024u;
+constexpr u32 MAX_STREAMED_ROM_BYTES = 64u * 1024u * 1024u;
+constexpr u32 MAX_ZIP_ENTRIES = 4096;
+constexpr u64 MAX_COMPRESSION_RATIO = 200;
 
 const char* MENU_LABELS[] = {
     "Resume", "Save state", "Load state", "Reset", "Screenshot", "Exit game",
 };
 }  // namespace
+
+bool GameSession::injectFailure(const char* stage) const {
+#ifdef RS_FAILURE_INJECTION
+    return cfg::gameOption(m_game.pathHash, "injectFailure") == stage;
+#else
+    (void)stage;
+    return false;
+#endif
+}
 
 /* ---------------------------------------------------------------------- */
 /* Launch / teardown                                                       */
@@ -47,25 +64,44 @@ bool GameSession::startCore(App& app) {
 
     /* 1. Evict frontend caches (the arena/vram space becomes the core's). */
     app.evictForCore();
+    m_frontendEvicted = true;
 
 #ifndef RS_STATIC_CORES
     /* 2. PRX mode: the module loader needs partition space, so the arena
      * is released around the load and re-reserved afterwards. */
     mem::shutdown();
+    m_arenaReady = false;
 #endif
-    const bool loaded = m_cores.loadCore(*info);
+    bool loaded = false;
+    if (!injectFailure("missing_prx"))
+        loaded = m_cores.loadCore(*info);
 #ifndef RS_STATIC_CORES
     if (!mem::init()) {
         std::snprintf(m_error, sizeof m_error, "arena re-reserve failed");
         return false;
     }
+    m_arenaReady = true;
 #endif
     if (!loaded) {
-        std::snprintf(m_error, sizeof m_error, "%s", m_cores.error());
+        std::snprintf(m_error, sizeof m_error, "%s",
+                      injectFailure("missing_prx") ? "injected missing PRX"
+                                                    : m_cores.error());
+        return false;
+    }
+    if (injectFailure("bad_api")) {
+        std::snprintf(m_error, sizeof m_error, "injected bad API");
         return false;
     }
     /* Init only now: the arena is guaranteed to be in place. */
-    if (!m_cores.core().initialize(host::table())) {
+    host::beginCoreSession();
+    m_coreSessionStarted = true;
+    if (injectFailure("arena_exhaustion")) {
+        (void)mem::alloc(mem::available(), 16);
+        std::snprintf(m_error, sizeof m_error, "injected arena exhaustion");
+        return false;
+    }
+    if (injectFailure("init_failure") ||
+        !m_cores.initialize(host::table())) {
         std::snprintf(m_error, sizeof m_error, "core init failed");
         return false;
     }
@@ -80,12 +116,27 @@ bool GameSession::startCore(App& app) {
             std::snprintf(m_error, sizeof m_error, "zip open failed");
             return false;
         }
+        if (mz_zip_reader_get_num_files(&zip) > MAX_ZIP_ENTRIES) {
+            mz_zip_reader_end(&zip);
+            std::snprintf(m_error, sizeof m_error, "zip has too many entries");
+            return false;
+        }
         const int idx =
             mz_zip_reader_locate_file(&zip, m_game.zipEntry.c_str(), nullptr, 0);
         mz_zip_archive_file_stat st;
         if (idx < 0 || !mz_zip_reader_file_stat(&zip, mz_uint(idx), &st)) {
             mz_zip_reader_end(&zip);
             std::snprintf(m_error, sizeof m_error, "zip entry missing");
+            return false;
+        }
+        if (!st.m_is_supported || st.m_is_encrypted ||
+            !st.m_uncomp_size || st.m_uncomp_size > MAX_ROM_BYTES ||
+            !bounds::decompressionRatio(st.m_comp_size, st.m_uncomp_size,
+                                        MAX_COMPRESSION_RATIO) ||
+            mem::available() <= MIN_CORE_HEADROOM ||
+            st.m_uncomp_size > mem::available() - MIN_CORE_HEADROOM) {
+            mz_zip_reader_end(&zip);
+            std::snprintf(m_error, sizeof m_error, "rom exceeds memory budget");
             return false;
         }
         romSize = u32(st.m_uncomp_size);
@@ -104,24 +155,51 @@ bool GameSession::startCore(App& app) {
             std::snprintf(m_error, sizeof m_error, "rom missing");
             return false;
         }
-        romSize = u32(size);
-        romData = static_cast<u8*>(mem::alloc(romSize, 64));
-        if (!romData ||
-            fs::readRange(m_game.path.c_str(), romData, 0, romSize) !=
-                s32(romSize)) {
-            std::snprintf(m_error, sizeof m_error, "rom read failed");
+        if (u32(size) > MAX_STREAMED_ROM_BYTES) {
+            std::snprintf(m_error, sizeof m_error, "rom exceeds memory budget");
+            return false;
+        }
+        const u32 requiredHeadroom = info->requiresFullContent
+                                         ? MIN_BUFFERED_CORE_HEADROOM
+                                         : MIN_CORE_HEADROOM;
+        const bool canBuffer =
+            u32(size) <= MAX_ROM_BYTES &&
+            mem::available() > requiredHeadroom &&
+            u32(size) <= mem::available() - requiredHeadroom;
+        if (canBuffer) {
+            romSize = u32(size);
+            romData = static_cast<u8*>(mem::alloc(romSize, 64));
+            if (!romData ||
+                fs::readRange(m_game.path.c_str(), romData, 0, romSize) !=
+                    s32(romSize)) {
+                std::snprintf(m_error, sizeof m_error, "rom read failed");
+                return false;
+            }
+        } else if (!info->requiresFullContent) {
+            /* The shim exposes a read-only libretro VFS backed by host
+             * random-access reads. Cores that require a full path can stream
+             * large uncompressed ROMs without duplicating them in RAM. */
+            romData = nullptr;
+            romSize = 0;
+        } else {
+            std::snprintf(m_error, sizeof m_error,
+                          "rom exceeds core memory budget");
             return false;
         }
     }
 
     /* 4. Boot the core. */
+    if (injectFailure("corrupt_rom") && romData && romSize)
+        romData[0] ^= 0xFF;
     host::setActiveGame(m_game.pathHash);
-    if (!m_cores.core().loadROM(m_game.path.c_str(), romData, romSize)) {
+    if (injectFailure("rom_rejection") ||
+        !m_cores.core().loadROM(m_game.path.c_str(), romData, romSize)) {
         std::snprintf(m_error, sizeof m_error, "core rejected rom");
         return false;
     }
     save::loadSram(m_game, m_cores.core());
     audio::clear();
+    audio::resetTelemetry();
     m_romLoaded = true;   /* only now is it safe to persist SRAM on exit */
 
     /* Resolve per-game video options once, here, not per frame. */
@@ -167,17 +245,30 @@ void GameSession::exitToHome(App& app) {
      * first would be a use-after-free. */
 #ifndef RS_STATIC_CORES
     m_cores.unloadCore();
-    mem::shutdown();
-    mem::init();
+    if (m_coreSessionStarted) {
+        host::endCoreSession();
+        m_coreSessionStarted = false;
+    }
+    if (m_frontendEvicted) {
+        if (m_arenaReady) mem::shutdown();
+        m_arenaReady = mem::init();
+    }
 #else
     m_cores.unloadCore();
-    mem::reset(0);
+    if (m_coreSessionStarted) {
+        host::endCoreSession();
+        m_coreSessionStarted = false;
+    }
+    if (m_frontendEvicted) mem::reset(0);
 #endif
     audio::clear();
     host::setActiveGame(0);
     power::setCpuMhz(cfg::get().cpuMenuMhz);
 
-    app.restoreAfterCore();
+    if (m_frontendEvicted) {
+        app.restoreAfterCore();
+        m_frontendEvicted = false;
+    }
     m_state = State::Exiting;
     app.switchScene(std::make_unique<HomeScene>());
 }
@@ -230,27 +321,56 @@ void GameSession::updateRunning(App& app, float dt) {
     const float period = 1.f / float(m_cores.core().fps());
     m_emuAccum += dt;
     int ran = 0;
-    const u32 emuStart = sceKernelGetSystemTimeLow();
     while (m_emuAccum >= period && ran < MAX_CATCHUP) {
+        const u32 frameStart = sceKernelGetSystemTimeLow();
         m_cores.core().runFrame(buttons);
+        const u32 frameUs = sceKernelGetSystemTimeLow() - frameStart;
+        m_perfEmuUs += frameUs;
+        if (m_perfSampleCount < PERF_SAMPLES)
+            m_perfSamples[m_perfSampleCount++] = frameUs;
         m_emuAccum -= period;
         ran++;
     }
     if (ran >= MAX_CATCHUP) m_emuAccum = 0.f;
-    m_perfEmuUs += sceKernelGetSystemTimeLow() - emuStart;
+    if (ran > 0) {
+        m_videoProbe.observe(m_cores.core().frame());
+        if (m_videoProbe.blackFrames() == FrameProbe::BLACK_WARNING_FRAMES) {
+            RS_LOGW("video: persistent black output; FPS only confirms core "
+                    "frame calls, not visible rendering");
+        } else if (m_videoProbe.staticFrames() ==
+                   FrameProbe::STATIC_WARNING_FRAMES) {
+            RS_LOGW("video: output unchanged for %u observations",
+                    unsigned(m_videoProbe.staticFrames()));
+        } else if (m_videoProbe.missingFrames() ==
+                   FrameProbe::MISSING_WARNING_FRAMES) {
+            RS_LOGW("video: core has not supplied a valid frame");
+        }
+    }
 
     /* Timing report once per second. m_perfFrames counts emulated frames,
      * so it reads ~60 when the game is running at full speed. */
     m_perfFrames += ran;
     m_perfElapsed += dt;
     if (m_perfElapsed >= 1.f) {
-        RS_LOGI("perf: %d emu-fps | emu %u us/frame | cpu %d MHz | audio buf %u",
+        std::sort(m_perfSamples, m_perfSamples + m_perfSampleCount);
+        const int p95Index = m_perfSampleCount
+            ? (m_perfSampleCount * 95 - 1) / 100 : 0;
+        const u32 p95 = m_perfSampleCount ? m_perfSamples[p95Index] : 0;
+        RS_LOGI("perf: %d fps | avg %u us | p95 %u us | cpu %d MHz | "
+                "arena %u/%u KB | allocfail %u | audio underrun %u drop %u | "
+                "video %s nonblack %u/64",
                 m_perfFrames,
                 unsigned(m_perfEmuUs / u32(m_perfFrames > 0 ? m_perfFrames : 1)),
-                power::cpuMhz(), unsigned(audio::buffered()));
+                unsigned(p95), power::cpuMhz(),
+                unsigned(mem::used() / 1024), unsigned(mem::highWater() / 1024),
+                unsigned(host::allocationFailures()),
+                unsigned(audio::underruns()), unsigned(audio::droppedFrames()),
+                m_videoProbe.status(),
+                unsigned(m_videoProbe.nonBlackSamples()));
         m_perfElapsed = 0.f;
         m_perfEmuUs = 0;
         m_perfFrames = 0;
+        m_perfSampleCount = 0;
     }
 
     /* Periodic battery-save flush. */
@@ -389,11 +509,19 @@ void GameSession::drawFrame(App& app) {
 
     if (!m_frameTex.valid() || m_frameW != f.width || m_frameH != f.height) {
         gfx::Renderer::freeTexture(m_frameTex);
-        const int psm = f.format == RS_PIXFMT_RGBA8888 ? GU_PSM_8888
-                                                       : GU_PSM_5650;
+        const int psm = f.format == RS_PIXFMT_RGBA8888
+                            ? GU_PSM_8888
+                            : f.format == RS_PIXFMT_RGBA5551 ? GU_PSM_5551
+                                                            : GU_PSM_5650;
         if (!gfx::Renderer::createTexture(m_frameTex, f.width, f.height, psm,
-                                          nullptr, /*dynamic=*/true))
+                                          nullptr, /*dynamic=*/true) ||
+            injectFailure("framebuffer_allocation")) {
+            gfx::Renderer::freeTexture(m_frameTex);
+            std::snprintf(m_error, sizeof m_error,
+                          "framebuffer allocation failed");
+            m_state = State::Failed;
             return;
+        }
         m_frameW = f.width;
         m_frameH = f.height;
     }

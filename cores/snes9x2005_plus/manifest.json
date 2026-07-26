@@ -1,0 +1,8 @@
+{
+  "name": "snes9x2005_plus",
+  "version": "1.36-plus",
+  "systems": "snes",
+  "priority": 80,
+  "testOnly": true,
+  "requiresFullContent": true
+}

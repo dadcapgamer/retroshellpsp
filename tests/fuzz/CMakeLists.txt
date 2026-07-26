@@ -1,0 +1,23 @@
+cmake_minimum_required(VERSION 3.16)
+project(retrosuite_fuzzers LANGUAGES C)
+
+option(RS_LIBFUZZER "Link Clang libFuzzer instead of the stdin corpus driver" OFF)
+set(FUZZ_FLAGS -fsanitize=address,undefined -fno-omit-frame-pointer)
+set(FUZZ_DRIVER standalone_main.c)
+if(RS_LIBFUZZER)
+  if(NOT CMAKE_C_COMPILER_ID MATCHES "Clang")
+    message(FATAL_ERROR "RS_LIBFUZZER requires Clang")
+  endif()
+  list(APPEND FUZZ_FLAGS -fsanitize=fuzzer)
+  set(FUZZ_DRIVER)
+endif()
+
+add_executable(fuzz_json fuzz_json.c ${FUZZ_DRIVER} ../../external/cJSON.c)
+target_include_directories(fuzz_json PRIVATE ../../external)
+target_compile_options(fuzz_json PRIVATE ${FUZZ_FLAGS})
+target_link_options(fuzz_json PRIVATE ${FUZZ_FLAGS})
+
+add_executable(fuzz_zip fuzz_zip.c ${FUZZ_DRIVER} ../../external/miniz.c)
+target_include_directories(fuzz_zip PRIVATE ../../external)
+target_compile_options(fuzz_zip PRIVATE ${FUZZ_FLAGS})
+target_link_options(fuzz_zip PRIVATE ${FUZZ_FLAGS})

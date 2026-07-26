@@ -29,13 +29,17 @@ bool Font::load(const void* data, u32 size) {
         RS_LOGE("font: bad magic");
         return false;
     }
-    const u32 glyphBytes = u32(h.glyphCount) * sizeof(Glyph);
-    const u32 atlasBytes = u32(h.atlasW) * u32(h.atlasH);
-    if (size < sizeof(Header) + glyphBytes + atlasBytes) {
+    if (!h.atlasW || !h.atlasH || h.atlasW > 512 || h.atlasH > 512)
+        return false;
+    const u64 glyphBytes64 = u64(h.glyphCount) * sizeof(Glyph);
+    const u64 atlasBytes64 = u64(h.atlasW) * u64(h.atlasH);
+    const u64 required = sizeof(Header) + glyphBytes64 + atlasBytes64;
+    if (required > size || glyphBytes64 > UINT32_MAX) {
         RS_LOGE("font: truncated (%u < %u)", unsigned(size),
-                unsigned(sizeof(Header) + glyphBytes + atlasBytes));
+                unsigned(required > UINT32_MAX ? UINT32_MAX : required));
         return false;
     }
+    const u32 glyphBytes = u32(glyphBytes64);
 
     m_glyphs = static_cast<Glyph*>(std::malloc(glyphBytes));
     if (!m_glyphs) return false;

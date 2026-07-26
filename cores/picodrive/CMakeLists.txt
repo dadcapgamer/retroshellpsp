@@ -1,19 +1,33 @@
 # PicoDrive (Genesis/MegaDrive + Master System + Game Gear + 32X + CD) via
 # the libretro shim.
 #
-# PicoDrive's build is too intricate to restate in CMake (arch-specific DRC
-# backends, submodules, conditional sources), so upstream/ vendors a
-# prebuilt static lib built with its own Makefile for the psp1 target:
-#
-#   git clone --recurse-submodules https://github.com/libretro/picodrive
-#   cd picodrive && make -f Makefile.libretro platform=psp1
-#   cp picodrive_libretro_psp1.a  <here>/upstream/picodrive_libretro.a
-#
-# That build selects the C 68K core (FAME), CZ80, and the MIPS SH2 dynarec —
-# no ARM assembly. GPLv2 (see upstream/COPYING).
+# PicoDrive is built from the pinned, pruned upstream source in this tree.
+# Its Makefile selects FAME, CZ80, and the MIPS SH2 dynarec for psp1.
+# LOW_MEMORY reduces caches for the PSP-1000; libchdr is disabled because
+# RetroSuite does not advertise Sega CD support. GPLv2 (upstream/COPYING).
 
 set(PD ${CMAKE_CURRENT_SOURCE_DIR}/upstream)
-set(LRC ${PD}/lrc)
+set(LRC ${PD}/platform/libretro/libretro-common)
+set(PD_BUILD ${CMAKE_CURRENT_BINARY_DIR}/upstream-build)
+set(PD_ARCHIVE ${PD_BUILD}/picodrive_libretro_psp1.a)
+
+file(GLOB_RECURSE PD_UPSTREAM_FILES CONFIGURE_DEPENDS
+     ${PD}/*.c ${PD}/*.h ${PD}/*.S ${PD}/*.s
+     ${PD}/Makefile ${PD}/Makefile.libretro)
+find_program(RS_MAKE_EXECUTABLE make REQUIRED)
+
+add_custom_command(
+  OUTPUT ${PD_ARCHIVE}
+  COMMAND ${CMAKE_COMMAND} -E rm -rf ${PD_BUILD}
+  COMMAND ${CMAKE_COMMAND} -E copy_directory ${PD} ${PD_BUILD}
+  COMMAND ${CMAKE_COMMAND} -E chdir ${PD_BUILD}
+          ${RS_MAKE_EXECUTABLE} -f Makefile.libretro
+          platform=psp1 LOW_MEMORY=1 use_libchdr=0 PLATFORM_TREMOR=1
+          GIT_REVISION=-78a662e -j2
+  DEPENDS ${PD_UPSTREAM_FILES}
+  COMMENT "Building pinned PicoDrive 78a662e for PSP-1000"
+  VERBATIM)
+add_custom_target(rs_picodrive_upstream DEPENDS ${PD_ARCHIVE})
 
 # The static lib was built with STATIC_LINKING=1, which leaves the
 # libretro-common file/stream/PNG helpers for the frontend to provide.
@@ -39,9 +53,13 @@ rs_add_core(picodrive
     ${LRC}/time/rtime.c
     ${LRC}/formats/png/rpng.c
     ../shared/psp_posix_stubs.c
-  LIBS ${PD}/picodrive_libretro.a)
+  LIBS ${PD_ARCHIVE})
 
-target_include_directories(rs_core_picodrive PRIVATE ${PD}/lrc/include)
+add_dependencies(rs_core_picodrive rs_picodrive_upstream)
+
+target_include_directories(rs_core_picodrive PRIVATE
+  ${LRC}/include
+  ${LRC})
 
 target_compile_definitions(rs_core_picodrive PRIVATE
   RS_CORE_NAME="picodrive"

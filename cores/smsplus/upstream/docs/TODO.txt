@@ -1,0 +1,16 @@
+TODO LIST
+=========
+
+- Switch render.c internally to 16-bits instead of using remap_8_to_16.
+Right now, SMS Plus assumes that we use an 8-bits display instead.
+For better performance on devices we target (RGB565 mainly), this will need to be switched to 16-bits internally.
+
+remap_8_to_16 is COMPLETE AND UTTER CRAP and takes away most of our CPU cycles simply because of it.
+I've seen some other ports trying to simplify said code.
+The Odroid-Go port of SMS Plus GX does such a thing, see here :
+https://github.com/OtherCrashOverride/go-play/blob/71636ed569ea6ecbb128fbd30bc4c5eedb59eab1/smsplusgx-go/components/smsplus/render.c
+
+But if you look at it, it still uses an 8-bits buffer.
+Looks like they still use an 8-bits display on the Odroid-Go.
+
+We really want to do it the proper way but perhaps getting rid of caching can help us do so.

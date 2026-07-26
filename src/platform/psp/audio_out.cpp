@@ -5,6 +5,7 @@
 #include <pspkernel.h>
 
 #include <cstring>
+#include <atomic>
 
 namespace rs::audio {
 
@@ -15,12 +16,15 @@ constexpr u32 RING_MASK   = RING_FRAMES - 1;
 constexpr int BLOCK_FRAMES = 1024;           /* sceAudio block size */
 
 s16 s_ring[RING_FRAMES * 2];
-volatile u32 s_write = 0;   /* in frames, free-running (producer writes) */
-volatile u32 s_read  = 0;   /* audio thread is the ONLY writer of s_read  */
-volatile bool s_running = false;
-volatile bool s_flush   = false;  /* producer asks consumer to drop the ring */
+std::atomic<u32> s_write{0}; /* in frames, free-running (producer writes) */
+std::atomic<u32> s_read{0};  /* audio thread is the ONLY writer of s_read */
+std::atomic<bool> s_running{false};
+std::atomic<bool> s_flush{false}; /* producer asks consumer to drop the ring */
+std::atomic<u32> s_underruns{0};
+std::atomic<u32> s_dropped{0};
 
 int s_channel = -1;
+SceUID s_thread = -1;
 
 /* Resampler state. */
 u32 s_srcRate = OUTPUT_RATE;
@@ -31,18 +35,22 @@ s16 s_lastL = 0, s_lastR = 0;
 alignas(64) s16 s_block[BLOCK_FRAMES * 2];
 
 int audioThread(SceSize, void*) {
-    while (s_running) {
+    while (s_running.load(std::memory_order_acquire)) {
         /* Honor a flush here so s_read is only ever written by this thread;
          * clear() on the producer must not touch s_read or it can race this
          * loop's read-modify-write and drive s_read past s_write. */
-        if (s_flush) {
-            s_read = s_write;
-            s_flush = false;
+        if (s_flush.exchange(false, std::memory_order_acq_rel)) {
+            s_read.store(s_write.load(std::memory_order_acquire),
+                         std::memory_order_release);
         }
-        const u32 avail = s_write - s_read;
+        const u32 read = s_read.load(std::memory_order_relaxed);
+        const u32 write = s_write.load(std::memory_order_acquire);
+        const u32 avail = write - read;
         const u32 take = avail < u32(BLOCK_FRAMES) ? avail : u32(BLOCK_FRAMES);
+        if (take < u32(BLOCK_FRAMES))
+            s_underruns.fetch_add(1, std::memory_order_relaxed);
         for (u32 i = 0; i < take; i++) {
-            const u32 idx = (s_read + i) & RING_MASK;
+            const u32 idx = (read + i) & RING_MASK;
             s_block[i * 2 + 0] = s_ring[idx * 2 + 0];
             s_block[i * 2 + 1] = s_ring[idx * 2 + 1];
         }
@@ -51,7 +59,7 @@ int audioThread(SceSize, void*) {
             s_block[i * 2 + 0] = 0;
             s_block[i * 2 + 1] = 0;
         }
-        s_read = s_read + take;
+        s_read.store(read + take, std::memory_order_release);
         sceAudioOutputBlocking(s_channel, PSP_AUDIO_VOLUME_MAX, s_block);
     }
     return 0;
@@ -66,13 +74,17 @@ bool init() {
         RS_LOGE("audio: channel reserve failed (%08x)", unsigned(s_channel));
         return false;
     }
-    s_running = true;
-    const SceUID tid = sceKernelCreateThread("rs_audio", audioThread, 0x10,
-                                             16 * 1024, PSP_THREAD_ATTR_USER,
-                                             nullptr);
-    if (tid < 0 || sceKernelStartThread(tid, 0, nullptr) < 0) {
+    s_write.store(0);
+    s_read.store(0);
+    s_flush.store(false);
+    s_running.store(true, std::memory_order_release);
+    s_thread = sceKernelCreateThread("rs_audio", audioThread, 0x10,
+                                     16 * 1024, PSP_THREAD_ATTR_USER, nullptr);
+    if (s_thread < 0 || sceKernelStartThread(s_thread, 0, nullptr) < 0) {
         RS_LOGE("audio: thread start failed");
-        s_running = false;
+        s_running.store(false);
+        if (s_thread >= 0) sceKernelDeleteThread(s_thread);
+        s_thread = -1;
         sceAudioChRelease(s_channel);
         s_channel = -1;
         return false;
@@ -82,16 +94,20 @@ bool init() {
 }
 
 void shutdown() {
-    s_running = false;
+    s_running.store(false, std::memory_order_release);
+    if (s_thread >= 0) {
+        sceKernelWaitThreadEnd(s_thread, nullptr);
+        sceKernelDeleteThread(s_thread);
+        s_thread = -1;
+    }
     if (s_channel >= 0) {
-        sceKernelDelayThread(80 * 1000);   /* let the thread drain out */
         sceAudioChRelease(s_channel);
         s_channel = -1;
     }
 }
 
 void setSourceRate(u32 srcRate) {
-    if (srcRate == 0) srcRate = OUTPUT_RATE;
+    if (srcRate < 8000 || srcRate > 192000) srcRate = OUTPUT_RATE;
     s_srcRate = srcRate;
     s_step = u32((u64(srcRate) << 16) / OUTPUT_RATE);
     s_frac = 0;
@@ -102,18 +118,24 @@ void push(const s16* stereo, u32 frames) {
     if (!frames) return;
 
     if (s_srcRate == OUTPUT_RATE) {
+        u32 write = s_write.load(std::memory_order_relaxed);
         for (u32 i = 0; i < frames; i++) {
-            if (s_write - s_read >= RING_FRAMES) break;   /* full: drop */
-            const u32 idx = s_write & RING_MASK;
+            if (write - s_read.load(std::memory_order_acquire) >= RING_FRAMES) {
+                s_dropped.fetch_add(frames - i, std::memory_order_relaxed);
+                break;   /* full: drop */
+            }
+            const u32 idx = write & RING_MASK;
             s_ring[idx * 2 + 0] = stereo[i * 2 + 0];
             s_ring[idx * 2 + 1] = stereo[i * 2 + 1];
-            s_write = s_write + 1;
+            write++;
+            s_write.store(write, std::memory_order_release);
         }
         return;
     }
 
     /* Linear resample srcRate → 44100. `s_frac` carries across pushes. */
     u32 pos = s_frac;
+    u32 write = s_write.load(std::memory_order_relaxed);
     while (true) {
         const u32 srcIdx = pos >> 16;
         if (srcIdx >= frames) break;
@@ -122,11 +144,14 @@ void push(const s16* stereo, u32 frames) {
         const s16 r0 = srcIdx == 0 ? s_lastR : stereo[(srcIdx - 1) * 2 + 1];
         const s16 l1 = stereo[srcIdx * 2 + 0];
         const s16 r1 = stereo[srcIdx * 2 + 1];
-        if (s_write - s_read < RING_FRAMES) {
-            const u32 idx = s_write & RING_MASK;
+        if (write - s_read.load(std::memory_order_acquire) < RING_FRAMES) {
+            const u32 idx = write & RING_MASK;
             s_ring[idx * 2 + 0] = s16(l0 + ((s32(l1) - l0) * s32(t) >> 16));
             s_ring[idx * 2 + 1] = s16(r0 + ((s32(r1) - r0) * s32(t) >> 16));
-            s_write = s_write + 1;
+            write++;
+            s_write.store(write, std::memory_order_release);
+        } else {
+            s_dropped.fetch_add(1, std::memory_order_relaxed);
         }
         pos += s_step;
     }
@@ -139,11 +164,21 @@ void clear() {
     /* Producer side: request a drain (consumer applies it) and reset the
      * resampler carry, including the last-sample history so the first
      * output after a load/reset doesn't click against a stale sample. */
-    s_flush  = true;
+    s_flush.store(true, std::memory_order_release);
     s_frac   = 0;
     s_lastL  = s_lastR = 0;
 }
 
-u32 buffered() { return s_write - s_read; }
+u32 buffered() {
+    return s_write.load(std::memory_order_acquire) -
+           s_read.load(std::memory_order_acquire);
+}
+
+u32 underruns() { return s_underruns.load(std::memory_order_relaxed); }
+u32 droppedFrames() { return s_dropped.load(std::memory_order_relaxed); }
+void resetTelemetry() {
+    s_underruns.store(0, std::memory_order_relaxed);
+    s_dropped.store(0, std::memory_order_relaxed);
+}
 
 }  // namespace rs::audio

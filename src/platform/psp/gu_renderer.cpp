@@ -290,6 +290,10 @@ void Renderer::endSprites(VertT* verts, int spriteCount) {
 
 bool Renderer::createTexture(Texture& out, int w, int h, int psm,
                              const void* pixels, bool dynamic) {
+    if (w <= 0 || h <= 0 || w > 512 || h > 512) {
+        RS_LOGW("texture: invalid dimensions %dx%d", w, h);
+        return false;
+    }
     const int bpp = bytesPerPixel(psm);
     /* Pitch must be a 16-byte multiple for swizzling; height a multiple
      * of 8. pow2 with floors handles both. */
@@ -299,8 +303,11 @@ bool Renderer::createTexture(Texture& out, int w, int h, int psm,
     if (texW < minW) texW = minW;
     if (texH < 8) texH = 8;
 
-    const u32 pitch = texW * u32(bpp);
-    const u32 size  = pitch * texH;
+    const u64 pitch64 = u64(texW) * u32(bpp);
+    const u64 size64 = pitch64 * texH;
+    if (pitch64 > UINT32_MAX || size64 > UINT32_MAX) return false;
+    const u32 pitch = u32(pitch64);
+    const u32 size  = u32(size64);
 
     /* Stage the padded linear image, duplicating the last row/column into
      * the padding so linear filtering never bleeds garbage. */
@@ -357,13 +364,16 @@ bool Renderer::createTexture(Texture& out, int w, int h, int psm,
 }
 
 void Renderer::updateTexture(Texture& t, const void* pixels, int pitchBytes) {
+    if (!t.valid() || !pixels || pitchBytes <= 0) return;
     const int bpp = bytesPerPixel(t.psm);
     const u32 dstPitch = u32(t.texW) * u32(bpp);
+    const u32 copyBytes = u32(t.width) * u32(bpp);
+    if (u32(pitchBytes) < copyBytes || copyBytes > dstPitch) return;
     u8* dst = static_cast<u8*>(t.pixels);
     const u8* src = static_cast<const u8*>(pixels);
     for (int y = 0; y < t.height; y++)
         std::memcpy(dst + u32(y) * dstPitch, src + u32(y) * u32(pitchBytes),
-                    u32(t.width) * u32(bpp));
+                    copyBytes);
     sceKernelDcacheWritebackRange(t.pixels, dstPitch * t.texH);
 }
 

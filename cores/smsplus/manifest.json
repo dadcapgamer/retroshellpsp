@@ -1,0 +1,8 @@
+{
+  "name": "smsplus",
+  "version": "1.2",
+  "systems": "sms|gg",
+  "priority": 90,
+  "testOnly": true,
+  "requiresFullContent": true
+}

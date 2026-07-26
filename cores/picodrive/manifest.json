@@ -1,5 +1,7 @@
 {
   "name": "picodrive",
   "version": "1.99",
-  "systems": "md|sms|gg"
+  "systems": "md|sms|gg",
+  "priority": 100,
+  "testOnly": false
 }

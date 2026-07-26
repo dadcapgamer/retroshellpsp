@@ -16,6 +16,18 @@
 
 namespace rs {
 
+namespace {
+bool validApi(const RSCoreAPI* api) {
+    return api && api->api_version == RS_CORE_API_VERSION &&
+           api->name && api->version && api->systems &&
+           api->init && api->shutdown && api->load_rom && api->unload_rom &&
+           api->reset && api->run_frame && api->get_frame &&
+           api->state_size && api->state_save && api->state_load &&
+           api->sram_size && api->sram_data && api->sram_dirty &&
+           api->set_option;
+}
+}  // namespace
+
 #ifdef RS_STATIC_CORES
 
 int CoreManager::staticCoreCount() {
@@ -32,7 +44,7 @@ bool CoreManager::loadCore(const CoreInfo& info) {
     for (const auto& entry : RS_STATIC_CORE_TABLE) {
         if (std::strcmp(entry.name, name) == 0) {
             const RSCoreAPI* api = entry.getApi();
-            if (!api || api->api_version != RS_CORE_API_VERSION) {
+            if (!validApi(api)) {
                 std::snprintf(m_error, sizeof m_error,
                               "core '%s': api version mismatch", name);
                 return false;
@@ -46,8 +58,15 @@ bool CoreManager::loadCore(const CoreInfo& info) {
     return false;
 }
 
+bool CoreManager::initialize(const RSHostAPI* host) {
+    if (!m_core.valid() || m_initialized) return false;
+    m_initialized = m_core.initialize(host);
+    return m_initialized;
+}
+
 void CoreManager::unloadCore() {
-    if (m_core.valid()) m_core.shutdown();
+    if (m_core.valid() && m_initialized) m_core.shutdown();
+    m_initialized = false;
     m_core = EmulatorCore();
 }
 
@@ -86,7 +105,7 @@ bool CoreManager::loadCore(const CoreInfo& info) {
         return false;
     }
 
-    if (s_apiSlot->api_version != RS_CORE_API_VERSION) {
+    if (!validApi(s_apiSlot)) {
         std::snprintf(m_error, sizeof m_error,
                       "core '%s': api v%u, host v%u", name,
                       unsigned(s_apiSlot->api_version),
@@ -103,8 +122,15 @@ bool CoreManager::loadCore(const CoreInfo& info) {
     return true;
 }
 
+bool CoreManager::initialize(const RSHostAPI* host) {
+    if (!m_core.valid() || m_initialized) return false;
+    m_initialized = m_core.initialize(host);
+    return m_initialized;
+}
+
 void CoreManager::unloadCore() {
-    if (m_core.valid()) m_core.shutdown();
+    if (m_core.valid() && m_initialized) m_core.shutdown();
+    m_initialized = false;
     m_core = EmulatorCore();
     if (m_moduleId >= 0) {
         int status = 0;

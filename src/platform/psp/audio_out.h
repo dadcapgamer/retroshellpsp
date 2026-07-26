@@ -27,4 +27,9 @@ void clear();
 /* Ring occupancy in output frames — lets the session pace emulation. */
 u32 buffered();
 
+/* Monotonic session telemetry used by the PSP-1000 release gate. */
+u32 underruns();
+u32 droppedFrames();
+void resetTelemetry();
+
 }  // namespace rs::audio

@@ -11,6 +11,12 @@ namespace rs::host {
  * to the running game and `inputState` mirrors the latest mapped pad. */
 const RSHostAPI* table();
 
+/* Resets the core-only recyclable allocation table around each module
+ * lifetime. The underlying arena remains owned by runtime/arena. */
+void beginCoreSession();
+void endCoreSession();
+u32 allocationFailures();
+
 void setActiveGame(u32 pathHash);
 void setInputState(u32 rsButtons);
 

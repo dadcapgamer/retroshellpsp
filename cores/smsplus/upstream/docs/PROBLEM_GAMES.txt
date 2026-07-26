@@ -1,0 +1,114 @@
+BreakThru! (Game Gear)
+======================
+
+Unpatched version does not actually work on real hardware it seems. (tested on Megadrive with GG2SMS and reverted patch)
+The patch just NOPs out the DI/EI calls to 0x00.
+
+It is apparently supposed not to work on real hardware without the patch, see :
+https://github.com/ekeeke/Genesis-Plus-GX/issues/399
+
+One might wonder if this was intentional or only happens under very specific circumstances.
+(Leftover register values ?)
+
+Madou Monogatari I (Game Gear)
+===============================
+
+Intro with character waking up from nightmare has rendering issues with the sprite.
+This part is sensitive to the timing of the rendering scanline.
+
+Currently, this is partially fixed except during the short time when the sprites scroll into the background.
+
+Sonic's Edusoft (Master System)
+===============================
+
+Relies on VDP register 1 being set by the BIOS.
+I looked at what the BIOS outputs to that register and it's 0xE except for one BIOS setting it to 0xC.
+The latter of which would still make it work on Sonic's Edusoft but seemingly break other games also.
+
+Because of this flaw, the Megadrive cannot run this game unpatched and it appears that
+the Game Gear and Mark 3 should not be able to run this either.
+
+Fantastic Dizzy (Master System)
+===============================
+
+Uses the higher resolution modes found on PAL models. Very sensitive to timings.
+The game also needs proper emulation of HALT and a fairly accurate Z80 interpreter overall.
+If you don't get the timing rights for the VDP, you will get some rendering issues.
+The most common one being the flickering bar at the top.
+
+There are also other issues as well, such as the fact that this game won't work properly in NTSC mode
+so this should be done accordingly.
+
+Sonic 1 FM (Master system, homebrew patch)
+==========================================
+
+The game can switch on the fly to FM or PSG.
+One must make sure that the FM code is not being emulated when disabled as otherwise this can lead
+to higher CPU usage for nothing.
+
+Some earlier versions of it were also suffering from timing issues on Japanese Mark 3 models.
+(I believe this is partly the reason why games just use one chip at a time, except for the Japanese SMS bios)
+These have since been fixed but i wonder if we should emulate this someday ?
+
+Dallyeora Pigu Wang (Master System)
+===================================
+
+Uses the Z80's R register for selecting the CPU team. (it is used as some sort of a randomizer, a few other games do this also)
+If we ever add another CPU dynarec to it, this is a good test case.
+ROM file size is also not a power of 2.
+
+Alibaba and 40 Thieves, Block Hole (Master system)
+==================================================
+
+These games will only work on consoles with RAM not being cleared.
+A quick fix is simply to clear the memory with 0xF0.
+
+This means that only the Japanese Master system can run these games.
+The overseas version clear the memory (0x00) but this also means that they can't run these games at all.
+
+Shadow Dancer, Ace of Aces (SMS)
+=================================
+
+Both rely on the BIOS setting the Z80's SP register to 0xDFF0.
+If this is not being done, Shadow Dancer will be stuck on a black screen.
+
+Rainbow Islands (Master System, PAL)
+====================================
+
+Relies on memory area $df90 - $dffb being 0.
+On Consoles without a BIOS (Megadrive, Game Gear, Mark 3), area will most likely be random thus the game will lock up
+before you can reach the final level.
+
+https://www.smspower.org/forums/6843-WhatsUpWithRainbowIslands
+
+This is fixed in the Brazilian release.
+
+PGA TOUR Golf (Game Gear)
+=========================
+
+Expects the low 5 bits of the VDP status register to not be zero. 
+https://www.smspower.org/Development/PGATourGolf-SMS
+
+Great Baseball (1985), Pit Pot and Teddy Boy Blues (Japan)
+==========================================================
+
+These have control issues when a FM sound unit is plugged in.
+
+Wanted (SMS)
+============
+
+Incompatible FM game. (Won't boot, red screen of death)
+
+Zool (GG, SMS)
+==============
+
+From https://www.smspower.org/Development/Zool-SMS :
+
+Zool (SMS and GG versions) expects the VBlank bit (VDP status register bit 7) to be set several cycles
+before the VBlank IRQ actually occurs because of the following polling routine which can execute with interrupts enabled:
+
+wait_for_vblank:
+    in a,(bf)
+    and a,a
+    jp p,wait_for_blank
+    ret

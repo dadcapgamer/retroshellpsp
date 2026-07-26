@@ -36,9 +36,8 @@ private:
     void drawEmptyPanel(App& app, float alpha);
     void drawGameList(App& app, float focus);
 
-    /* Core picker — the "adaptive core step". Opens before launch when a
-     * system has several cores and the game has no remembered choice, or
-     * any time via the Square shortcut. */
+    /* Core picker — opens before launch when a remembered core disappeared,
+     * or any time via the Square shortcut when alternatives are installed. */
     void openCorePicker(App& app, const db::GameEntry& game);
     void updatePicker(App& app);
     void drawPicker(App& app);

@@ -2,7 +2,9 @@
 # RetroSuite PSP build script.
 #   ./build.sh            — configure (if needed) + build
 #   ./build.sh clean      — wipe the build directory
-#   ./build.sh static     — build with cores linked statically
+#   ./build.sh test       — run repository audit tests
+#   ./build.sh release    — build, audit, and create deterministic stable ZIP
+#   ./build.sh candidates — build a test-core EBOOT and drag-and-drop packages
 set -e
 
 export PSPDEV="${PSPDEV:-$HOME/pspdev}"
@@ -18,15 +20,44 @@ case "$1" in
     exit 0
     ;;
   static)
-    BUILD_DIR=build-static
-    EXTRA_ARGS="-DRS_STATIC_CORES=ON"
+    echo "error: static multi-core builds are unsafe; production is PRX-only" >&2
+    exit 2
+    ;;
+  test)
+    python3 tools/audit_repository.py
+    cmake -S tests/host -B build-host-tests
+    cmake --build build-host-tests
+    ctest --test-dir build-host-tests --output-on-failure
+    cmake -S tests/fuzz -B build-fuzz
+    cmake --build build-fuzz
+    printf '{"malformed":[' | build-fuzz/fuzz_json
+    printf 'PK\\003\\004broken' | build-fuzz/fuzz_zip
+    exit 0
+    ;;
+  candidates)
+    BUILD_DIR=build-candidates
+    EXTRA_ARGS="-DRS_INCLUDE_TEST_CORES=ON"
     ;;
 esac
 
 if [ ! -f "$BUILD_DIR/CMakeCache.txt" ]; then
   psp-cmake -S . -B "$BUILD_DIR" $EXTRA_ARGS
 fi
-cmake --build "$BUILD_DIR" -j"$(sysctl -n hw.ncpu 2>/dev/null || nproc)"
+JOBS="$(sysctl -n hw.ncpu 2>/dev/null || true)"
+if [ -z "$JOBS" ] && command -v nproc >/dev/null 2>&1; then
+  JOBS="$(nproc)"
+fi
+JOBS="${JOBS:-2}"
+cmake --build "$BUILD_DIR" -j"$JOBS"
 
 echo
 echo "EBOOT: $BUILD_DIR/src/EBOOT.PBP"
+
+if [ "$1" = "release" ]; then
+  python3 tools/audit_repository.py --build-dir "$BUILD_DIR"
+  python3 tools/package_release.py --build-dir "$BUILD_DIR"
+elif [ "$1" = "candidates" ]; then
+  python3 tools/audit_repository.py --build-dir "$BUILD_DIR"
+  python3 tools/package_release.py --build-dir "$BUILD_DIR" \
+    --include-candidates --core-packages
+fi

@@ -17,9 +17,10 @@
  *   1. the core remembered for this game (per-game "core" option) — save
  *      states are core-specific, so a game sticks with the core that made
  *      them;
- *   2. otherwise, the single core claiming the game's system;
- *   3. two or more candidates and nothing remembered → needsChoice() is
- *      true and the UI shows the core picker before launching.
+ *   2. otherwise, the highest-priority core claiming the game's system;
+ *   3. the UI exposes the installed alternatives through the Square
+ *      shortcut. needsChoice() is reserved for a remembered core that has
+ *      disappeared, avoiding a silent cross-core save-state substitution.
  */
 #pragma once
 
@@ -35,6 +36,9 @@ struct CoreInfo {
     std::string name;      /* module / manifest name, e.g. "gambatte" */
     std::string version;
     std::string systems;   /* pipe-separated coreIds, e.g. "gb|gbc"   */
+    int priority = 0;      /* higher sorts first and becomes the default */
+    bool testOnly = false; /* never exposed in a production build */
+    bool requiresFullContent = false; /* core cannot use host VFS/fullpath */
     bool isStatic = false;
 
     bool serves(db::System s) const;

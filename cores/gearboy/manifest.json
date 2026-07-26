@@ -1,5 +1,7 @@
 {
   "name": "gearboy",
   "version": "3.8",
-  "systems": "gb|gbc"
+  "systems": "gb|gbc",
+  "priority": 50,
+  "testOnly": true
 }

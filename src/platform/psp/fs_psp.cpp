@@ -3,6 +3,7 @@
 #include <pspiofilemgr.h>
 
 #include <cstring>
+#include <cstdio>
 
 namespace rs::fs {
 
@@ -14,6 +15,15 @@ u32 packTime(const ScePspDateTime& t) {
            (u32(t.day) << 17) | (u32(t.hour) << 12) | (u32(t.minute) << 6) |
            u32(t.second);
 }
+
+SceUID openReadWithBackup(const char* path) {
+    SceUID fd = sceIoOpen(path, PSP_O_RDONLY, 0);
+    if (fd >= 0) return fd;
+    char backup[320];
+    const int n = std::snprintf(backup, sizeof backup, "%s.bak", path);
+    if (n <= 0 || n >= int(sizeof backup)) return fd;
+    return sceIoOpen(backup, PSP_O_RDONLY, 0);
+}
 }  // namespace
 
 bool exists(const char* path) {
@@ -23,7 +33,8 @@ bool exists(const char* path) {
 
 bool mkdirs(const char* path) {
     char buf[256];
-    std::snprintf(buf, sizeof buf, "%s", path);
+    const int length = std::snprintf(buf, sizeof buf, "%s", path);
+    if (length <= 0 || length >= int(sizeof buf)) return false;
     /* Walk past "ms0:/", creating each component. */
     char* p = std::strchr(buf, '/');
     while (p) {
@@ -41,9 +52,11 @@ bool mkdirs(const char* path) {
 }
 
 s32 fileSize(const char* path) {
-    SceIoStat st{};
-    if (sceIoGetstat(path, &st) < 0) return -1;
-    return s32(st.st_size);
+    SceUID fd = openReadWithBackup(path);
+    if (fd < 0) return -1;
+    const s32 size = s32(sceIoLseek32(fd, 0, PSP_SEEK_END));
+    sceIoClose(fd);
+    return size;
 }
 
 bool listDir(const char* path, std::vector<DirEntry>& out) {
@@ -69,20 +82,48 @@ bool listDir(const char* path, std::vector<DirEntry>& out) {
     return true;
 }
 
-bool readFile(const char* path, std::vector<u8>& out) {
-    SceUID fd = sceIoOpen(path, PSP_O_RDONLY, 0);
+namespace {
+bool writeAll(const char* path, const void* data, u32 size) {
+    SceUID fd = sceIoOpen(path, PSP_O_WRONLY | PSP_O_CREAT | PSP_O_TRUNC, 0666);
+    if (fd < 0) return false;
+    const u8* p = static_cast<const u8*>(data);
+    u32 left = size;
+    bool ok = true;
+    while (left) {
+        const int put = sceIoWrite(fd, p, left);
+        if (put <= 0) {
+            ok = false;
+            break;
+        }
+        p += put;
+        left -= u32(put);
+    }
+    if (sceIoClose(fd) < 0) ok = false;
+    return ok;
+}
+}  // namespace
+
+bool readFile(const char* path, std::vector<u8>& out, u32 maxBytes) {
+    SceUID fd = openReadWithBackup(path);
     if (fd < 0) return false;
     const s32 size = s32(sceIoLseek32(fd, 0, PSP_SEEK_END));
     sceIoLseek32(fd, 0, PSP_SEEK_SET);
-    if (size < 0) {
+    if (size < 0 || u32(size) > maxBytes ||
+        out.size() > size_t(maxBytes) - size_t(size)) {
         sceIoClose(fd);
         return false;
     }
     const size_t base = out.size();
     out.resize(base + size_t(size));
-    const int got = sceIoRead(fd, out.data() + base, SceSize(size));
+    u8* dst = out.data() + base;
+    s32 total = 0;
+    while (total < size) {
+        const int got = sceIoRead(fd, dst + total, SceSize(size - total));
+        if (got <= 0) break;
+        total += got;
+    }
     sceIoClose(fd);
-    if (got != size) {
+    if (total != size) {
         out.resize(base);
         return false;
     }
@@ -90,20 +131,59 @@ bool readFile(const char* path, std::vector<u8>& out) {
 }
 
 bool writeFile(const char* path, const void* data, u32 size) {
-    SceUID fd = sceIoOpen(path, PSP_O_WRONLY | PSP_O_CREAT | PSP_O_TRUNC, 0777);
-    if (fd < 0) return false;
-    const int put = sceIoWrite(fd, data, size);
-    sceIoClose(fd);
-    return put == int(size);
+    return writeAll(path, data, size);
+}
+
+bool writeFileAtomic(const char* path, const void* data, u32 size) {
+    char tmp[320], bak[320];
+    const int tn = std::snprintf(tmp, sizeof tmp, "%s.tmp", path);
+    const int bn = std::snprintf(bak, sizeof bak, "%s.bak", path);
+    if (tn <= 0 || tn >= int(sizeof tmp) ||
+        bn <= 0 || bn >= int(sizeof bak))
+        return false;
+    sceIoRemove(tmp);
+    if (!writeAll(tmp, data, size)) {
+        sceIoRemove(tmp);
+        return false;
+    }
+    sceIoSync("ms0:", 0);
+    sceIoRemove(bak);
+    const bool hadOld = exists(path);
+    if (hadOld && sceIoRename(path, bak) < 0) {
+        sceIoRemove(tmp);
+        return false;
+    }
+    if (sceIoRename(tmp, path) < 0) {
+        if (hadOld) sceIoRename(bak, path);
+        sceIoRemove(tmp);
+        return false;
+    }
+    sceIoSync("ms0:", 0);
+    sceIoRemove(bak);
+    return true;
 }
 
 s32 readRange(const char* path, void* buf, u32 offset, u32 size) {
-    SceUID fd = sceIoOpen(path, PSP_O_RDONLY, 0);
+    SceUID fd = openReadWithBackup(path);
     if (fd < 0) return -1;
-    sceIoLseek32(fd, int(offset), PSP_SEEK_SET);
-    const int got = sceIoRead(fd, buf, size);
+    if (offset > 0x7FFFFFFFu ||
+        sceIoLseek32(fd, s32(offset), PSP_SEEK_SET) < 0) {
+        sceIoClose(fd);
+        return -1;
+    }
+    u8* dst = static_cast<u8*>(buf);
+    u32 total = 0;
+    while (total < size) {
+        const int got = sceIoRead(fd, dst + total, size - total);
+        if (got < 0) {
+            sceIoClose(fd);
+            return total ? s32(total) : s32(got);
+        }
+        if (got == 0) break;
+        total += u32(got);
+    }
     sceIoClose(fd);
-    return got;
+    return s32(total);
 }
 
 }  // namespace rs::fs

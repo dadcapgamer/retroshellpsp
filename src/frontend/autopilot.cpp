@@ -20,14 +20,11 @@ struct Step {
     const char* capture;   /* shot name, or nullptr */
 };
 
-/* Phase 4 flow: boot → GBC list (Cave Dave, a real ROM) → Cross triggers
- * the adaptive core picker (dummy + gambatte both claim gbc) → pick
- * gambatte → real emulation → save/load a state → exit → relaunch, which
- * must now SKIP the picker (core remembered per game) → exit → the
- * detail panel reads "via gambatte". */
-/* Clean render test: launch the SNES game via snes9x2005 (the only SNES
- * core once dummy is removed → direct launch, no picker) and capture raw
- * gameplay frames with NO input, so nothing opens the in-game menu. */
+/* PSP-1000 regression flow: boot → navigate to a target system → launch →
+ * capture sustained gameplay → save/load a state → exit through the
+ * frontend menu → verify frontend recovery → relaunch the same core.
+ * The one-frame gaps are intentional: Pad::poll must observe a release
+ * between navigation presses. */
 constexpr Step SCRIPT[] = {
     {30,   0,                 "boot"},
     {150,  0,                 "home"},
@@ -35,13 +32,32 @@ constexpr Step SCRIPT[] = {
     {173,  PSP_CTRL_RIGHT,    nullptr},   /* → GBA */
     {181,  PSP_CTRL_RIGHT,    nullptr},   /* → NES */
     {189,  PSP_CTRL_RIGHT,    nullptr},   /* → SNES */
+#ifndef RS_AUTOPILOT_SNES
     {197,  PSP_CTRL_RIGHT,    nullptr},   /* → Genesis/MD */
-    {205,  PSP_CTRL_DOWN,     nullptr},   /* into the MD list */
-    {240,  0,                 "list_md"},
-    {260,  PSP_CTRL_CROSS,    nullptr},   /* single MD core → direct launch */
+#endif
+    {205,  PSP_CTRL_DOWN,     nullptr},   /* into the target system list */
+    {240,  0,                 "list_target"},
+    {260,  PSP_CTRL_CROSS,    nullptr},   /* single core → direct launch */
     {560,  0,                 "game_a"},
     {820,  0,                 "game_b"},
     {1080, 0,                 "game_c"},
+    {1120, PSP_CTRL_LTRIGGER | PSP_CTRL_RTRIGGER | PSP_CTRL_START,
+                                    nullptr},   /* open frontend menu */
+    {1130, PSP_CTRL_DOWN,     nullptr},         /* Save state */
+    {1140, PSP_CTRL_CROSS,    nullptr},
+    {1150, PSP_CTRL_DOWN,     nullptr},         /* Load state */
+    {1160, PSP_CTRL_CROSS,    nullptr},
+    {1200, PSP_CTRL_LTRIGGER | PSP_CTRL_RTRIGGER | PSP_CTRL_START,
+                                    nullptr},
+    {1210, PSP_CTRL_DOWN,     nullptr},
+    {1214, PSP_CTRL_DOWN,     nullptr},
+    {1218, PSP_CTRL_DOWN,     nullptr},
+    {1222, PSP_CTRL_DOWN,     nullptr},
+    {1226, PSP_CTRL_DOWN,     nullptr},         /* Exit game */
+    {1235, PSP_CTRL_CROSS,    nullptr},
+    {1280, 0,                 "returned_home"},
+    {1300, PSP_CTRL_CROSS,    nullptr},         /* relaunch selected game */
+    {1500, 0,                 "game_relaunch"},
 };
 constexpr int STEPS = int(sizeof(SCRIPT) / sizeof(SCRIPT[0]));
 

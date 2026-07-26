@@ -92,15 +92,15 @@ Theme loadTheme(const std::string& id) {
         std::snprintf(bg, sizeof bg, "%s/themes/%s/%s", fs::ROOT, id.c_str(),
                       v->valuestring);
         std::vector<u8> img;
-        if (fs::readFile(bg, img)) {
+        if (fs::readFile(bg, img, 2u * 1024u * 1024u)) {
             int w = 0, h = 0, comp = 0;
             stbi_uc* px = stbi_load_from_memory(img.data(), int(img.size()),
                                                 &w, &h, &comp, 4);
-            if (px) {
+            if (px && w > 0 && h > 0 && w <= 1024 && h <= 1024) {
                 gfx::Renderer::createTexture(t.background, w, h, GU_PSM_8888,
                                              px);
-                stbi_image_free(px);
             }
+            if (px) stbi_image_free(px);
         }
     }
     cJSON_Delete(root);

@@ -7,12 +7,26 @@
 
 #include <cstdio>
 #include <cstring>
+#include <cctype>
 
 namespace rs::cfg {
 
 namespace {
 const char* CFG_PATH = "ms0:/RETROSUITE/config.json";
 Config s_cfg;
+
+bool safeId(const char* s, size_t maxLen = 48) {
+    if (!s || !*s || std::strlen(s) > maxLen) return false;
+    for (; *s; ++s)
+        if (!(std::isalnum(static_cast<unsigned char>(*s)) ||
+              *s == '_' || *s == '-'))
+            return false;
+    return true;
+}
+
+bool validClock(int mhz) {
+    return mhz == 222 || mhz == 266 || mhz == 333;
+}
 
 void gamePath(char* buf, size_t n, u32 hash) {
     std::snprintf(buf, n, "ms0:/RETROSUITE/pergame/%08x.json", unsigned(hash));
@@ -26,13 +40,13 @@ void load() {
     cJSON* root = json::parseFile(CFG_PATH);
     if (!root) return;
     if (const cJSON* v = cJSON_GetObjectItemCaseSensitive(root, "theme");
-        cJSON_IsString(v))
+        cJSON_IsString(v) && safeId(v->valuestring))
         s_cfg.theme = v->valuestring;
     if (const cJSON* v = cJSON_GetObjectItemCaseSensitive(root, "cpuMenuMhz");
-        cJSON_IsNumber(v))
+        cJSON_IsNumber(v) && validClock(v->valueint))
         s_cfg.cpuMenuMhz = v->valueint;
     if (const cJSON* v = cJSON_GetObjectItemCaseSensitive(root, "cpuGameMhz");
-        cJSON_IsNumber(v))
+        cJSON_IsNumber(v) && validClock(v->valueint))
         s_cfg.cpuGameMhz = v->valueint;
     if (const cJSON* v = cJSON_GetObjectItemCaseSensitive(root, "uiSounds");
         cJSON_IsBool(v))
@@ -60,19 +74,21 @@ void save() {
 }
 
 std::string gameOption(u32 pathHash, const char* key) {
+    if (!safeId(key, 64)) return {};
     char path[96];
     gamePath(path, sizeof path, pathHash);
     cJSON* root = json::parseFile(path);
     if (!root) return {};
     std::string out;
     if (const cJSON* v = cJSON_GetObjectItemCaseSensitive(root, key);
-        cJSON_IsString(v))
+        cJSON_IsString(v) && std::strlen(v->valuestring) <= 256)
         out = v->valuestring;
     cJSON_Delete(root);
     return out;
 }
 
 void setGameOption(u32 pathHash, const char* key, const char* value) {
+    if (!safeId(key, 64) || !value || std::strlen(value) > 256) return;
     char path[96];
     gamePath(path, sizeof path, pathHash);
     cJSON* root = json::parseFile(path);

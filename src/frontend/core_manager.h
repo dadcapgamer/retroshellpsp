@@ -24,6 +24,7 @@ public:
      * place, since cores may allocate during init. On failure the manager
      * is left empty and error() explains why. */
     bool loadCore(const CoreInfo& info);
+    bool initialize(const RSHostAPI* host);
     void unloadCore();
 
 #ifdef RS_STATIC_CORES
@@ -33,12 +34,14 @@ public:
 #endif
 
     bool loaded() const { return m_core.valid(); }
+    bool initialized() const { return m_initialized; }
     EmulatorCore& core() { return m_core; }
     const char* error() const { return m_error; }
 
 private:
     EmulatorCore m_core;
     int  m_moduleId = -1;      /* PRX SceUID, or -1 when static/unloaded */
+    bool m_initialized = false;
     char m_error[160] = {};    /* roomy enough for a full module path */
 };
 

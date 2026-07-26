@@ -58,7 +58,9 @@ void Library::save() const {
     cJSON_Delete(root);
     if (text) {
         fs::mkdirs(fs::ROOT);
-        fs::writeFile(LIB_PATH, text, u32(std::strlen(text)));
+        const size_t len = std::strlen(text);
+        if (len <= 256u * 1024u)
+            fs::writeFileAtomic(LIB_PATH, text, u32(len));
         cJSON_free(text);
     }
 }

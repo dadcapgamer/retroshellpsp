@@ -1,0 +1,8 @@
+{
+  "name": "quicknes",
+  "version": "1.0-WIP",
+  "systems": "nes",
+  "priority": 90,
+  "testOnly": true,
+  "requiresFullContent": true
+}

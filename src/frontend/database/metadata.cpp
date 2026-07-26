@@ -65,26 +65,31 @@ const gfx::Texture* BoxartCache::get(const GameEntry& g) {
     char path[512];
     metaPath(path, sizeof path, g, "boxart", "png");
     std::vector<u8> file;
-    if (!fs::readFile(path, file)) return nullptr;
+    constexpr u32 MAX_BOXART_FILE = 2u * 1024u * 1024u;
+    if (!fs::readFile(path, file, MAX_BOXART_FILE)) return nullptr;
 
     int w = 0, h = 0, comp = 0;
     stbi_uc* px = stbi_load_from_memory(file.data(), int(file.size()), &w, &h,
                                         &comp, 4);
-    if (!px) {
+    if (!px || w <= 0 || h <= 0 || w > 2048 || h > 2048) {
         RS_LOGW("boxart: decode failed for %s", g.name.c_str());
+        if (px) stbi_image_free(px);
         return nullptr;
     }
     /* Cap size to keep VRAM/RAM predictable: art bigger than 160px is
      * downsampled 2x with a box filter. */
-    if (w > 160 || h > 160) {
-        const int nw = w / 2, nh = h / 2;
+    while (w > 160 || h > 160) {
+        const int nw = w > 1 ? w / 2 : 1;
+        const int nh = h > 1 ? h / 2 : 1;
         for (int y = 0; y < nh; y++)
             for (int x = 0; x < nw; x++)
                 for (int c = 0; c < 4; c++) {
-                    const int a = px[((y * 2) * w + x * 2) * 4 + c];
-                    const int b = px[((y * 2) * w + x * 2 + 1) * 4 + c];
-                    const int cc = px[((y * 2 + 1) * w + x * 2) * 4 + c];
-                    const int d = px[((y * 2 + 1) * w + x * 2 + 1) * 4 + c];
+                    const int x0 = x * 2, x1 = x0 + 1 < w ? x0 + 1 : x0;
+                    const int y0 = y * 2, y1 = y0 + 1 < h ? y0 + 1 : y0;
+                    const int a = px[(y0 * w + x0) * 4 + c];
+                    const int b = px[(y0 * w + x1) * 4 + c];
+                    const int cc = px[(y1 * w + x0) * 4 + c];
+                    const int d = px[(y1 * w + x1) * 4 + c];
                     px[(y * nw + x) * 4 + c] = u8((a + b + cc + d) / 4);
                 }
         w = nw;

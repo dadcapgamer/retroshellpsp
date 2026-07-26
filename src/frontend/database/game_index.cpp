@@ -100,12 +100,13 @@ bool GameIndex::saveCache() const {
         }
     }
     fs::mkdirs("ms0:/RETROSUITE/cache");
-    return fs::writeFile(CACHE_PATH, out.data(), u32(out.size()));
+    return out.size() <= fs::DEFAULT_MAX_FILE &&
+           fs::writeFileAtomic(CACHE_PATH, out.data(), u32(out.size()));
 }
 
 bool GameIndex::loadCache() {
     std::vector<u8> buf;
-    if (!fs::readFile(CACHE_PATH, buf)) return false;
+    if (!fs::readFile(CACHE_PATH, buf, fs::DEFAULT_MAX_FILE)) return false;
     const u8* p = buf.data();
     const u8* end = p + buf.size();
     u32 magic, ver, count;

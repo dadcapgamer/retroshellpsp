@@ -1,0 +1,229 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html><head>
+
+  
+    <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-2">
+    <meta name="keywords" content="akop, karapetyan, sms, plus, game, gear, sega, master, system, psp, playstation, portable, emulator, emulation, smspluspsp, smsplus">
+    <meta name="author" content="Akop Karapetyan">
+    <meta name="description" content="Sega Master System and Game Gear emulator for PlayStation Portable"><title>SMS Plus Readme</title>
+    
+    <style type="text/css">
+      body
+      {
+        margin: 0;
+        font-family: sans-serif;
+        font-size: 10pt;
+        background-color: #fbfaf4;
+      }
+
+      #content
+      {
+        padding: 2em 2em 2em 2em;
+        margin-left: 5em;
+        border-left: dotted 1px #000000;
+      }
+            
+      h1
+      {
+        font-size: 14pt;
+      }
+      
+      h2
+      {
+        font-size: 12pt;
+      }
+      
+      span.button
+      {
+        font-size: 1.25em;
+        font-family: monospace;
+      }
+      
+      span.file
+      {
+        font-family: monospace;
+      }
+
+      div.indent
+      {
+        font-family: monospace;
+        margin-left: 1.5em;
+      }
+      
+      div.section
+      {
+        margin: 1.5em;
+      }
+
+      #title
+      {
+        font-weight: bold;
+        font-family: serif;
+        font-size: 24pt;
+      }
+      
+      #byline
+      {
+        font-family: serif;
+        font-size: 13pt;
+        font-style: oblique;
+      }
+      
+      .no-bullets
+      {
+        list-style: none;
+      }
+    </style></head><body>
+
+    <div id="content">
+      <div id="title">SMS Plus PSP</div>
+      <div id="byline">Sega Master System and Game Gear emulator for PlayStation Portable</div>
+
+      <p><a href="http://psp.akop.org/smsplus">http://psp.akop.org/smsplus</a></p>
+
+      <p>
+        &#169; 2007 Akop Karapetyan (port)<br>
+        &#169; 1998-2004 Charles MacDonald (emulation)<br>
+      </p>
+
+      <p>SMS Plus PSP is a port of the <a href="http://cgfm2.emuviews.com/smsplus.php">SMS Plus
+        emulator</a> to the Sony PlayStation Portable platform. It's written in
+        C and uses GU (Graphical Utility toolkit) for rendering.</p>
+
+      <h1 id="toc">Table of Contents</h1>
+      <div class="section">
+        <ol>
+          <li><a href="#news">New Features</a></li>
+          <li><a href="#install">Installation</a></li>
+          <li><a href="#controls">Controls</a></li>
+          <li><a href="#compile">Compiling</a></li>
+          <li><a href="#hist">Version history</a></li>
+          <li><a href="#cred">Credits</a></li>
+        </ol>
+      </div>
+
+      <h1 id="news">New Features</h1>
+      <div class="section">
+        <h2>Version 1.2.4 (September 11, 2007)</h2>
+        <ul>
+          <li>Fixed buffer overflow error affecting units without a 
+              battery</li>
+          <li>Added menu animations</li>
+          <li>Various small bug fixes</li>
+        </ul>
+      </div>
+
+      <h1 id="install">Installation</h1>
+      <div class="section">
+        <p>Unzip smsppsp.zip into /PSP/GAME/ folder on the memory stick. This
+          should create the following directory tree:</p>
+
+          <div class="indent">PSP/
+            <div class="indent">GAME/
+              <div class="indent">SMSPPSP/
+                <div class="indent">ROMS/ (<i>game roms</i>)</div>
+                <div class="indent">SCREENS/ (<i>screenshots</i>)</div>
+                <div class="indent">SAVEDATA/ (<i>save states and SRAM</i>)</div>
+                <div class="indent">BUTTONS.CNF (<i>Button configuration file</i>)</div>
+                <div class="indent">[any other files]</div>
+              </div>
+              <div class="indent">SMSPPSP%/
+                <div class="indent">EBOOT.PBP</div>
+              </div>
+            </div>
+          </div>
+
+        <p>Game ROM's may reside anywhere (the ROMS subdirectory is recommended,
+          but not necessary). SMS+ PSP supports ROM loading from ZIP files.</p>
+      </div>
+
+      <h1 id="controls">Controls</h1>
+      <div class="section">
+        <p>The emulator currently "ships" with the following default key mappings:</p>
+
+        During emulation:
+
+        <ul>
+          <li>Analog stick - Directional pad up/down/left/right</li>
+          <li>Directional pad - Directional pad up/down/left/right</li>
+          <li><span class="button">&#9633;</span> (square) - Button 2</li>
+          <li><span class="button">&#10005;</span> (cross) - Button 1</li>
+          <li><span class="button">&#9675;</span> (circle) - Spacebar</li>
+          <li><span class="button">L</span> +
+            <span class="button">R</span> - Return to the emulator menu</li>
+          <li><span class="button">START</span> - Pause/Start</li>
+        </ul>
+
+        <p>By default, button
+          configuration changes are not retained after button mapping is modified. 
+          To save changes, press <span class="button">&#927;</span> (circle) 
+          after desired mapping is configured. To load
+          the default mapping press <span class="button">&#9651;</span>
+          (triangle).</p>
+      </div>
+
+      <h1 id="compile">Compiling</h1>
+      <div class="section">
+        <p>Emulator's source code is only available via a Subversion
+        (SVN) repository. To check out a particular version, run</p>
+
+        <p><code>svn co http://svn.akop.org/psp/tags/smsplus/<i>version</i></code></p>
+
+        <p>where <i>version</i> is the release version (for example, 1.2.1). Note that
+        for this to work, you need to have Subversion installed.</p>
+
+        <div>To compile the emulator, you will need
+        <a href="svn://svn.pspdev.org/psp/trunk/zlib">zlib</a> (svn://) and
+        <a href="svn://svn.pspdev.org/psp/trunk/libpng">libpng</a> (svn://).</div>
+      </div>
+
+      <h1 id="hist">Version History</h1>
+      <div class="section">
+        <h2>Version 1.2.3 (July 20, 2007)</h2>
+        <ul>
+          <li>20% speedup in emulation speed with new 8-bit video
+              rendering</li>
+          <li>Option to turn off FM emulation (an additional 48% improvement
+              in emulation speed - all games now play at 100% speed with
+              VSync enabled)</li>
+          <li>Various small bug fixes</li>
+        </ul>
+
+        <h2>Version 1.2.2 (July 14, 2007)</h2>
+        <ul>
+          <li>Fixed a bug that caused subsequently loaded games to crash</li>
+          <li>Added an option to use a faster, less accurate sound emulation engine
+              (3-4 fps difference)</li>
+          <li>Added an option to remove the leftmost vertical column for SMS games</li>
+        </ul>
+        <h2>Version 1.2.1 (July 11, 2007)</h2>
+        <ul>
+          <li>Initial release</li>
+        </ul>
+      </div>
+
+      <h1 id="cred">Credits</h1>
+      <div class="section">
+        <ul class="no-bullets">
+          <li>Charles MacDonald - SMS Plus</li>
+          <li>Simon Tatham - fixed.fd font on which the emulator's font is
+            based</li>
+          <li>Gilles Vollant - Minizip library</li>
+          <li>Ruka - PNG saving/loading code</li>
+        </ul>
+      </div>
+
+      <h1 id="cred">Thanks</h1>
+      <div class="section">
+        <ul class="no-bullets">
+          <li>Chris Swindle - for pointing out the reason behind the lag
+              in the source of original SMS Plus PSP</li>
+        </ul>
+      </div>
+
+     <hr>
+
+      <i>Akop Karapetyan, 2007</i>
+    </div>
+  
+</body></html>

@@ -12,6 +12,7 @@
 #include <cstdarg>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 
 #ifndef RS_CORE_NAME
@@ -54,6 +55,98 @@ uint32_t g_sramHash;
 std::jmp_buf g_faultJmp;
 bool         g_faultArmed;
 bool         g_faulted;
+bool         g_gameLoaded;
+
+constexpr uint32_t MAX_GEOMETRY = 1024;
+constexpr uint32_t MAX_STATE_BYTES = 16u * 1024u * 1024u;
+
+struct RSVfsFile {
+    char path[256];
+    int64_t size;
+    int64_t pos;
+};
+
+bool safeVfsPath(const char* path) {
+    if (!path || !*path || std::strlen(path) >= 256 ||
+        std::strstr(path, ".."))
+        return false;
+    return std::strncmp(path, "ms0:/ROMS/", 10) == 0 ||
+           std::strncmp(path, "ms0:/RETROSUITE/system/", 23) == 0;
+}
+
+const char* vfsGetPath(retro_vfs_file_handle* stream) {
+    auto* f = reinterpret_cast<RSVfsFile*>(stream);
+    return f ? f->path : nullptr;
+}
+
+retro_vfs_file_handle* vfsOpen(const char* path, unsigned mode, unsigned) {
+    if (!safeVfsPath(path) || !(mode & RETRO_VFS_FILE_ACCESS_READ) ||
+        (mode & RETRO_VFS_FILE_ACCESS_WRITE))
+        return nullptr;
+    const int32_t size = g_host->file_size(path);
+    if (size < 0) return nullptr;
+    auto* f = static_cast<RSVfsFile*>(malloc(sizeof(RSVfsFile)));
+    if (!f) return nullptr;
+    std::snprintf(f->path, sizeof f->path, "%s", path);
+    f->size = size;
+    f->pos = 0;
+    return reinterpret_cast<retro_vfs_file_handle*>(f);
+}
+
+int vfsClose(retro_vfs_file_handle* stream) {
+    free(reinterpret_cast<RSVfsFile*>(stream));
+    return 0;
+}
+
+int64_t vfsSize(retro_vfs_file_handle* stream) {
+    auto* f = reinterpret_cast<RSVfsFile*>(stream);
+    return f ? f->size : -1;
+}
+
+int64_t vfsTell(retro_vfs_file_handle* stream) {
+    auto* f = reinterpret_cast<RSVfsFile*>(stream);
+    return f ? f->pos : -1;
+}
+
+int64_t vfsSeek(retro_vfs_file_handle* stream, int64_t offset, int whence) {
+    auto* f = reinterpret_cast<RSVfsFile*>(stream);
+    if (!f) return -1;
+    int64_t base = 0;
+    if (whence == RETRO_VFS_SEEK_POSITION_CURRENT) base = f->pos;
+    else if (whence == RETRO_VFS_SEEK_POSITION_END) base = f->size;
+    else if (whence != RETRO_VFS_SEEK_POSITION_START) return -1;
+    if ((offset > 0 && base > INT64_MAX - offset) ||
+        offset == INT64_MIN ||
+        (offset < 0 && base < -offset))
+        return -1;
+    const int64_t next = base + offset;
+    if (next < 0 || next > f->size || next > UINT32_MAX) return -1;
+    f->pos = next;
+    return next;
+}
+
+int64_t vfsRead(retro_vfs_file_handle* stream, void* dst, uint64_t len) {
+    auto* f = reinterpret_cast<RSVfsFile*>(stream);
+    if (!f || !dst || f->pos < 0 || f->pos > f->size) return -1;
+    const uint64_t left = uint64_t(f->size - f->pos);
+    if (len > left) len = left;
+    if (len > UINT32_MAX) len = UINT32_MAX;
+    const int32_t got =
+        g_host->file_read(f->path, dst, uint32_t(f->pos), uint32_t(len));
+    if (got < 0) return -1;
+    f->pos += got;
+    return got;
+}
+
+int64_t vfsWrite(retro_vfs_file_handle*, const void*, uint64_t) { return -1; }
+int vfsFlush(retro_vfs_file_handle*) { return -1; }
+int vfsRemove(const char*) { return -1; }
+int vfsRename(const char*, const char*) { return -1; }
+
+retro_vfs_interface g_vfs = {
+    vfsGetPath, vfsOpen, vfsClose, vfsSize, vfsTell, vfsSeek, vfsRead,
+    vfsWrite, vfsFlush, vfsRemove, vfsRename
+};
 
 /* Maps a libretro pixel format to the matching RS_PIXFMT_*. */
 uint8_t rsPixFmt(retro_pixel_format f) {
@@ -146,6 +239,15 @@ bool environment(unsigned cmd, void* data) {
              * some cores insist on a directory existing. */
             *static_cast<const char**>(data) = "ms0:/RETROSUITE/saves";
             return true;
+#ifdef RETRO_ENVIRONMENT_GET_VFS_INTERFACE
+        case RETRO_ENVIRONMENT_GET_VFS_INTERFACE: {
+            auto* info = static_cast<retro_vfs_interface_info*>(data);
+            if (!info || info->required_interface_version > 1) return false;
+            info->required_interface_version = 1;
+            info->iface = &g_vfs;
+            return true;
+        }
+#endif
         case RETRO_ENVIRONMENT_GET_VARIABLE: {
             auto* var = static_cast<retro_variable*>(data);
             var->value = g_host->get_option(var->key);
@@ -177,7 +279,7 @@ bool environment(unsigned cmd, void* data) {
             ext.data = g_romData;
             ext.size = g_romSize;
             ext.file_in_archive = false;
-            ext.persistent_data = true;   /* buffer lives in the arena */
+            ext.persistent_data = g_romData != nullptr;
             *static_cast<const retro_game_info_ext**>(data) = &ext;
             return true;
         }
@@ -239,7 +341,10 @@ void videoRefresh(const void* data, unsigned w, unsigned h, size_t pitch) {
     if (!data || !g_frame) return;   /* NULL = duped frame, keep the last */
 
     const unsigned bpp = (g_srcFormat == RETRO_PIXEL_FORMAT_XRGB8888) ? 4 : 2;
-    if (uint32_t(w * h * bpp) > g_frameCap) {
+    const uint64_t bytes = uint64_t(w) * uint64_t(h) * bpp;
+    if (!w || !h || w > MAX_GEOMETRY || h > MAX_GEOMETRY ||
+        pitch < size_t(w) * bpp || bytes > g_frameCap ||
+        uint64_t(w) * bpp > UINT16_MAX) {
         /* Larger than the load-time allocation — a core that grew its
          * geometry at runtime (which the shim doesn't support). Skip the
          * frame loudly rather than overrun the buffer. */
@@ -261,6 +366,7 @@ void videoRefresh(const void* data, unsigned w, unsigned h, size_t pitch) {
 }
 
 size_t audioBatch(const int16_t* data, size_t frames) {
+    if (!data || frames > UINT32_MAX) return 0;
     g_host->audio_push(data, uint32_t(frames));
     return frames;
 }
@@ -368,6 +474,8 @@ static void coreShutdown(void) {
     g_faultArmed = false;
     g_frame = nullptr;
     g_frameCap = 0;
+    g_gameLoaded = false;
+    g_host = nullptr;
 }
 
 static void coreReset(void) {
@@ -391,19 +499,31 @@ static void coreRunFrame(uint32_t buttons) {
 static RSVideoFrame coreGetFrame(void) { return g_frameInfo; }
 
 static uint32_t coreStateSize(void) {
-    return uint32_t(retro_serialize_size());
+    const size_t n = retro_serialize_size();
+    return n <= MAX_STATE_BYTES ? uint32_t(n) : 0;
 }
 
 static int coreStateSave(void* buf, uint32_t size) {
-    return retro_serialize(buf, size) ? int(retro_serialize_size()) : -1;
+    if (!buf || !size || size > MAX_STATE_BYTES) return -1;
+    const size_t need = retro_serialize_size();
+    if (!need || need > size || need > MAX_STATE_BYTES) return -1;
+    g_faultArmed = true;
+    const bool ok = setjmp(g_faultJmp) == 0 && retro_serialize(buf, size);
+    g_faultArmed = false;
+    return ok ? int(need) : -1;
 }
 
 static int coreStateLoad(const void* buf, uint32_t size) {
-    return retro_unserialize(buf, size) ? 0 : -1;
+    if (!buf || !size || size > MAX_STATE_BYTES) return -1;
+    g_faultArmed = true;
+    const bool ok = setjmp(g_faultJmp) == 0 && retro_unserialize(buf, size);
+    g_faultArmed = false;
+    return ok ? 0 : -1;
 }
 
 static uint32_t coreSramSize(void) {
-    return uint32_t(retro_get_memory_size(RETRO_MEMORY_SAVE_RAM));
+    const size_t n = retro_get_memory_size(RETRO_MEMORY_SAVE_RAM);
+    return n <= UINT32_MAX ? uint32_t(n) : 0;
 }
 
 static void* coreSramData(void) {
@@ -413,7 +533,9 @@ static void* coreSramData(void) {
 static int coreSramDirty(void) {
     const auto* p = static_cast<const uint8_t*>(
         retro_get_memory_data(RETRO_MEMORY_SAVE_RAM));
-    const uint32_t n = uint32_t(retro_get_memory_size(RETRO_MEMORY_SAVE_RAM));
+    const size_t raw = retro_get_memory_size(RETRO_MEMORY_SAVE_RAM);
+    if (raw > UINT32_MAX) return 0;
+    const uint32_t n = uint32_t(raw);
     if (!p || !n) return 0;
     const uint32_t hash = adler32(p, n);
     if (hash == g_sramHash) return 0;
@@ -454,19 +576,11 @@ static RSCoreAPI g_api = {
 };
 
 static int coreLoadRom(const char* path, const void* data, uint32_t size) {
-    /* The streaming contract (data == NULL, core reads via host file IO) is
-     * not wired up in this shim yet — no libretro VFS is exported and the
-     * cores' own fopen isn't backed. Fail clearly rather than hand the core
-     * a NULL buffer and let it fault. Large ROMs (e.g. big GBA carts) need
-     * this path implemented before they can stream. */
-    if (!data || size == 0) {
-        g_host->log(RS_LOG_ERROR,
-                    "libretro shim: ROM streaming (data=NULL) unsupported");
+    if ((!data || size == 0) && (!path || g_host->file_size(path) <= 0))
         return -1;
-    }
 
     g_romData = data;
-    g_romSize = size;
+    g_romSize = data ? size : uint32_t(g_host->file_size(path));
     std::snprintf(g_romPath, sizeof g_romPath, "%s", path ? path : "");
 
     retro_game_info game = {};
@@ -495,7 +609,30 @@ static int coreLoadRom(const char* path, const void* data, uint32_t size) {
     /* Frame buffer sized for the worst case the core declares. */
     const uint32_t bpp =
         (g_srcFormat == RETRO_PIXEL_FORMAT_XRGB8888) ? 4 : 2;
-    g_frameCap = av.geometry.max_width * av.geometry.max_height * bpp;
+    const uint64_t frameBytes = uint64_t(av.geometry.max_width) *
+                                uint64_t(av.geometry.max_height) * bpp;
+    if (!av.geometry.base_width || !av.geometry.base_height ||
+        av.geometry.base_width > av.geometry.max_width ||
+        av.geometry.base_height > av.geometry.max_height ||
+        av.geometry.max_width > MAX_GEOMETRY ||
+        av.geometry.max_height > MAX_GEOMETRY ||
+        uint64_t(av.geometry.base_width) * bpp > UINT16_MAX ||
+        frameBytes == 0 || frameBytes > UINT32_MAX ||
+        frameBytes > g_host->mem_available()) {
+        g_host->log(RS_LOG_ERROR, "libretro shim: invalid geometry %ux%u/%ux%u",
+                    av.geometry.base_width, av.geometry.base_height,
+                    av.geometry.max_width, av.geometry.max_height);
+        retro_unload_game();
+        return -1;
+    }
+    if (!(av.timing.fps >= 10.0 && av.timing.fps <= 1000.0) ||
+        !(av.timing.sample_rate >= 8000.0 &&
+          av.timing.sample_rate <= 192000.0)) {
+        g_host->log(RS_LOG_ERROR, "libretro shim: invalid timing");
+        retro_unload_game();
+        return -1;
+    }
+    g_frameCap = uint32_t(frameBytes);
     g_frame = static_cast<uint16_t*>(g_host->mem_alloc(g_frameCap, 64));
     if (!g_frame) {
         g_host->log(RS_LOG_ERROR, "libretro shim: no memory for frame buffer");
@@ -513,6 +650,7 @@ static int coreLoadRom(const char* path, const void* data, uint32_t size) {
     g_api.fps = av.timing.fps;
     g_api.audio_rate = uint32_t(av.timing.sample_rate);
     g_host->audio_set_rate(g_api.audio_rate);
+    g_gameLoaded = true;
 
     /* Baseline so an untouched SRAM doesn't read as dirty. */
     g_sramHash = 0;
@@ -525,7 +663,8 @@ static int coreLoadRom(const char* path, const void* data, uint32_t size) {
 }
 
 static void coreUnloadRom(void) {
-    retro_unload_game();
+    if (g_gameLoaded) retro_unload_game();
+    g_gameLoaded = false;
     if (g_frame) g_host->mem_free(g_frame);
     g_frame = nullptr;
     g_frameCap = 0;
@@ -549,7 +688,7 @@ extern "C" const RSCoreAPI* rs_get_core_api(void) { return &g_api; }
 /*   - a libc heap: malloc & friends forward to the host arena, so      */
 /*     every allocation a core makes lives in the memory the frontend   */
 /*     released for it, and unloading the core reclaims everything —    */
-/*     free() can be lazy because of that wholesale reset.              */
+/*     free() returns blocks to the host's recyclable core heap.         */
 /* ------------------------------------------------------------------ */
 
 #ifndef RS_STATIC_BUILD
@@ -592,18 +731,35 @@ void abort(void) {
 
 void _exit(int) { abort(); }
 
-/* Each block is prefixed by a 16-byte header holding its size so
- * realloc can copy. Alignment stays at 16. */
+/* Each block is prefixed by a 16-byte header holding its requested size and
+ * the arena pointer that must be returned to mem_free. Keeping the original
+ * pointer lets posix_memalign satisfy cores that require 32/64-byte buffers. */
+static void* alignedHeapAlloc(size_t size, size_t alignment) {
+    if (alignment < 16) alignment = 16;
+    if ((alignment & (alignment - 1)) != 0 || alignment > 4096 ||
+        size > UINT32_MAX - alignment - 16)
+        return nullptr;
+    auto* base = static_cast<uint8_t*>(
+        g_host->mem_alloc(uint32_t(size + alignment + 16), 16));
+    if (!base) return nullptr;
+    const uintptr_t raw = reinterpret_cast<uintptr_t>(base + 16);
+    const uintptr_t aligned = (raw + alignment - 1) & ~(alignment - 1);
+    auto* p = reinterpret_cast<uint32_t*>(aligned);
+    p[-4] = uint32_t(size);
+    p[-3] = uint32_t(reinterpret_cast<uintptr_t>(base));
+    return p;
+}
+
 void* malloc(size_t size) {
-    if (size > 0xFFFFFFFFu - 16) return nullptr;   /* +16 header can't wrap */
-    auto* p = static_cast<uint32_t*>(g_host->mem_alloc(uint32_t(size) + 16, 16));
-    if (!p) return nullptr;
-    p[0] = uint32_t(size);
-    return p + 4;
+    return alignedHeapAlloc(size, 16);
 }
 
 void free(void* ptr) {
-    if (ptr) g_host->mem_free(static_cast<uint32_t*>(ptr) - 4);
+    if (ptr) {
+        const auto base = reinterpret_cast<void*>(
+            uintptr_t(static_cast<uint32_t*>(ptr)[-3]));
+        g_host->mem_free(base);
+    }
 }
 
 void* calloc(size_t n, size_t size) {
@@ -622,6 +778,16 @@ void* realloc(void* ptr, size_t size) {
         free(ptr);
     }
     return p;
+}
+
+int posix_memalign(void** out, size_t alignment, size_t size) {
+    if (alignment < sizeof(void*) ||
+        (alignment & (alignment - 1)) != 0 || alignment > 4096)
+        return 22;  /* EINVAL */
+    void* p = alignedHeapAlloc(size, alignment);
+    if (!p) return 12;
+    *out = p;
+    return 0;
 }
 
 /* newlib's stdio reaches for the reentrant entry points directly. */

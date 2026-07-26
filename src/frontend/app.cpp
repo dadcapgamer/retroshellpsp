@@ -87,6 +87,9 @@ void App::launchGame(const db::GameEntry& game, const CoreInfo* core) {
 }
 
 void App::evictForCore() {
+    /* A scanner competes for the 4 MB newlib heap and Memory Stick while a
+     * core is loading. Stop and join it before changing the memory map. */
+    m_scanner.stop();
     m_boxart.clear();
     m_theme.freeAssets();
     gfx::vram::freeToBootMark();
@@ -99,10 +102,12 @@ void App::restoreAfterCore() {
     m_theme = theme::loadTheme(m_theme.id);
     m_pal = m_theme.palette;
     m_themeFrom = m_pal;
+    m_scanner.start();
     RS_LOGI("app: frontend restored");
 }
 
 void App::shutdown() {
+    m_scanner.stop();
     m_scene.reset();
     m_pending.reset();
     m_boxart.clear();

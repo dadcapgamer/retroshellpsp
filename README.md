@@ -20,9 +20,15 @@ architecture — inspired by Emu4Vita++, built native for the PSP.
 - Box art + metadata (drop-in JSON/PNG files, no tooling required)
 - Theme engine: user themes on the Memory Stick can override any color,
   the background image, and the wave animation
-- Core API: emulator cores as loadable PRX plugins (one core in RAM at a
-  time — key for the PSP-1000) or statically linked (`-DRS_STATIC_CORES=ON`)
-- **Game Boy / Game Boy Color** via Gambatte — the first real core
+- Core API: emulator cores are loadable PRX plugins, with exactly one core
+  in RAM at a time. Static multi-core builds are deliberately blocked
+  because libretro's global `retro_*` symbols cannot safely coexist.
+- Production defaults: Gambatte (GB/GBC), FCEUmm (NES), Snes9x 2005
+  (SNES), and PicoDrive (Genesis/Master System/Game Gear).
+- Gearboy, TGB Dual, QuickNES, SMS Plus GX, Snes9x 2005 Plus, and a
+  PSP-pruned Snes9x 2010 SA-1 compatibility core are buildable test
+  candidates, but are omitted from normal releases until PSP-1000
+  measurements prove a compatibility win.
 - **Manifest-driven core registry**: cores are discovered at boot from
   `.json` sidecars, so adding one never touches frontend source. When a
   system has more than one installed core the launch UI offers a picker,
@@ -31,8 +37,8 @@ architecture — inspired by Emu4Vita++, built native for the PSP.
   libretro cores integrate with almost no per-core code
 - Save states with thumbnails, battery-save autosave, screenshots,
   in-game menu (L + R + START)
-- Remaining cores land in Phases 5+
-  (SMS Plus GX → PicoDrive → gpSP → Snes9x 2005 → PCE; NES via FCEUmm)
+- GBA and PC Engine remain blocked until streaming, memory, and hardware
+  safety gates are complete.
 
 See [docs/ADDING_A_CORE.md](docs/ADDING_A_CORE.md) to add your own.
 
@@ -46,7 +52,9 @@ your PATH:
 export PSPDEV="$HOME/pspdev"
 export PATH="$PSPDEV/bin:$PATH"
 ./build.sh            # → build/src/EBOOT.PBP + build/cores/*.prx
-./build.sh static     # single EBOOT with cores linked in
+./build.sh test       # manifests, provenance, source hashes, PRX policy
+./build.sh release    # audited deterministic dist/RetroSuite-PSP.zip
+./build.sh candidates # experimental EBOOT, all candidates, .rscore.zip files
 ```
 
 If the prebuilt toolchain fails to start on macOS, install its library
@@ -56,7 +64,7 @@ dependencies: `brew install gmp mpfr libmpc isl zstd`.
 
 ```
 ms0:/PSP/GAME/RetroSuite/EBOOT.PBP      ← build/src/EBOOT.PBP
-ms0:/RETROSUITE/cores/*.prx + *.json    ← build/cores/* (PRX mode; ship both)
+ms0:/RETROSUITE/cores/*.prx + *.json    ← production pairs from release ZIP
 ms0:/ROMS/GameBoy/…                     ← your ROMs (see layout below)
 ```
 
@@ -86,12 +94,26 @@ PPSSPP's config directory (`~/.config/ppsspp/` on macOS/Linux) — put
 
 Developer goodies:
 
+- Run `./build.sh candidates` to create
+  `dist/RetroSuite-PSP-Candidates.zip` and individual drag-and-drop
+  candidate packages under `dist/cores/`. Install the candidate EBOOT
+  before testing a `testOnly` core. Candidate PRXs are native executable
+  code, so only install packages from a source you trust.
+- In the game list, press Square to choose an installed core for that game.
+  Snes9x 2005 remains the deterministic production default; a successful
+  launch remembers the selected alternate.
 - `-DRS_AUTOPILOT=ON` builds a scripted self-test that drives the UI,
   launches a game, exercises save states, and dumps framebuffer PNGs to
   `ms0:/RETROSUITE/shots/` — enable PPSSPP's software renderer for exact
   framebuffer readbacks.
 - `L-trigger + TRIANGLE` toggles the FPS/frame-time overlay.
 - Logs: `ms0:/RETROSUITE/retrosuite.log`.
+- Runtime logs include p95 core frame time, arena high-water/allocation
+  failures, and audio underrun/drop counters for hardware qualification.
+
+The acceptance matrix and unresolved hardware gates are tracked in
+[docs/CORE_AUDIT.md](docs/CORE_AUDIT.md). PPSSPP is useful for correctness,
+but only real PSP hardware can approve performance.
 
 ## Project layout
 

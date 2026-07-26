@@ -6,15 +6,16 @@ A core is one directory under `cores/` with four things:
 cores/mycore/
 ├── CMakeLists.txt      rs_add_core(mycore SOURCES …)
 ├── exports.exp         PRX export table (copy dummy's verbatim)
-├── manifest.json       { "name", "version", "systems" }
+├── manifest.json       { "name", "version", "systems", "priority", "testOnly" }
 └── …sources…           the emulator + a thin adapter
 ```
 
 The frontend discovers cores at boot by reading the manifests next to the
 `.prx` files — **you do not edit any frontend source to add a core.** Drop
 the directory in, register it in `cores/CMakeLists.txt`, build, and it
-appears. When several installed cores claim the same system, the launch UI
-offers a picker automatically.
+appears. When several installed cores claim the same system, the highest
+priority core is the deterministic default and Square opens the per-game
+core picker.
 
 Two ways in, easiest first:
 
@@ -28,15 +29,22 @@ Two ways in, easiest first:
 ## The manifest
 
 ```json
-{ "name": "mycore", "version": "1.2.0", "systems": "gb|gbc" }
+{
+  "name": "mycore",
+  "version": "1.2.0",
+  "systems": "gb|gbc",
+  "priority": 100,
+  "testOnly": true
+}
 ```
 
 `name` must match the module (`mycore.prx`) and the `RSCoreAPI::name`
 field. `systems` is a pipe-separated list of the stable core-ids from
 `db::SystemInfo::coreId` in `src/frontend/database/systems.h`
-(`gb gbc gba nes snes md sms gg pce`). rs_add_core copies the manifest
-next to the built `.prx`; static builds read the same fields from the
-linked-in API table instead.
+(`gb gbc gba nes snes md sms gg pce`). Higher `priority` wins, with core
+name as the stable tie-breaker. New cores stay `testOnly` until they pass
+the PSP-1000 release gate. `rs_add_core` copies the manifest next to the
+built `.prx`.
 
 ## The contract
 
@@ -68,7 +76,6 @@ Rules that keep cores portable and the PSP-1000 alive:
 ## PRX module boilerplate
 
 ```c
-#ifndef RS_STATIC_BUILD
 #include <pspkernel.h>
 PSP_MODULE_INFO("rs_core_mycore", 0, 1, 0);
 
@@ -80,26 +87,43 @@ int module_start(SceSize args, void* argp) {
     return 0;
 }
 int module_stop(SceSize args, void* argp) { return 0; }
-#endif
 ```
 
-Guard it with `RS_STATIC_BUILD` — in static mode the build renames your
-`rs_get_core_api` (via a compile definition) and registers it
-automatically; module boilerplate must disappear.
+Production is PRX-only. Do not add a static-core fallback: every libretro
+core exports the same global `retro_*` symbol set.
 
 ## Wiring it up
 
-1. `cores/CMakeLists.txt`: `add_subdirectory(mycore)` (before
-   `rs_finalize_static_cores()`).
+1. `cores/CMakeLists.txt`: `add_subdirectory(mycore)`.
 2. Build. PRX mode drops `build/cores/mycore.prx` and `mycore.json` —
-   install both to `ms0:/RETROSUITE/cores/`. Verify the static build too:
-   `./build.sh static`.
+   install both to `ms0:/RETROSUITE/cores/`.
+3. Add the exact upstream commit, retained-source hash, license, patches,
+   flags, and expected PRX hash to `core-provenance.lock.json`.
 
 That's the whole wiring. There is no frontend source to touch — the
 registry (`src/frontend/core_registry.cpp`) reads your manifest, and the
 launch UI resolves cores per game: it remembers which core a game was last
-run with (save states are core-specific), and shows the picker only when a
-system has two or more installed cores.
+run with (save states are core-specific). Highlight a game and press Square
+to open the picker when a system has two or more installed cores.
+
+## Community packages
+
+`./build.sh candidates` creates an experimental all-cores bundle plus one
+`dist/cores/<name>-<version>.rscore.zip` file per candidate. An `.rscore.zip`
+is a deterministic, drag-and-drop archive containing:
+
+- the PRX and manifest under `RETROSUITE/cores/`;
+- the upstream license;
+- pinned provenance and artifact-hash metadata;
+- an installation and native-code trust warning.
+
+Extract the archive at the root of the Memory Stick. A `testOnly` package
+is intentionally invisible to a normal production EBOOT, so testers must
+install the candidate EBOOT from `RetroSuite-PSP-Candidates.zip` first.
+Core packages are native PSP executables, not sandboxed themes or data:
+community distribution should publish source, the exact commit and patches,
+and a reproducible artifact hash. RetroSuite does not treat an unsigned
+third-party package as trusted.
 
 ## Porting a libretro core
 

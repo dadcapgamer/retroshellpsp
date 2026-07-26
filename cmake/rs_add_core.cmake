@@ -1,17 +1,11 @@
 # rs_add_core(<name> SOURCES <src>... [LIBS <lib>...])
 #
-# Builds an emulator core against the RetroSuite Core API in one of two
-# delivery modes:
+# Builds an emulator core as a relocatable PRX module
+# (build/cores/<name>.prx). Only one core occupies RAM at a time.
 #
-#   default            — relocatable PRX module (build/cores/<name>.prx,
-#                        installed to ms0:/RETROSUITE/cores/). Only one
-#                        core occupies RAM at a time.
-#   -DRS_STATIC_CORES  — static library linked into the EBOOT and listed
-#                        in the generated rs_static_cores.inc registry.
-#
-# In static mode the core's rs_get_core_api symbol is renamed per-core so
-# several cores can coexist in one binary; RS_STATIC_BUILD=1 lets core
-# sources drop their PRX module boilerplate.
+# Static multi-core delivery is intentionally unsupported: libretro cores
+# export the same retro_* symbol set, so renaming only rs_get_core_api does
+# not isolate them and silently links the wrong implementation.
 #
 # PRX link recipe mirrors $PSPSDK/lib/build_prx.mak: link with -Wl,-q and
 # linkfile.prx, no start files, then psp-fixup-imports + psp-prxgen.
@@ -32,12 +26,7 @@ function(rs_add_core name)
   set(target rs_core_${name})
 
   if(RS_STATIC_CORES)
-    add_library(${target} STATIC ${ARG_SOURCES})
-    target_compile_definitions(${target} PRIVATE
-      RS_STATIC_BUILD=1
-      rs_get_core_api=rs_core_entry_${name})
-    set_property(GLOBAL APPEND PROPERTY RS_STATIC_CORE_NAMES ${name})
-    target_link_libraries(retrosuite PRIVATE ${target})
+    message(FATAL_ERROR "RS_STATIC_CORES is unsafe and unsupported; use PRX cores")
   else()
     set(exports_c ${CMAKE_CURRENT_BINARY_DIR}/${name}_exports.c)
     add_custom_command(
@@ -83,12 +72,11 @@ function(rs_add_core name)
     # The manifest ships beside the .prx so CoreRegistry can list the core
     # without loading it (see src/frontend/core_registry.h).
     if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/manifest.json)
-      add_custom_command(
-        TARGET ${target} POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                ${CMAKE_CURRENT_SOURCE_DIR}/manifest.json
-                ${CMAKE_BINARY_DIR}/cores/${name}.json
-        VERBATIM)
+      # Configure-time copy keeps an incremental build's sidecar current
+      # even when only manifest policy changes and the PRX does not relink.
+      file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/cores)
+      configure_file(${CMAKE_CURRENT_SOURCE_DIR}/manifest.json
+                     ${CMAKE_BINARY_DIR}/cores/${name}.json COPYONLY)
     else()
       message(WARNING
         "core '${name}' has no manifest.json — it will not be discovered "
@@ -109,34 +97,4 @@ function(rs_add_core name)
   if(ARG_LIBS)
     target_link_libraries(${target} PRIVATE ${ARG_LIBS})
   endif()
-endfunction()
-
-# Called once from cores/CMakeLists.txt after all rs_add_core() calls:
-# writes the static-core registry consumed by core_manager.cpp.
-function(rs_finalize_static_cores)
-  if(NOT RS_STATIC_CORES)
-    return()
-  endif()
-  get_property(names GLOBAL PROPERTY RS_STATIC_CORE_NAMES)
-  set(decls "")
-  set(rows "")
-  set(SC "\;")   # literal semicolon for the generated C source
-  foreach(n IN LISTS names)
-    string(APPEND decls
-           "extern \"C\" const RSCoreAPI* rs_core_entry_${n}(void)${SC}\n")
-    string(APPEND rows "    {\"${n}\", &rs_core_entry_${n}},\n")
-  endforeach()
-  set(content "/* Auto-generated static core registry — do not edit. */
-${decls}
-struct RSStaticCoreEntry {
-    const char* name${SC}
-    const RSCoreAPI* (*getApi)(void)${SC}
-}${SC}
-
-static const RSStaticCoreEntry RS_STATIC_CORE_TABLE[] = {
-${rows}}${SC}
-")
-  string(REPLACE "\;" ";" content "${content}")
-  file(WRITE ${CMAKE_BINARY_DIR}/generated/rs_static_cores.inc "${content}")
-  target_include_directories(retrosuite PRIVATE ${CMAKE_BINARY_DIR}/generated)
 endfunction()

@@ -32,6 +32,14 @@ add_executable(retrosuite
 
 target_include_directories(retrosuite PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
+# First-party code is held to strict diagnostics. Vendored emulator sources
+# keep their narrowly scoped compatibility suppressions in each core target.
+target_compile_options(retrosuite PRIVATE
+  -Wextra
+  -Werror=return-type
+  -Werror=format
+  -Werror=implicit-fallthrough)
+
 target_link_libraries(retrosuite PRIVATE
   rs_external
   pspgu

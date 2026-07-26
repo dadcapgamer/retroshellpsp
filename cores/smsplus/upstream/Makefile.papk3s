@@ -1,0 +1,84 @@
+PRGNAME     = sms_sdl
+CC			= /opt/rs97-toolchain/bin/mipsel-linux-gcc
+
+# Possible choices : rs97, k3s (PAP K3S), sdl, amini, fbdev
+PORT = k3s
+# Possible choices : alsa, pulse (pulseaudio), oss, sdl12 (SDL 1.2 sound output), portaudio, libao
+SOUND_OUTPUT = oss
+# Possible choices : crabemu_sn76489 (less accurate, GPLv2), maxim_sn76489 (somewhat problematic license but good accuracy)
+SOUND_ENGINE = maxim_sn76489
+# Possible choices : z80 (accurate), eighty (EightyZ80's core, GPLv2)
+Z80_CORE = z80
+SCALE2X_UPSCALER = 1
+PROFILE = APPLY
+ZIP_SUPPORT = 1
+
+SRCDIR		= ./source ./source/cpu_cores/$(Z80_CORE) ./source/sound ./source/unzip
+SRCDIR		+= ./source/scalers ./source/ports/$(PORT) ./source/sound/$(SOUND_ENGINE) ./source/sound_output/$(SOUND_OUTPUT)
+VPATH		= $(SRCDIR)
+SRC_C		= $(foreach dir, $(SRCDIR), $(wildcard $(dir)/*.c))
+SRC_CP		= $(foreach dir, $(SRCDIR), $(wildcard $(dir)/*.cpp))
+OBJ_C		= $(notdir $(patsubst %.c, %.o, $(SRC_C)))
+OBJ_CP		= $(notdir $(patsubst %.cpp, %.o, $(SRC_CP)))
+OBJS		= $(OBJ_C) $(OBJ_CP)
+
+CFLAGS		= -Ofast -funroll-loops -fdata-sections -ffunction-sections -mno-fp-exceptions -mno-check-zero-division -mframe-header-opt -fsingle-precision-constant -fno-common -mips32 -fno-PIC -mno-abicalls -flto
+# SMS Plus GX suffers from alignment issues so setting these to 1 helps.
+CFLAGS		+= -falign-functions=1 -falign-jumps=1 -falign-loops=1 -falign-labels=1
+CFLAGS		+= -fipa-pta -fsection-anchors -fdelete-dead-exceptions
+CFLAGS		+= -DALIGN_DWORD -DNOBLANKING_LEFTCOLUM
+CFLAGS		+= -DLSB_FIRST -std=gnu99
+CFLAGS		+= -Isource -Isource/cpu_cores/$(Z80_CORE) -Isource/scalers -Isource/ports/$(PORT) -I./source/sound -Isource/unzip -Isource/sdl -Isource/sound/$(SOUND_ENGINE) -Isource/sound_output
+
+ifeq ($(PORT), fbdev)
+SRCDIR		+= ./source/text/fb
+CFLAGS		+= -Isource/text/fb
+else
+SRCDIR		+= ./source/text/sdl
+CFLAGS		+= -Isource/text/sdl
+endif
+
+ifeq ($(PROFILE), YES)
+CFLAGS 		+= -fprofile-generate=/mnt/int_sd/profile
+else ifeq ($(PROFILE), APPLY)
+CFLAGS		+= -fprofile-use -fbranch-probabilities
+endif
+
+ifeq ($(SOUND_ENGINE), maxim_sn76489)
+CFLAGS 		+= -DMAXIM_PSG
+endif
+
+ifeq ($(ZIP_SUPPORT), 0)
+CFLAGS 		+= -DNOZIP_SUPPORT
+endif
+
+ifeq ($(SCALE2X_UPSCALER), 1)
+CFLAGS 		+= -DSCALE2X_UPSCALER
+CFLAGS		+= -Isource/scale2x
+SRCDIR		+= ./source/scale2x
+endif
+
+LDFLAGS     = -nodefaultlibs -lc -lgcc -lSDL -no-pie -Wl,--as-needed -Wl,--gc-sections -s -flto
+
+ifeq ($(SOUND_OUTPUT), portaudio)
+LDFLAGS		+= -lportaudio
+endif
+ifeq ($(SOUND_OUTPUT), libao)
+LDFLAGS		+= -lao
+endif
+ifeq ($(SOUND_OUTPUT), alsa)
+LDFLAGS		+= -lasound
+endif
+ifeq ($(SOUND_OUTPUT), pulse)
+LDFLAGS		+= -lpulse -lpulse-simple
+endif
+
+# Rules to make executable
+$(PRGNAME): $(OBJS)  
+	$(CC) $(CFLAGS) -o $(PRGNAME) $^ $(LDFLAGS)
+
+$(OBJ_C) : %.o : %.c
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+clean:
+	rm -f $(PRGNAME) *.o

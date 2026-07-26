@@ -1,0 +1,114 @@
+Charles Mcdonald
+================
+
+Released his SMS emulator since 0.9 under the GPLv2+.
+It stayed like so until after version 1.5 (source code to version 1.5 got lost unfortunately but we still have SmSPlus-GX thankfully).
+After version 1.5, he decided to switch it to a non-commercial license, turning it proprietary again.
+(The reason being he got legal threats from some companies using his emulator)
+
+He also contributed modifications to sn76489.c, i contacted him and he told me it fell under the same license as Maxim's.
+
+ekeeke
+======
+He worked on SMSPlus-GX, with several improvements such as improved accuracy, fixing bugs with most games etc...
+It was originally designed for the Gamecube/Wii.
+https://github.com/ekeeke/smsplus-gx
+
+This fork also has code for Colecovision but Colecovision support seems to be a bit spotty and requires a BIOS.
+The overscan code got removed because it was not useful and little to no SMS games make use of it.
+
+Alekmaul
+=========
+He came up with the bitmap_scale function. That function is solely used for the menu and unscaled.
+
+drowsnug95
+==========
+
+Came up with upscale_160x144_to_212x144 and upscale_160x144_to_212x160.
+License should fall under the GPLv2+.
+
+Harteex
+========
+Came up with the TGA font loading code and he converted the fonts to a c array with bin2h.
+
+dmitrysmagin
+=============
+
+- Menu code based on his fork sms_sdl-rzx50 available here :
+https://github.com/dmitrysmagin/sms_sdl-rzx50
+
+I suspect he also did the SDL sound code that was found in FBA-SDL.
+That code is so much better than what we used to have so thank you Dmitry !
+
+exmortis@yandex.ru, joyrider
+============================
+They are mostly responsible for making the initial port of Dingux-SMS for the Dingoo.
+I don't think there's much of their code left, if any.
+The SDL sound code was very poor and got entirely replaced by the one found in FBA-SDL.
+
+PocketSprite
+============
+Patches to switch SMS Plus to EightyOne's Z80 CPU core. (based itself on FUSE)
+https://github.com/PocketSprite/8bkc-gamegear/commit/cd3510d12feb8f922c0505a2a47e4a58b5fef9f0
+
+Contrarely to what they say, it is based on SMS Plus 0.9, not SMS Plus 1.3 with the TMS support and all.
+The fact that it uses sms_frame (rather than system_frame from SMS Plus 1.2+) further confirms this.
+This patch switches to a GPLv2 Z80 Core so it can be used for commercial use, which is what they did.
+Anyway, those patches wouldn't work as is on SMS Plus 1.2 but they did tell me how i should switch to another Z80's core.
+And for that, i am very grateful.
+
+Most of my issues with it were related to irq & cpureadmap (which turns out, required minor changes for it to work)
+
+EightyOne ZX81
+==============
+
+https://github.com/PocketSprite/8bkc-gamegear/commit/cd3510d12feb8f922c0505a2a47e4a58b5fef9f0
+(Based on that)
+https://github.com/libretro/81-libretro/tree/master/81/z80
+
+See PocketSprite's patches. This CPU core is much less accurate and is unable to run games like Dizzy and some SG-1000 games.
+Juergen's z80 cpu core on the other hand, does not suffer from these issues.
+
+I am planning on removing this core in the future due to how crap it is but i will leave it for now.
+
+Juergen Buchmueller
+====================
+
+He made the z80 core for SMS Plus and later released an updated one for MAME under the BSD-3 license.
+He declined releasing the old z80's core so i had to reconvert the MAME core for our use in SMS Plus GX.
+
+CrabEmu
+========
+https://github.com/OpenEmu/CrabEmu-Core/blob/master/sound/sn76489.c
+https://github.com/OpenEmu/CrabEmu-Core/blob/master/sound/ym2413.c
+
+The ym2413 & sn76489 sound emulators from CrabEmu were used as the stock ones provided with SMS_Plus did not clarify their licenses.
+ym2413.c is based on MAME's GPLv2 code, with some modifications that switches it to C as well as provide some functions to use it more easily.
+The changes are also released under the GPLv2.
+
+sn76489.c by CrabEmu does not seem to be based upon any code other than Maxim's documentation and some snippets of code.
+It shares little to no similarity with Maxim's code and it is also released under the GPLv2.
+
+Gameblabla, me
+==============
+
+I switced most variables to c99 data types: this fixed rendering issues on 64-bits and somewhat broken PSG sound for Maxim's PSG core.
+I also improved PocketSprite's EightyOne patches for making sure it works with the newer SMS Plus version. (not as straightfoward as it might seem !)
+Disabled collision check for 9th sprite : doing so passes Flubba's test.
+Fixed support for 256 pages. This fixes Bad Apple SMS. (also added it to the ROM database list as it requires PAL timings)
+
+I made specific changes for each devices, like the RS-97. They can be found under their own subfolders in src/ports.
+I'm also responsible for making MAME's z80 core work with SMS Plus GX. (it was similar but with some improvements)
+Another thing i did was to port it to several sound APIs such as ALSA, OSS, Portaudio, libao and pulseaudio.
+I am releasing the changes under the GPLv2+, just to make things clear.
+
+Maxim
+=====
+He's the author of sn76489.c (not crabemu's one), a sn76489 emulator.
+Contacted by email, he said that it was released along with in_vgm as a whole under this license :
+You are allowed to do what you like with it just so long as:
+1. You let me know if you distribute it (any included files or anything derived from them), and
+2. You don't pass it off as your own.
+
+Clause 1 is problematic and potentially makes it non-free. (He did say that he plans to relicense it)
+As a failsafe, CrabEmu's PSG emulation is also provided.

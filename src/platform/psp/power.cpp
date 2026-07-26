@@ -21,6 +21,7 @@ void clockNow(int& hour, int& minute) {
 }
 
 void setCpuMhz(int mhz) {
+    if (mhz != 222 && mhz != 266 && mhz != 333) mhz = 222;
     scePowerSetClockFrequency(mhz, mhz, mhz / 2);
 }
 

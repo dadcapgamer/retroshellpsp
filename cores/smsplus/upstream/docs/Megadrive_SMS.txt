@@ -1,0 +1,45 @@
+VDP Test
+
+Intro screen is glitchy.
+When entering a test, text is pink with grey outlines and some kind of blueish background, incorrect.
+Goes back to normal colors when exiting tests.
+Megadrive VDP test is correct.
+
+**SMS VDP data test**
+
+The following get errors
+Write after code2 wr
+VRAM wr set VDPbuffer
+CRAM wr set VDPbuffer
+1 byte wr sets rd adr
+1 byte wr sets wr adr
+
+The rest is OK.
+
+**VDP misc test**
+VCounter values : Error
+Hcounter correct : Error
+VCounter eng time
+VDP Realster mirrors
+Vcounter mirrors
+Frame IRQ HCount
+Line IRQ Hcount
+VINT flag Hcount
+
+**VDP Sprite test**
+Offscreen Y, col
+Spr col correct HC
+No disp spr egr
+
+Spr eyr correct HC
+
+
+**Testing X-Scroll latchtime**
+
+Column is not straight (sprite is visible, except if set to Megadrive VDP)
+
+Z80 SP : 0xDFF0
+Z80 IR : 0x0009
+Z80 AF : 0xAB00
+VDP VC : 0x0015
+VDP HC : 0x00F3

@@ -1,4 +1,5 @@
 #include "runtime/arena.h"
+#include "runtime/bounds.h"
 #include "runtime/log.h"
 
 #include <pspkernel.h>
@@ -16,6 +17,7 @@ u8*    s_base   = nullptr;
 u32    s_size   = 0;
 u32    s_cursor = 0;
 u32    s_high   = 0;
+u32    s_failures = 0;
 }  // namespace
 
 bool init() {
@@ -35,6 +37,7 @@ bool init() {
     s_base   = static_cast<u8*>(sceKernelGetBlockHeadAddr(s_block));
     s_cursor = 0;
     s_high   = 0;
+    s_failures = 0;
     RS_LOGI("arena: reserved %u KB at %p", unsigned(s_size / 1024),
             (void*)s_base);
     return true;
@@ -49,10 +52,25 @@ void shutdown() {
 
 void* alloc(u32 size, u32 align) {
     if (align == 0) align = 16;
+    if (!bounds::powerOfTwo(align) || align > 4096) {
+        s_failures++;
+        RS_LOGW("arena: invalid alignment %u", unsigned(align));
+        return nullptr;
+    }
+    if (!s_base) {
+        s_failures++;
+        RS_LOGW("arena: allocation attempted while unavailable");
+        return nullptr;
+    }
+    if (s_cursor > 0xFFFFFFFFu - (align - 1)) {
+        s_failures++;
+        return nullptr;
+    }
     const u32 start = (s_cursor + align - 1) & ~(align - 1);
     /* Overflow-safe: `start + size` could wrap for a huge (e.g. corrupt
      * zip-declared) size and pass a naive `start + size > s_size` check. */
     if (start > s_size || size > s_size - start) {
+        s_failures++;
         RS_LOGW("arena: out of memory (want %u, have %u)", unsigned(size),
                 unsigned(s_size - s_cursor));
         return nullptr;
@@ -69,7 +87,9 @@ void reset(Marker m) {
 }
 
 u32 available() { return s_size - s_cursor; }
+u32 used() { return s_cursor; }
 u32 totalSize() { return s_size; }
 u32 highWater() { return s_high; }
+u32 allocationFailures() { return s_failures; }
 
 }  // namespace rs::mem

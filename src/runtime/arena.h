@@ -27,7 +27,9 @@ Marker marker();
 void   reset(Marker m);
 
 u32    available();
+u32    used();
 u32    totalSize();
 u32    highWater();
+u32    allocationFailures();
 
 }  // namespace rs::mem

@@ -18,6 +18,7 @@
 #include "frontend/ui/anim.h"
 #include "platform/psp/gu_renderer.h"
 #include "platform/psp/input_pad.h"
+#include "runtime/frame_probe.h"
 #include "runtime/save_manager.h"
 
 namespace rs {
@@ -52,6 +53,7 @@ private:
     void openMenu(App& app);
     void makeThumb(u16* out) const;
     u32  mapButtons(const input::Pad& pad) const;
+    bool injectFailure(const char* stage) const;
 
     db::GameEntry m_game;
     std::string m_coreName;
@@ -76,6 +78,9 @@ private:
     gfx::Texture m_thumbTex;
     int m_thumbSlot = -1;          /* slot currently in m_thumbTex */
 
+    bool m_frontendEvicted = false;
+    bool m_arenaReady = true;
+    bool m_coreSessionStarted = false;
     bool m_romLoaded = false;   /* true once the ROM+SRAM are in the core */
     float m_sramTimer = 0.f;
 
@@ -88,6 +93,10 @@ private:
     float m_perfElapsed = 0.f;
     u32   m_perfEmuUs   = 0;
     int   m_perfFrames  = 0;
+    static constexpr int PERF_SAMPLES = 120;
+    u32   m_perfSamples[PERF_SAMPLES] = {};
+    int   m_perfSampleCount = 0;
+    FrameProbe m_videoProbe;
 
     char m_error[160] = {};    /* sized to relay CoreManager::error() */
 };

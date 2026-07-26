@@ -9,9 +9,11 @@
 
 namespace rs::thread {
 
-/* Runs fn(arg) once on a low-priority kernel thread. */
+/* Runs fn(arg) once on a low-priority kernel thread. Returns a PSP thread
+ * id, or a negative error. The owner must join every successful spawn. */
 using Fn = int (*)(void* arg);
-bool spawn(const char* name, Fn fn, void* arg, int stackKb = 64);
+int spawn(const char* name, Fn fn, void* arg, int stackKb = 64);
+void join(int threadId);
 
 class Mutex {
 public:

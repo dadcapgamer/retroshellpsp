@@ -1,0 +1,69 @@
+SOURCE_DIR        := $(CORE_DIR)/source
+LIBRETRO_COMMON   := $(SOURCE_DIR)/ports/libretro/libretro-common
+
+SOURCES_CXX       :=
+SOURCES_C         :=
+
+INCFLAGS          += -I$(SOURCE_DIR)/ports/libretro -I$(LIBRETRO_COMMON)/include
+INCFLAGS          += -I$(SOURCE_DIR)
+INCFLAGS          += -I$(SOURCE_DIR)/sound -I$(SOURCE_DIR)/sound/$(SOUND_ENGINE) -I$(SOURCE_DIR)/sound_output
+
+ifeq ($(SOUND_ENGINE), crabemu_sn76489)
+SOURCES_C         += $(SOURCE_DIR)/sound/crabemu_sn76489/sn76489.c
+else
+CFLAGS            += -DMAXIM_PSG
+SOURCES_C         += $(SOURCE_DIR)/sound/maxim_sn76489/sn76489.c
+endif
+
+ifeq ($(ZIP_SUPPORT), 0)
+CFLAGS            += -DNOZIP_SUPPORT
+else
+INCFLAGS          += -I$(SOURCE_DIR)/unzip
+SOURCES_C         += \
+                  $(SOURCE_DIR)/unzip/fileio.c \
+                  $(SOURCE_DIR)/unzip/ioapi.c \
+                  $(SOURCE_DIR)/unzip/miniz.c \
+                  $(SOURCE_DIR)/unzip/unzip.c
+endif
+
+# Main
+SOURCES_C         += \
+                  $(SOURCE_DIR)/loadrom.c \
+                  $(SOURCE_DIR)/memz80.c \
+                  $(SOURCE_DIR)/pio.c \
+                  $(SOURCE_DIR)/render.c \
+                  $(SOURCE_DIR)/sms.c \
+                  $(SOURCE_DIR)/system.c \
+                  $(SOURCE_DIR)/tms.c \
+                  $(SOURCE_DIR)/vdp.c
+
+# CPU Cores
+INCFLAGS          += -I$(SOURCE_DIR)/cpu_cores/z80
+CFLAGS            += -DUSE_Z80
+SOURCES_C         += $(SOURCE_DIR)/cpu_cores/z80/z80.c
+
+# Sounds
+SOURCES_C         += \
+                  $(SOURCE_DIR)/sound/fmintf.c \
+                  $(SOURCE_DIR)/sound/sound.c \
+                  $(SOURCE_DIR)/sound/ym2413.c
+
+# SMS NTSC
+ifeq ($(HAVE_NTSC), 1)
+CFLAGS            += -DHAVE_NTSC
+INCFLAGS          += -I$(SOURCE_DIR)/ntsc
+SOURCES_C         += $(SOURCE_DIR)/ntsc/sms_ntsc.c
+endif
+
+# Libretro
+# memory_stream is consumed directly by the core's savestate code
+# (smsplus_libretro.c) and must be linked into the core itself even on
+# statically-linked platforms, where the frontend does not export
+# libretro-common symbols.
+SOURCES_C         += $(LIBRETRO_COMMON)/streams/memory_stream.c
+
+ifeq ($(STATIC_LINKING),1)
+else
+endif
+
+SOURCES_C         += $(SOURCE_DIR)/ports/libretro/smsplus_libretro.c

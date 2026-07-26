@@ -15,6 +15,7 @@ namespace rs::fs {
 
 constexpr const char* ROOT     = "ms0:/RETROSUITE";
 constexpr const char* ROM_ROOT = "ms0:/ROMS";
+constexpr u32 DEFAULT_MAX_FILE = 4u * 1024u * 1024u;
 
 struct DirEntry {
     std::string name;      /* file name only, no path */
@@ -30,9 +31,12 @@ s32  fileSize(const char* path);
 /* Lists a directory non-recursively; returns false if it can't be opened. */
 bool listDir(const char* path, std::vector<DirEntry>& out);
 
-/* Whole-file helpers. read appends to `out` and returns success. */
-bool readFile(const char* path, std::vector<u8>& out);
+/* Whole-file helpers. read appends to `out`, rejects oversized files, and
+ * falls back to the last atomic-write backup if the main file is absent. */
+bool readFile(const char* path, std::vector<u8>& out,
+              u32 maxBytes = DEFAULT_MAX_FILE);
 bool writeFile(const char* path, const void* data, u32 size);
+bool writeFileAtomic(const char* path, const void* data, u32 size);
 
 /* Random-access read for streaming; returns bytes read or <0. */
 s32 readRange(const char* path, void* buf, u32 offset, u32 size);

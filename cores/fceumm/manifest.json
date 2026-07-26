@@ -1,5 +1,7 @@
 {
   "name": "fceumm",
   "version": "1.0",
-  "systems": "nes"
+  "systems": "nes",
+  "priority": 100,
+  "testOnly": false
 }

@@ -1,0 +1,69 @@
+Known issues
+=============
+
+-  Madou Monogatari I (Game Gear)
+
+Has rendering issues due to video timing being different between SMS and GG.
+See :
+https://github.com/drhelius/Gearsystem/commit/71b7252831e8a50d94a11b491431b52f6c3af8d4
+
+Partially fixed as of f0192681f2daa9d1f225f891119e26dbc4969a54, but
+it is still not correct when the sprite moves into the background.
+
+-  93c46 EEPROM Support
+
+Used by a few Game Game games.
+
+Majors Pro Baseball
+Nomo's World Series Baseball (J)
+Pro Yakyuu GG League (J)
+World Series Baseball [A]
+World Series Baseball [B]
+World Series Baseball 95
+
+Implementations :
+https://github.com/OpenEmu/CrabEmu-Core/blob/master/consoles/sms/mapper-93c46.c
+
+World Series Baseball '95 and World Series Baseball will hang up without at least a stub in place.
+
+- LCD Persistence issues
+
+Some games take advantage of the Game Gear's poor LCD screen.
+If this behaviour is not replicated then it results in some heavy flickering.
+
+Here's a list of affected games :
+
+-  The Adventures of Batman & Robin (Disappearing HUD)
+-  Super Monaco GP 2 (Titlescreen)
+-  Space Harrier
+-  Ninja Gaiden (affects 3rd & 2nd act)
+-  Halley Wars
+-  MLBPA Baseball
+-  Power Drive (unreleased prototype)
+-  James Pond 3 (Overworld level text)
+
+MAME has an implementation of LCD persistence here (first appeared in MESS 0.135) :
+
+https://github.com/mamedev/mame/blob/08cd6110268f9363e6c2cb9f0b6d92c00dadfbd6/src/mame/machine/sms.cpp#L1557
+
+-  Graphics Board
+
+http://www.smspower.org/forums/15032-SegaGraphicBoardV20ReverseEngineering
+No support for it given how recent it is. MEKA supports this so i should take a look at it.
+
+-  Space Gun
+
+http://www.smspower.org/Development/SpaceGun-SMS
+
+I need to add back Lightgun emulation.
+The code is left turned off for now because most games also support the controllers but this game requires the light gun.
+
+There's also an issue with memory mapping. I believe we don't suffer from that bug ?
+
+-  Sports Pad
+
+Not currently implemented.
+In addition to that, a bug has been discovered where the game would sometimes read the input from player 1 for player 2.
+Do we really want to implement this bug though ???
+
+https://github.com/mamedev/mame/commit/33c5196a429d0afa801caac3ad24a76bf0ac273d#diff-cafb9b1c2517c95f421c776c3ec74e56
