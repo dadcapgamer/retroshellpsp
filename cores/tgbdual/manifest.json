@@ -3,5 +3,6 @@
   "version": "0.8.3",
   "systems": "gb|gbc",
   "priority": 25,
-  "testOnly": true
+  "testOnly": true,
+  "psp1000Safe": false
 }

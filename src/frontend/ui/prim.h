@@ -19,11 +19,14 @@ void roundedRect(gfx::Renderer& r, float x, float y, float w, float h,
  * draws the ring mask 9-sliced). */
 void roundedOutline(gfx::Renderer& r, float x, float y, float w, float h,
                     float radius, u32 color);
+/* Tight, hardware-cheap elevation used under selected controls. */
+void dropShadow(gfx::Renderer& r, float x, float y, float w, float h,
+                float radius, u32 color);
 
 /* Selected-row treatment shared by every list panel (settings, core
- * picker, in-game menu): soft rounded fill plus a 3px accent bar. */
+ * picker, in-game menu): tight shadow, soft tint and accent focus ring. */
 void focusRow(gfx::Renderer& r, float x, float y, float w, float h,
-              u32 fill, u32 bar);
+              u32 fill, u32 bar, u32 shadow);
 
 void circle(gfx::Renderer& r, float cx, float cy, float radius, u32 color);
 void ring(gfx::Renderer& r, float cx, float cy, float radius, u32 color);
@@ -32,6 +35,10 @@ void ring(gfx::Renderer& r, float cx, float cy, float radius, u32 color);
 void iconClock(gfx::Renderer& r, float cx, float cy, float radius, u32 color);
 void iconStar(gfx::Renderer& r, float cx, float cy, float radius, u32 color);
 void iconGear(gfx::Renderer& r, float cx, float cy, float radius, u32 color);
+/* Ten hard-pixel system silhouettes: System enum order 0..8, settings=9.
+ * `size` should be 32 or 64 so the baked pixels remain integer-scaled. */
+void iconSystem(gfx::Renderer& r, int systemIdx, float x, float y, float size,
+                u32 base, u32 detail);
 
 /* PSP face-button glyphs for hint bars. */
 enum class Button { Cross, Circle, Triangle, Square };

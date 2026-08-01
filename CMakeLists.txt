@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
-project(RetroSuite VERSION 0.1.0 LANGUAGES C CXX)
+project(RetroShell VERSION 1.0.0 LANGUAGES C CXX ASM)
 
-# RetroSuite PSP — all-in-one retro emulator frontend for Sony PSP.
+# RetroShell PSP — all-in-one retro emulator frontend for Sony PSP.
 # Build with the pspdev toolchain wrapper:
 #   psp-cmake -S . -B build && cmake --build build
 # Output: build/src/EBOOT.PBP + build/cores/*.prx
@@ -18,7 +18,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 option(RS_DEBUG_OVERLAY "Compile in the FPS / frame-time debug overlay (toggled with SELECT)" ON)
 option(RS_AUTOPILOT "Scripted self-test: inject input and dump screenshots (debug only)" OFF)
-option(RS_AUTOPILOT_SNES "Make the scripted self-test target the SNES core" OFF)
+set(RS_AUTOPILOT_SYSTEM_INDEX "2" CACHE STRING
+    "System index for the scripted self-test (0=GB, 1=GBC, 2=GBA, 3=NES, 4=SNES, 5=MD, 6=SMS, 7=GG, 8=PCE)")
 option(RS_SHIM_DIAG "Log one-shot libretro video diagnostics (debug only)" OFF)
 option(RS_FAILURE_INJECTION "Enable launch-stage failures selected by per-game injectFailure option" OFF)
 option(RS_INCLUDE_TEST_CORES "Build/package test-only cores such as dummy" OFF)
@@ -38,17 +39,13 @@ add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-fno-exceptions>
 if(RS_DEBUG_OVERLAY)
   add_compile_definitions(RS_DEBUG_OVERLAY=1)
 endif()
-if(RS_INCLUDE_TEST_CORES)
-  add_compile_definitions(RS_INCLUDE_TEST_CORES=1)
-endif()
 if(RS_AUTOPILOT)
-  add_compile_definitions(RS_AUTOPILOT=1)
-endif()
-if(RS_AUTOPILOT_SNES)
-  if(NOT RS_AUTOPILOT)
-    message(FATAL_ERROR "RS_AUTOPILOT_SNES requires RS_AUTOPILOT=ON")
+  if(NOT RS_AUTOPILOT_SYSTEM_INDEX MATCHES "^[0-8]$")
+    message(FATAL_ERROR "RS_AUTOPILOT_SYSTEM_INDEX must be an integer from 0 through 8")
   endif()
-  add_compile_definitions(RS_AUTOPILOT_SNES=1)
+  add_compile_definitions(RS_AUTOPILOT=1)
+  add_compile_definitions(
+    RS_AUTOPILOT_SYSTEM_INDEX=${RS_AUTOPILOT_SYSTEM_INDEX})
 endif()
 if(RS_SHIM_DIAG)
   add_compile_definitions(RS_SHIM_DIAG=1)

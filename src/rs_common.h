@@ -1,4 +1,4 @@
-/** Shared basic types and small helpers used across RetroSuite. */
+/** Shared basic types and small helpers used across RetroShell. */
 #pragma once
 
 #include <cstdint>

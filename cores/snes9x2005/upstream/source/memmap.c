@@ -686,6 +686,26 @@ again:
    {
       Memory.ROM[0x00006D] = 0x42;
    }
+   /* Clean US Secret of Mana (CRC32 D0176B24). These three idle-loop
+    * substitutions are the matching SNESAdvance/PSP Snes9xTYL entry.
+    * Validate the header and every original branch byte so a translation,
+    * revision, headered image, or modified ROM is never patched by mistake. */
+   else if (TotalFileSize == 0x200000 &&
+            strncmp("Secret of MANA", (char *) &Memory.ROM[0xFFC0], 14) == 0 &&
+            Memory.ROM[0x79773] == 0xD0 &&
+            Memory.ROM[0x79774] == 0xF5 &&
+            Memory.ROM[0x0B07B] == 0xD0 &&
+            Memory.ROM[0x0B07C] == 0xFC &&
+            Memory.ROM[0x0694D] == 0x10 &&
+            Memory.ROM[0x0694E] == 0xFB)
+   {
+      Memory.ROM[0x79773] = 0xEA;
+      Memory.ROM[0x79774] = 0xEA;
+      Memory.ROM[0x0B07B] = 0x42;
+      Memory.ROM[0x0B07C] = 0xDC;
+      Memory.ROM[0x0694D] = 0x42;
+      Memory.ROM[0x0694E] = 0x1B;
+   }
    else if (strncmp("ALL_STARS + WORLD", (char *) &Memory.ROM[0x7FC0], 17) == 0)
    {
       Memory.ROM[0x0003D0] = 0x42;

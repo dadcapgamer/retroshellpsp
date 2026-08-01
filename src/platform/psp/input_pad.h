@@ -17,6 +17,9 @@ class Pad {
 public:
     void init();
     void poll();
+    /* Refresh held/analog state without consuming pressed/released edges.
+     * Used between multiple emulated frames in one presentation pass. */
+    void refreshHeld();
 
     u32 held() const     { return m_held; }
     u32 pressed() const  { return m_pressed; }

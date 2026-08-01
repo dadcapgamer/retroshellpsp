@@ -1113,7 +1113,12 @@ static void update_input(int pads[MAX_PLAYERS])
    for (p = 0; p < MAX_PLAYERS; p++)
    {
       unsigned bind;
-      bool turbo_btn[2];
+      /* Keep turbo inputs deterministic when the frontend uses the
+       * per-button callback and turbo is disabled. The values are only
+       * consumed while turbo_enabled[p] is true today, but initializing
+       * them prevents undefined behaviour if that option changes during
+       * the same input update. */
+      bool turbo_btn[2] = { false, false };
 
       if (libretro_supports_bitmasks)
       {

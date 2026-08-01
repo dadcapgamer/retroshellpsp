@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en" data-github-repository="https://github.com/dadcapgamer/retroshellpsp" data-release-version="v1.0.0-beta.1">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#faf5ee">
+  <meta name="description" content="RetroShell is an open-source, PSP-first retro launcher for homebrew-enabled PSP systems.">
+  <title>RetroShell — A PSP-first retro launcher</title>
+  <link rel="icon" href="assets/retroshell-logo-light.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+  <script defer src="site.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <a class="brand" href="#top" aria-label="RetroShell home">
+      <img src="assets/retroshell-logo-light.svg" alt="" width="40" height="40">
+      <span>RetroShell</span>
+    </a>
+    <nav aria-label="Primary navigation">
+      <a href="#why">Why RetroShell</a>
+      <a href="#get-started">Get started</a>
+      <a href="#" data-github-link>GitHub</a>
+    </nav>
+    <a class="header-download" href="#get-started" data-release-link>Download</a>
+  </header>
+
+  <main id="main">
+    <section class="hero" id="top" aria-labelledby="hero-title">
+      <div class="hero-copy">
+        <h1 id="hero-title">A PSP-first retro launcher.</h1>
+        <p class="lede">RetroShell turns your PSP into a clean retro library. Browse by system, jump back into recent games, and launch supported emulators from one simple home screen.</p>
+        <div class="actions">
+          <a class="button button-primary" href="#get-started" data-release-link>
+            Download RetroShell
+            <img class="button-icon" src="assets/icon-download.svg" alt="" width="18" height="18">
+          </a>
+          <a class="button button-secondary" href="#" data-github-link>
+            View on GitHub
+            <img class="button-icon" src="assets/icon-external.svg" alt="" width="18" height="18">
+          </a>
+        </div>
+        <p class="fine-print">Requires custom firmware. Games and BIOS files are not included.</p>
+      </div>
+
+      <figure class="product-view">
+        <div class="product-meta" aria-hidden="true"><span>RetroShell / PSP</span><span>480 × 272</span></div>
+        <picture>
+          <source media="(max-width: 720px)" srcset="assets/retroshell-library-light-960.png">
+          <img
+            src="assets/retroshell-library-light-1440.png"
+            srcset="assets/retroshell-library-light-960.png 960w, assets/retroshell-library-light-1440.png 1440w, assets/retroshell-library-light@3x.png 2880w"
+            sizes="(max-width: 720px) calc(100vw - 40px), (max-width: 980px) 760px, 760px"
+            alt="RetroShell home screen showing console shortcuts and recently played games"
+            width="1440" height="816" decoding="async" fetchpriority="high">
+        </picture>
+      </figure>
+    </section>
+
+    <section class="why" id="why" aria-labelledby="why-title">
+      <div class="section-intro">
+        <h2 id="why-title">Made for the PSP, not squeezed onto it.</h2>
+        <p>RetroShell is designed around the PSP’s screen, buttons, memory limits, and homebrew ecosystem. It keeps the experience focused so you can choose a system, pick a game, and play.</p>
+      </div>
+
+      <div class="feature-grid">
+        <article class="feature-card">
+          <img class="feature-icon" src="assets/icon-feature-console.svg" alt="" width="40" height="40">
+          <h3>Built for PSP</h3>
+          <p>RetroShell was built around the PSP front and center, not a port.</p>
+        </article>
+        <article class="feature-card">
+          <img class="feature-icon" src="assets/icon-feature-library.svg" alt="" width="40" height="40">
+          <h3>One clean library</h3>
+          <p>Multiple emulators baked into a single seamless experience.</p>
+        </article>
+        <article class="feature-card">
+          <img class="feature-icon" src="assets/icon-feature-core.svg" alt="" width="40" height="40">
+          <h3>Curated for play</h3>
+          <p>RetroShell focuses on systems and cores that make sense on PSP.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="get-started" id="get-started" aria-labelledby="install-title">
+      <div class="section-intro install-intro">
+        <h2 id="install-title">Install RetroShell, add games, play.</h2>
+      </div>
+
+      <ol class="install-steps">
+        <li>
+          <span class="step-number" aria-hidden="true">1</span>
+          <div><h3>Download RetroShell</h3><p>Copy the RetroShell folder to your PSP memory stick.</p></div>
+        </li>
+        <li>
+          <span class="step-number" aria-hidden="true">2</span>
+          <div><h3>Add your games</h3><p>Place ROMs into the matching folders inside <code>/ROMS/</code>.</p></div>
+        </li>
+        <li>
+          <span class="step-number" aria-hidden="true">3</span>
+          <div><h3>Launch on PSP</h3><p>Open RetroShell from Game → Memory Stick.</p></div>
+        </li>
+      </ol>
+
+      <div class="core-support" aria-labelledby="support-title">
+        <div class="support-heading">
+          <h3 id="support-title">Core support</h3>
+          <p>Current development status. Labels may change as real-hardware testing continues.</p>
+        </div>
+        <div class="support-levels">
+          <div class="support-level included"><strong>Included</strong><span>GB / GBC · NES · GBA</span></div>
+          <div class="support-level testing"><strong>Testing</strong><span>Genesis · SNES · PC Engine</span></div>
+          <div class="support-level experimental"><strong>Experimental</strong><span>Master System · Game Gear</span></div>
+        </div>
+      </div>
+
+      <div class="final-cta">
+        <img class="cta-brand-mark" src="assets/retroshell-brand-mark.svg" alt="">
+        <div class="cta-copy">
+          <h2>Give your PSP a new retro home.</h2>
+          <p>RetroShell is open-source homebrew. Games and BIOS files are not included.</p>
+        </div>
+        <div class="actions cta-actions">
+          <a class="button button-light" href="#get-started" data-release-link>Download latest release</a>
+          <a class="button button-outline-light" href="#" data-github-link>View source</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <a class="brand footer-brand" href="#top"><img src="assets/retroshell-logo-light.svg" alt="" width="40" height="40"><span>RetroShell</span></a>
+    <p>Open-source homebrew for the Sony PSP. Not affiliated with Sony.</p>
+    <p>© RetroShell</p>
+  </footer>
+</body>
+</html>

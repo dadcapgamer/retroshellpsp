@@ -110,8 +110,16 @@ void Font::draw(gfx::Renderer& r, float x, float y, const char* text,
     }
     if (count == 0) return;
 
+    /* Atlases are baked at their exact on-screen size. Linear filtering
+     * blends adjacent coverage texels and makes native-size type look soft
+     * on an IPS panel, so render glyphs with nearest sampling. */
+    const gfx::TexFilter previousFilter = r.texFilter();
+    r.setTexFilter(gfx::TexFilter::Nearest);
     gfx::VertT* v = r.beginSprites(m_tex, count);
-    if (!v) return;
+    if (!v) {
+        r.setTexFilter(previousFilter);
+        return;
+    }
     int i = 0;
     float pen = x;
     for (const char* s = text; *s;) {
@@ -130,6 +138,7 @@ void Font::draw(gfx::Renderer& r, float x, float y, const char* text,
         pen += float(g->xadv);
     }
     r.endSprites(v, i);
+    r.setTexFilter(previousFilter);
 }
 
 void Font::drawShadow(gfx::Renderer& r, float x, float y, const char* text,

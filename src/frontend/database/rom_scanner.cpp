@@ -16,6 +16,9 @@ constexpr u32 MAX_ZIP_FILE_BYTES = 256u * 1024u * 1024u;
 constexpr u32 MAX_ROM_BYTES = 16u * 1024u * 1024u;
 constexpr mz_uint MAX_ZIP_ENTRIES = 4096;
 constexpr mz_uint64 MAX_COMPRESSION_RATIO = 200;
+constexpr int MAX_SCAN_DEPTH = 8;
+constexpr int MAX_SCANNED_FILES = 100000;
+constexpr size_t MAX_ROM_PATH = 511;
 
 /* Lower-cased extension of `name` (no dot), or empty. */
 void extOf(const char* name, char out[16]) {
@@ -35,9 +38,17 @@ std::string displayName(const char* fileName) {
     return n;
 }
 
-/* Reads the zip central directory and returns the first entry matching the
- * system's extensions. Cheap: only directory records are touched. */
-bool peekZip(const char* zipPath, const SystemInfo& info, GameEntry& g) {
+const SystemInfo* systemForExtension(const char* ext) {
+    for (int si = 0; si < SYSTEM_COUNT; si++) {
+        const SystemInfo& info = systemInfo(System(si));
+        if (extMatches(info.extensions, ext)) return &info;
+    }
+    return nullptr;
+}
+
+/* Reads the ZIP central directory and assigns the archive to the system of
+ * its first supported ROM. Cheap: only directory records are touched. */
+bool peekZip(const char* zipPath, GameEntry& g) {
     const s32 archiveSize = fs::fileSize(zipPath);
     if (archiveSize <= 0 || u32(archiveSize) > MAX_ZIP_FILE_BYTES) return false;
     mz_zip_archive zip;
@@ -62,7 +73,9 @@ bool peekZip(const char* zipPath, const SystemInfo& info, GameEntry& g) {
             continue;
         char ext[16];
         extOf(st.m_filename, ext);
-        if (!extMatches(info.extensions, ext)) continue;
+        const SystemInfo* info = systemForExtension(ext);
+        if (!info) continue;
+        g.system   = info->id;
         g.zipEntry = st.m_filename;
         g.crc32    = u32(st.m_crc32);
         g.size     = u32(st.m_uncomp_size);
@@ -116,42 +129,81 @@ int RomScanner::threadMain(void* self) {
 }
 
 void RomScanner::scan() {
-    for (int si = 0; si < SYSTEM_COUNT; si++) {
-        if (m_stopRequested.load()) return;
-        const SystemInfo& info = systemInfo(System(si));
-        char dir[128];
-        std::snprintf(dir, sizeof dir, "%s/%s", fs::ROM_ROOT, info.dirName);
-
-        std::vector<fs::DirEntry> entries;
-        if (!fs::listDir(dir, entries)) continue;
-
-        for (const auto& e : entries) {
-            if (m_stopRequested.load()) return;
-            if (e.isDir) continue;
-            m_progress.fetch_add(1);
-
-            char ext[16];
-            extOf(e.name.c_str(), ext);
-
-            GameEntry g;
-            g.system = info.id;
-            g.name   = displayName(e.name.c_str());
-            g.path   = std::string(dir) + "/" + e.name;
-            g.mtime  = e.mtime;
-
-            if (std::strcmp(ext, "zip") == 0) {
-                if (!peekZip(g.path.c_str(), info, g)) continue;
-            } else if (extMatches(info.extensions, ext)) {
-                g.size = e.size;
-            } else {
-                continue;
-            }
-            g.pathHash = fnv1a(g.path.c_str());
-            m_results.push_back(std::move(g));
+    /* FAT is case-insensitive on hardware, while host-backed PPSSPP paths
+     * can be case-sensitive. Accept either spelling without scanning twice. */
+    std::vector<fs::DirEntry> rootEntries;
+    const char* root = fs::ROM_ROOT;
+    if (!fs::listDir(root, rootEntries)) {
+        root = "ms0:/roms";
+        if (!fs::listDir(root, rootEntries)) {
+            RS_LOGI("scanner: ROM root not found (%s)", fs::ROM_ROOT);
+            return;
         }
     }
+    std::vector<fs::DirEntry>().swap(rootEntries);
+    scanDirectory(root, 0);
     RS_LOGI("scanner: found %d games (%d files inspected)",
             int(m_results.size()), int(m_progress));
+}
+
+void RomScanner::scanDirectory(const std::string& directory, int depth) {
+    if (m_stopRequested.load() || depth > MAX_SCAN_DEPTH ||
+        m_progress.load() >= MAX_SCANNED_FILES)
+        return;
+
+    std::vector<fs::DirEntry> entries;
+    if (!fs::listDir(directory.c_str(), entries)) return;
+    std::vector<std::string> subdirectories;
+
+    for (const auto& e : entries) {
+        if (m_stopRequested.load() ||
+            m_progress.load() >= MAX_SCANNED_FILES)
+            return;
+        if (e.name.empty() || e.name == "." || e.name == ".." ||
+            e.name.rfind("._", 0) == 0)
+            continue;
+
+        const std::string path = directory + "/" + e.name;
+        if (path.size() > MAX_ROM_PATH) {
+            RS_LOGW("scanner: skipping overlong path under %s",
+                    directory.c_str());
+            continue;
+        }
+        if (e.isDir) {
+            subdirectories.push_back(path);
+            continue;
+        }
+
+        m_progress.fetch_add(1);
+        char ext[16];
+        extOf(e.name.c_str(), ext);
+
+        GameEntry g;
+        g.name  = displayName(e.name.c_str());
+        g.path  = path;
+        g.mtime = e.mtime;
+
+        if (std::strcmp(ext, "zip") == 0) {
+            if (!peekZip(g.path.c_str(), g)) continue;
+        } else {
+            const SystemInfo* info = systemForExtension(ext);
+            if (!info) continue;
+            g.system = info->id;
+            g.size = e.size;
+        }
+        g.pathHash = fnv1a(g.path.c_str());
+        m_results.push_back(std::move(g));
+    }
+
+    /* Do not retain a potentially large directory listing while descending;
+     * the scanner shares the frontend's deliberately small system heap. */
+    std::vector<fs::DirEntry>().swap(entries);
+    for (const auto& subdirectory : subdirectories) {
+        scanDirectory(subdirectory, depth + 1);
+        if (m_stopRequested.load() ||
+            m_progress.load() >= MAX_SCANNED_FILES)
+            return;
+    }
 }
 
 bool RomScanner::takeResults(std::vector<GameEntry>& out) {

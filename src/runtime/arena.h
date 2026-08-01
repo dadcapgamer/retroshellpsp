@@ -1,4 +1,4 @@
-/** The boot-time memory arena — RetroSuite's big-allocation strategy.
+/** The boot-time memory arena — RetroShell's big-allocation strategy.
  *
  * At startup the frontend reserves the largest available block of the user
  * partition (leaving a small fixed newlib heap for incidental allocations).

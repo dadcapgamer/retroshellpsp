@@ -4,5 +4,6 @@
   "systems": "sms|gg",
   "priority": 90,
   "testOnly": true,
+  "psp1000Safe": false,
   "requiresFullContent": true
 }

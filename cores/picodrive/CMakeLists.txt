@@ -64,4 +64,6 @@ target_include_directories(rs_core_picodrive PRIVATE
 target_compile_definitions(rs_core_picodrive PRIVATE
   RS_CORE_NAME="picodrive"
   RS_CORE_SYSTEMS="md|sms|gg"
+  RS_PSP_NATIVE_RGB565
+  RS_PICODRIVE_PSP_DEFAULTS
   __LIBRETRO__)

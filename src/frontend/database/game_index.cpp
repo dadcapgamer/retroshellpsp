@@ -10,7 +10,7 @@ namespace rs::db {
 namespace {
 constexpr u32 CACHE_MAGIC   = 0x58495352u;  /* "RSIX" */
 constexpr u32 CACHE_VERSION = 1;
-const char* CACHE_PATH = "ms0:/RETROSUITE/cache/index.bin";
+const char* CACHE_PATH = "ms0:/RETROSHELL/cache/index.bin";
 
 void put32(std::vector<u8>& v, u32 x) {
     v.push_back(u8(x)); v.push_back(u8(x >> 8));
@@ -99,7 +99,7 @@ bool GameIndex::saveCache() const {
             putStr(out, g.zipEntry);
         }
     }
-    fs::mkdirs("ms0:/RETROSUITE/cache");
+    fs::mkdirs("ms0:/RETROSHELL/cache");
     return out.size() <= fs::DEFAULT_MAX_FILE &&
            fs::writeFileAtomic(CACHE_PATH, out.data(), u32(out.size()));
 }

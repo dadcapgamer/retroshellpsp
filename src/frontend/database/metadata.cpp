@@ -19,6 +19,31 @@ void metaPath(char* buf, size_t n, const GameEntry& g, const char* kind,
     std::snprintf(buf, n, "%s/%s/%s/%s.%s", fs::ROOT, kind,
                   systemInfo(g.system).dirName, g.name.c_str(), ext);
 }
+
+/* Replaces only the ROM file's final extension, preserving its exact
+ * directory and filename casing:
+ *   ms0:/ROMS/GBC/Pokemon Yellow.gb -> .../Pokemon Yellow.png
+ * ZIP artwork follows the archive name, which is also what the library
+ * displays. */
+bool siblingArtPath(char* buf, size_t n, const GameEntry& g,
+                    const char* ext) {
+    if (!buf || !n || g.path.empty() || !ext || !*ext) return false;
+    const char* begin = g.path.c_str();
+    const char* slash = std::strrchr(begin, '/');
+    const char* dot = std::strrchr(begin, '.');
+    const char* end = begin + g.path.size();
+    if (!dot || (slash && dot < slash)) dot = end;
+    const size_t baseLen = size_t(dot - begin);
+    const size_t extLen = std::strlen(ext);
+    if (baseLen >= n || extLen > n - baseLen - 1u ||
+        baseLen + 1u + extLen >= n)
+        return false;
+    std::memcpy(buf, begin, baseLen);
+    buf[baseLen] = '.';
+    std::memcpy(buf + baseLen + 1u, ext, extLen);
+    buf[baseLen + 1u + extLen] = '\0';
+    return true;
+}
 }  // namespace
 
 GameMeta loadMeta(const GameEntry& g) {
@@ -62,11 +87,40 @@ const gfx::Texture* BoxartCache::get(const GameEntry& g) {
     s.hash = g.pathHash;
     s.missing = true;
 
-    char path[512];
-    metaPath(path, sizeof path, g, "boxart", "png");
     std::vector<u8> file;
     constexpr u32 MAX_BOXART_FILE = 2u * 1024u * 1024u;
-    if (!fs::readFile(path, file, MAX_BOXART_FILE)) return nullptr;
+    char path[512];
+    /* Hardware FAT is case-insensitive; PPSSPP's host-backed Memory Stick
+     * may not be, so accept common lower- and upper-case spellings. */
+    const char* extensions[] = {
+        "png", "jpg", "jpeg", "PNG", "JPG", "JPEG",
+    };
+    bool found = false;
+    bool sibling = false;
+
+    /* User-friendly path: keep the image beside the ROM. */
+    for (const char* ext : extensions) {
+        if (siblingArtPath(path, sizeof path, g, ext) &&
+            fs::readFile(path, file, MAX_BOXART_FILE)) {
+            found = true;
+            sibling = true;
+            break;
+        }
+    }
+
+    /* Backward-compatible path for existing art packs/installations. */
+    if (!found) {
+        for (const char* ext : extensions) {
+            metaPath(path, sizeof path, g, "boxart", ext);
+            if (fs::readFile(path, file, MAX_BOXART_FILE)) {
+                found = true;
+                break;
+            }
+        }
+    }
+    if (!found) return nullptr;
+    RS_LOGI("boxart: loaded %s %s",
+            sibling ? "beside ROM" : "from library", path);
 
     int w = 0, h = 0, comp = 0;
     stbi_uc* px = stbi_load_from_memory(file.data(), int(file.size()), &w, &h,
@@ -101,6 +155,13 @@ const gfx::Texture* BoxartCache::get(const GameEntry& g) {
     if (!ok) return nullptr;
     s.missing = false;
     return &s.tex;
+}
+
+const gfx::Texture* BoxartCache::peek(const GameEntry& g) const {
+    for (const auto& s : m_slots)
+        if (s.hash == g.pathHash)
+            return (!s.missing && s.tex.valid()) ? &s.tex : nullptr;
+    return nullptr;
 }
 
 void BoxartCache::clear() {

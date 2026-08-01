@@ -1,4 +1,4 @@
-/** RetroSuite PSP — entry point.
+/** RetroShell PSP — entry point.
  *
  * Owns the PSP module boilerplate and HOME-menu exit callback; everything
  * else lives in App (src/frontend/app.*).
@@ -12,7 +12,7 @@
 #include <pspdisplay.h>
 #include <pspkernel.h>
 
-PSP_MODULE_INFO("RetroSuite", 0, 0, 1);
+PSP_MODULE_INFO("RetroShell", 0, 0, 1);
 PSP_MAIN_THREAD_ATTR(PSP_THREAD_ATTR_USER | PSP_THREAD_ATTR_VFPU);
 /* Fixed 4MB newlib heap: everything large goes through the arena so the
  * memory map stays deterministic on the 32MB PSP-1000. */
@@ -42,7 +42,7 @@ void setupCallbacks() {
 
 [[noreturn]] void fatal(const char* msg) {
     pspDebugScreenInit();
-    pspDebugScreenPrintf("RetroSuite failed to start:\n  %s\n\n"
+    pspDebugScreenPrintf("RetroShell failed to start:\n  %s\n\n"
                          "Press HOME to quit.", msg);
     while (!g_exitRequested) sceDisplayWaitVblankStart();
     sceKernelExitGame();
@@ -53,9 +53,6 @@ void setupCallbacks() {
 
 int main() {
     setupCallbacks();
-    rs::log::init(/*toFile=*/true);
-    RS_LOGI("RetroSuite starting");
-
     rs::power::setCpuMhz(222);  /* menus don't need 333 */
 
     if (!rs::mem::init()) fatal("memory arena reservation failed");
@@ -65,9 +62,9 @@ int main() {
 
     app.run();
 
+    app.shutdown();
     RS_LOGI("clean exit (arena high water: %u KB)",
             unsigned(rs::mem::highWater() / 1024));
-    app.shutdown();
     rs::mem::shutdown();
     rs::log::shutdown();
     sceKernelExitGame();

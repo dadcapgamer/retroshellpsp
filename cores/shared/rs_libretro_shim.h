@@ -2,7 +2,7 @@
  *
  * This is the one-time bridge that makes libretro-based emulators cheap to
  * integrate: a core directory vendors its upstream source, compiles this
- * shim alongside it, and gets the whole RetroSuite feature set (save
+ * shim alongside it, and gets the whole RetroShell feature set (save
  * states, SRAM autosave, in-game menu, resampled audio) without writing
  * any RSCoreAPI code itself.
  *

@@ -1,4 +1,5 @@
 #include "frontend/core_manager.h"
+#include "platform/psp/fs_psp.h"
 #include "runtime/host_services.h"
 #include "runtime/log.h"
 
@@ -77,7 +78,7 @@ bool CoreManager::loadCore(const CoreInfo& info) {
 
     const char* name = info.name.c_str();
     char path[128];
-    std::snprintf(path, sizeof path, "ms0:/RETROSUITE/cores/%s.prx", name);
+    std::snprintf(path, sizeof path, "%s/cores/%s.prx", fs::ROOT, name);
 
     const SceUID mod = sceKernelLoadModule(path, 0, nullptr);
     if (mod < 0) {

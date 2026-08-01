@@ -1,5 +1,5 @@
 /**
- * RetroSuite Core API — the emulator core contract.
+ * RetroShell Core API — the emulator core contract.
  *
  * Every emulator core (PRX module or statically linked) exposes exactly one
  * entry point:
@@ -22,7 +22,7 @@
 extern "C" {
 #endif
 
-#define RS_CORE_API_VERSION 1u
+#define RS_CORE_API_VERSION 3u
 
 /* Pixel formats a core may emit. Values match what the PSP GE consumes so
  * frames upload without conversion. */
@@ -41,6 +41,13 @@ typedef struct RSVideoFrame {
     uint16_t    pitch;
     uint8_t     format;      /* RS_PIXFMT_* */
     uint8_t     _pad;
+    /* Allocated source-buffer height. When this and pitch describe a
+     * power-of-two texture, the PSP frontend may bind pixels directly. */
+    uint16_t    storage_height;
+    uint16_t    _pad2;
+    /* Incremented only when the pixel contents change. The frontend uses
+     * this to avoid re-uploading a duplicated or video-skipped frame. */
+    uint32_t    sequence;
 } RSVideoFrame;
 
 typedef struct RSCoreAPI {

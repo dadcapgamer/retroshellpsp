@@ -12,7 +12,7 @@
 namespace rs::cfg {
 
 namespace {
-const char* CFG_PATH = "ms0:/RETROSUITE/config.json";
+const char* CFG_PATH = "ms0:/RETROSHELL/config.json";
 Config s_cfg;
 
 bool safeId(const char* s, size_t maxLen = 48) {
@@ -29,7 +29,7 @@ bool validClock(int mhz) {
 }
 
 void gamePath(char* buf, size_t n, u32 hash) {
-    std::snprintf(buf, n, "ms0:/RETROSUITE/pergame/%08x.json", unsigned(hash));
+    std::snprintf(buf, n, "ms0:/RETROSHELL/pergame/%08x.json", unsigned(hash));
 }
 
 }  // namespace
@@ -42,6 +42,9 @@ void load() {
     if (const cJSON* v = cJSON_GetObjectItemCaseSensitive(root, "theme");
         cJSON_IsString(v) && safeId(v->valuestring))
         s_cfg.theme = v->valuestring;
+    if (const cJSON* v = cJSON_GetObjectItemCaseSensitive(root, "accent");
+        cJSON_IsNumber(v) && v->valueint >= 0 && v->valueint < 8)
+        s_cfg.accent = v->valueint;
     if (const cJSON* v = cJSON_GetObjectItemCaseSensitive(root, "cpuMenuMhz");
         cJSON_IsNumber(v) && validClock(v->valueint))
         s_cfg.cpuMenuMhz = v->valueint;
@@ -51,23 +54,41 @@ void load() {
     if (const cJSON* v = cJSON_GetObjectItemCaseSensitive(root, "uiSounds");
         cJSON_IsBool(v))
         s_cfg.uiSounds = cJSON_IsTrue(v);
+    if (const cJSON* v =
+            cJSON_GetObjectItemCaseSensitive(root, "clock24Hour");
+        cJSON_IsBool(v))
+        s_cfg.clock24Hour = cJSON_IsTrue(v);
     if (const cJSON* v = cJSON_GetObjectItemCaseSensitive(root, "showFps");
         cJSON_IsBool(v))
         s_cfg.showFps = cJSON_IsTrue(v);
     if (const cJSON* v = cJSON_GetObjectItemCaseSensitive(root, "autosave");
         cJSON_IsBool(v))
         s_cfg.autosave = cJSON_IsTrue(v);
+    if (const cJSON* v =
+            cJSON_GetObjectItemCaseSensitive(root, "psp1000SafeMode");
+        cJSON_IsBool(v)) {
+        s_cfg.psp1000SafeMode = cJSON_IsTrue(v);
+        s_cfg.psp1000SafeModeConfigured = true;
+    }
     cJSON_Delete(root);
+}
+
+void applyHardwareDefaults(bool isPsp1000) {
+    if (!s_cfg.psp1000SafeModeConfigured)
+        s_cfg.psp1000SafeMode = isPsp1000;
 }
 
 void save() {
     cJSON* root = cJSON_CreateObject();
     cJSON_AddStringToObject(root, "theme", s_cfg.theme.c_str());
+    cJSON_AddNumberToObject(root, "accent", s_cfg.accent);
     cJSON_AddNumberToObject(root, "cpuMenuMhz", s_cfg.cpuMenuMhz);
     cJSON_AddNumberToObject(root, "cpuGameMhz", s_cfg.cpuGameMhz);
     cJSON_AddBoolToObject(root, "uiSounds", s_cfg.uiSounds);
+    cJSON_AddBoolToObject(root, "clock24Hour", s_cfg.clock24Hour);
     cJSON_AddBoolToObject(root, "showFps", s_cfg.showFps);
     cJSON_AddBoolToObject(root, "autosave", s_cfg.autosave);
+    cJSON_AddBoolToObject(root, "psp1000SafeMode", s_cfg.psp1000SafeMode);
     fs::mkdirs(fs::ROOT);
     if (!json::writeFile(CFG_PATH, root)) RS_LOGW("config: save failed");
     cJSON_Delete(root);
@@ -95,7 +116,7 @@ void setGameOption(u32 pathHash, const char* key, const char* value) {
     if (!root) root = cJSON_CreateObject();
     cJSON_DeleteItemFromObjectCaseSensitive(root, key);
     cJSON_AddStringToObject(root, key, value);
-    fs::mkdirs("ms0:/RETROSUITE/pergame");
+    fs::mkdirs("ms0:/RETROSHELL/pergame");
     json::writeFile(path, root);
     cJSON_Delete(root);
 }

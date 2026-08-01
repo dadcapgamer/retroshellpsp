@@ -1,6 +1,6 @@
 # PSP core research and candidate roadmap
 
-Research snapshot: 2026-07-26
+Research snapshot: 2026-07-28
 
 ## What the RetroArch PSP catalog tells us
 
@@ -9,9 +9,9 @@ not a compatibility certification. A listed core is known to compile for the
 PSP target. It may still be too slow, consume too much memory, or fail games
 on a 32 MB PSP-1000.
 
-Current official PSP artifacts relevant to RetroSuite include:
+Current official PSP artifacts relevant to RetroShell include:
 
-| System | Current PSP buildbot cores | RetroSuite evaluation order |
+| System | Current PSP buildbot cores | RetroShell evaluation order |
 | --- | --- | --- |
 | GB/GBC | Gambatte, Gearboy, TGB Dual | Gambatte, Gearboy, TGB Dual |
 | NES | FCEUmm, QuickNES, Nestopia | FCEUmm, QuickNES, Nestopia |
@@ -41,24 +41,31 @@ test-only PRX packages and let the same ROM corpus select winners:
 2. **NES:** FCEUmm is the compatibility baseline. QuickNES is the speed
    candidate. Nestopia is the accuracy comparison and is expected to cost
    more CPU and memory.
-3. **SNES:** Snes9x 2005 Plus is the immediate missing candidate. Keep
-   Snes9x 2005 as a comparison, not a presumed default. Snes9x 2010 remains
-   experimental. Investigate Snes9xTYL's PSP GU renderer, Media Engine audio,
-   and game-specific speed work for portable optimizations.
+3. **SNES:** Snes9x 2005 is the sole safe candidate after Snes9x 2005 Plus
+   failed the PSP-1000 performance gate and Snes9x 2010 repeatedly shut the
+   hardware down. The PRX now carries the safe compiler portions of
+   Snes9xTYL's Allegrex profile. TYL's frontend-owned GU renderer, Media
+   Engine ownership, and whole-program linking cannot be copied directly:
+   RetroShell owns the GU/audio services and must unload the core cleanly.
+   Game-specific wait-loop/speed-hack work is evaluated only when it has a
+   compatibility test and does not compromise emulation state.
 4. **Sega:** PicoDrive remains the Mega Drive/Sega CD/32X baseline. SMS Plus
    is the dedicated Master System/Game Gear candidate; Gearsystem is the
    alternate.
-5. **GBA:** gpSP is the first performance candidate because of its dynarec.
-   mGBA is a compatibility comparison, not an expected PSP-1000 default.
+5. **GBA:** gpSP is integrated as the first performance candidate because of
+   its PSP MIPS dynarec. Its ROM page cache is bounded to 8 MiB and large
+   uncompressed games use the host VFS. mGBA remains a later compatibility
+   comparison, not an expected PSP-1000 default.
    Both remain blocked until host VFS/streaming is proven.
-6. **PC Engine:** Beetle PCE Fast is the first candidate after streaming and
-   shared memory work pass.
+6. **PC Engine:** Beetle PCE Fast is the first candidate. Its PSP build uses
+   32 kHz audio, native BGR565 output, and frontend-controlled recovery frames
+   so the core can skip obsolete rendering work without skipping emulation.
 
 The second wave can cover Lynx, Neo Geo Pocket, WonderSwan, Atari 8-bit/7800,
 ColecoVision, and MSX. Arcade must use a curated game set because a core
 binary existing does not imply its ROM sets fit the PSP-1000 budget.
 
-PS1 should use the PSP's native POPS route rather than spending RetroSuite's
+PS1 should use the PSP's native POPS route rather than spending RetroShell's
 limited memory on a libretro PS1 core. N64 is outside the production scope
 until a PSP-1000 result proves otherwise.
 
@@ -79,7 +86,7 @@ telemetry must also record changing-pixel and all-black detection.
 
 ## Community core catalog ("marketplace")
 
-The community idea fits RetroSuite well if it begins as a curated,
+The community idea fits RetroShell well if it begins as a curated,
 open catalog rather than an in-PSP commercial store.
 
 Each installable package should contain:
@@ -95,7 +102,7 @@ Each installable package should contain:
 
 Manifest version 2 should add:
 
-- package format and RetroSuite Core API versions;
+- package format and RetroShell Core API versions;
 - core id, version, systems, extensions, priority, and test-only status;
 - PSP-1000 support declaration and measured memory high-water;
 - SHA-256 hashes for every packaged file;
@@ -105,7 +112,7 @@ Manifest version 2 should add:
 - known compatibility exceptions and safe core options.
 
 Because a PRX is native executable code with no meaningful PSP sandbox,
-RetroSuite must never silently trust a downloaded core. The official catalog
+RetroShell must never silently trust a downloaded core. The official catalog
 should accept reproducible packages through review, verify hashes/signatures,
 show publisher and PSP-1000 status, and refuse incompatible API versions.
 Manual unsigned drag-and-drop packages can remain possible behind a clear
@@ -133,4 +140,3 @@ parser, interrupted-download, and memory risks without helping core emulation.
   https://github.com/libretro/snes9x2005
 - Snes9xTYL PSP source:
   https://github.com/esmjanus/snes9xTYL
-

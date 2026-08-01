@@ -1,10 +1,8 @@
-/** Home: XMB-inspired two-level navigation.
+/** Home: console-first two-level navigation.
  *
- * Level 1 — horizontal category bar: Recently Played, Favorites, the nine
- * systems, Settings. Level 2 — the vertical game list of the focused
- * category, with a detail panel (box art, metadata, favorites). The two
- * levels blend smoothly: entering the list shrinks the bar to the top of
- * the screen.
+ * Level 1 — horizontal console selector plus a recent-games shelf.
+ * Level 2 — thumbnail grid with a persistent metadata/box-art preview.
+ * Triangle opens quick actions for the selected game without launching it.
  */
 #pragma once
 
@@ -26,15 +24,18 @@ public:
     void draw(App& app) override;
 
 private:
-    static constexpr int NUM_CATS = 12;  /* recent, favs, 9 systems, settings */
+    static constexpr int NUM_CATS = 11;  /* 9 systems + favorites + settings */
 
     void rebuildList(App& app);
+    void rebuildRecents(App& app);
     void refreshSelection(App& app);   /* re-derives m_selCore/m_selMultiCore */
     void updateCats(App& app);
     void updateList(App& app);
-    void drawCatBar(App& app, float focus, float enterA, float slideUp);
-    void drawEmptyPanel(App& app, float alpha);
-    void drawGameList(App& app, float focus);
+    void openActions(App& app, const db::GameEntry& game);
+    void updateActions(App& app);
+    void drawHome(App& app, float alpha, float slide);
+    void drawBrowser(App& app, float alpha);
+    void drawActions(App& app);
 
     /* Core picker — opens before launch when a remembered core disappeared,
      * or any time via the Square shortcut when alternatives are installed. */
@@ -42,17 +43,19 @@ private:
     void updatePicker(App& app);
     void drawPicker(App& app);
 
-    int        m_catIdx = 2;
+    int        m_catIdx = 0;
     ui::Smooth m_catPos;
     ui::Tween  m_entrance;
-    ui::Tween  m_pulse;
 
-    /* List state. */
+    /* Game-grid state. */
     ui::Smooth m_listFocus;                     /* 0 = cats, 1 = list */
     bool       m_inList = false;
     int        m_listIdx = 0;
     ui::Smooth m_scroll;
     std::vector<const db::GameEntry*> m_visible;
+    bool       m_recentFocus = false;
+    int        m_recentIdx = 0;
+    std::vector<const db::GameEntry*> m_recentVisible;
     u32        m_lastIndexGen = 0;    /* index generation, not count — a
                                        * count-preserving rescan still frees
                                        * the GameEntry* held in m_visible */
@@ -62,6 +65,14 @@ private:
     const CoreInfo* m_selCore = nullptr;
     bool            m_selMultiCore = false;
     db::GameMeta    m_selMeta;      /* cached; loadMeta reads the stick */
+
+    /* Selected-game quick actions. Save-state headers are queried once when
+     * the panel opens, never in the 60 fps draw path. */
+    bool      m_actionsOpen = false;
+    int       m_actionIdx = 0;
+    int       m_saveCount = 0;
+    db::GameEntry m_actionGame;
+    ui::Tween m_actionsFade;
 
     /* Core picker state. The game is copied so a background scan can't
      * invalidate it while the modal is up; m_pickerCurrent marks the row

@@ -22,17 +22,27 @@ struct Palette {
     bool dark;
 };
 
+struct AccentOption {
+    const char* name;
+    u32 rgb;
+};
+
+constexpr int ACCENT_COUNT = 8;
+const AccentOption& accentOption(int index);
+Palette personalize(const Palette& base, int accentIndex);
+
 inline const Palette& light() {
     static const Palette p = {
-        /* bg        */ rsHex(0xF3F5F9), rsHex(0xD9E0EC),
-        /* waves     */ rsHex(0x2E7CF6, 30), rsHex(0x74A9FF, 22),
-        /* text      */ rsHex(0x1A1E26), rsHex(0x49536A), rsHex(0x8792A8),
-        /* accent    */ rsHex(0x2E7CF6),
-        /* tiles     */ rsHex(0xFFFFFF, 216), rsHex(0xFFFFFF),
-        /* panel     */ rsHex(0xFFFFFF, 190), rsHex(0x1A1E26, 26),
-        /* menu      */ rsHex(0xFDFEFF),
-        /* shadow    */ rsHex(0x39496B, 46),
-        /* scrim     */ rsHex(0xEDF1F7),
+        /* IPS-friendly warm grey instead of a near-white backlight field. */
+        /* bg        */ rsHex(0xD5D4CF), rsHex(0xC9C8C3),
+        /* waves     */ rsHex(0xD6A646, 8), rsHex(0x8F8777, 5),
+        /* text      */ rsHex(0x24231F), rsHex(0x45433E), rsHex(0x605D56),
+        /* accent    */ rsHex(0xD6A646),
+        /* tiles     */ rsHex(0xE7E6E1, 218), rsHex(0xF7F6F2),
+        /* panel     */ rsHex(0xE4E2DD, 236), rsHex(0x383630, 46),
+        /* menu      */ rsHex(0xE8E6E1),
+        /* shadow    */ rsHex(0x383630, 42),
+        /* scrim     */ rsHex(0xC9C8C3),
         false,
     };
     return p;
@@ -40,15 +50,16 @@ inline const Palette& light() {
 
 inline const Palette& dark() {
     static const Palette p = {
-        /* bg        */ rsHex(0x0E1218), rsHex(0x1A2230),
-        /* waves     */ rsHex(0x3E8CFF, 34), rsHex(0x6FA8FF, 20),
-        /* text      */ rsHex(0xF2F5FA), rsHex(0xA9B3C4), rsHex(0x5F6A7D),
-        /* accent    */ rsHex(0x4C9AFF),
-        /* tiles     */ rsHex(0xFFFFFF, 22), rsHex(0xFFFFFF, 46),
-        /* panel     */ rsHex(0xFFFFFF, 14), rsHex(0xFFFFFF, 26),
-        /* menu      */ rsHex(0x1C2534),
-        /* shadow    */ rsHex(0x000000, 110),
-        /* scrim     */ rsHex(0x0B0E13),
+        /* Solid near-black field; no gradient or decorative bands. */
+        /* bg        */ rsHex(0x121318), rsHex(0x121318),
+        /* waves     */ rsHex(0xD6A646, 12), rsHex(0x8E846D, 7),
+        /* text      */ rsHex(0xF3EEE2), rsHex(0xC2BCB0), rsHex(0x7E7B75),
+        /* accent    */ rsHex(0xE0B557),
+        /* tiles     */ rsHex(0xFFFFFF, 15), rsHex(0x34363F),
+        /* panel     */ rsHex(0xFFFFFF, 10), rsHex(0xFFFFFF, 24),
+        /* menu      */ rsHex(0x24252B),
+        /* shadow    */ rsHex(0x000000, 118),
+        /* scrim     */ rsHex(0x121318),
         true,
     };
     return p;

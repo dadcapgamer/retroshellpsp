@@ -68,6 +68,7 @@ bool Renderer::init() {
     sceGuStart(GU_DIRECT, s_list);
     sceGuDrawBuffer(GU_PSM_5650, reinterpret_cast<void*>(vram::FB0_OFFSET),
                     vram::FB_STRIDE);
+    m_drawBuffer = reinterpret_cast<void*>(vram::FB0_OFFSET);
     sceGuDispBuffer(RS_SCREEN_W, RS_SCREEN_H,
                     reinterpret_cast<void*>(vram::FB1_OFFSET), vram::FB_STRIDE);
     sceGuOffset(2048 - RS_SCREEN_W / 2, 2048 - RS_SCREEN_H / 2);
@@ -80,7 +81,10 @@ bool Renderer::init() {
     sceGuShadeModel(GU_SMOOTH);
     sceGuEnable(GU_BLEND);
     sceGuBlendFunc(GU_ADD, GU_SRC_ALPHA, GU_ONE_MINUS_SRC_ALPHA, 0, 0);
-    sceGuEnable(GU_DITHER);            /* smooths gradients on 5650 */
+    /* Ordered dithering is useful for photographs, but across flat UI
+     * surfaces it creates an obvious grain pattern on modern IPS panels.
+     * The frontend favors clean edges; box art remains naturally varied. */
+    sceGuDisable(GU_DITHER);
     sceGuTexFunc(GU_TFX_MODULATE, GU_TCC_RGBA);
     sceGuTexWrap(GU_CLAMP, GU_CLAMP);
     sceGuFinish();
@@ -109,8 +113,6 @@ void Renderer::endFrame() {
     sceGuFinish();
     sceGuSync(0, 0);
 
-    if (m_capturePath[0]) captureNow();
-
     const u32 busyEnd = sceKernelGetSystemTimeLow();
     m_frameMs = float(busyEnd - m_frameStart) * 0.001f;
     if (m_lastFrameStart != 0) {
@@ -123,8 +125,11 @@ void Renderer::endFrame() {
     m_lastFrameStart = m_frameStart;
 
     sceDisplayWaitVblankStart();
-    sceGuSwapBuffers();
-    m_drawIsFb1 = !m_drawIsFb1;
+    m_drawBuffer = sceGuSwapBuffers();
+    /* Capture the buffer after it becomes the displayed frame. Reading the
+     * pre-swap draw pointer is unreliable in PPSSPP and produced stale,
+     * identical screenshots even while valid core frames were presented. */
+    if (m_capturePath[0]) captureNow();
     if (!m_displayOn) {
         sceGuDisplay(GU_TRUE);
         m_displayOn = true;
@@ -136,20 +141,49 @@ void Renderer::requestCapture(const char* path) {
 }
 
 void Renderer::captureNow() {
-    /* The GE has just finished the current draw buffer; read it through the
-     * uncached mirror so we see the GPU's writes. */
-    const u32 fbOff = m_drawIsFb1 ? vram::FB1_OFFSET : vram::FB0_OFFSET;
-    const u8* base = static_cast<const u8*>(sceGeEdramGetAddr()) + fbOff;
-    const u16* fb = reinterpret_cast<const u16*>(
-        reinterpret_cast<uintptr_t>(base) | 0x40000000u);
+    /* Prefer the actual displayed framebuffer. This remains correct if a GU
+     * implementation uses a swap policy different from our local bookkeeping. */
+    void* displayed = nullptr;
+    int stride = vram::FB_STRIDE;
+    int psm = GU_PSM_5650;
+    if (sceDisplayGetFrameBuf(&displayed, &stride, &psm,
+                              PSP_DISPLAY_SETBUF_IMMEDIATE) < 0 ||
+        !displayed || psm != GU_PSM_5650) {
+        displayed = m_drawBuffer;
+        stride = vram::FB_STRIDE;
+    }
+    const uintptr_t draw = reinterpret_cast<uintptr_t>(displayed);
+    const uintptr_t edram = reinterpret_cast<uintptr_t>(sceGeEdramGetAddr());
+    constexpr uintptr_t EDRAM_BYTES = 2u * 1024u * 1024u;
+    const uintptr_t addr = draw < EDRAM_BYTES ? edram + draw : draw;
+    /* Force a GE readback into ordinary RAM. PPSSPP may keep an optimized
+     * framebuffer only in its host renderer, in which case directly reading
+     * either PSP VRAM alias returns an old image even after GU sync. */
+    const size_t snapBytes = RS_SCREEN_W * RS_SCREEN_H * sizeof(u16);
+    u16* snapshot = static_cast<u16*>(memalign(64, snapBytes));
+    if (!snapshot) {
+        m_capturePath[0] = 0;
+        return;
+    }
+    std::memset(snapshot, 0, snapBytes);
+    sceKernelDcacheWritebackInvalidateRange(snapshot, snapBytes);
+    sceGuStart(GU_DIRECT, s_list);
+    sceGuCopyImage(GU_PSM_5650, 0, 0, RS_SCREEN_W, RS_SCREEN_H, stride,
+                   reinterpret_cast<void*>(addr),
+                   0, 0, RS_SCREEN_W, snapshot);
+    sceGuFinish();
+    sceGuSync(0, 0);
+    sceKernelDcacheInvalidateRange(snapshot, snapBytes);
+    const u16* fb = snapshot;
 
     u8* rgb = static_cast<u8*>(std::malloc(RS_SCREEN_W * RS_SCREEN_H * 3));
     if (!rgb) {
+        std::free(snapshot);
         m_capturePath[0] = 0;
         return;
     }
     for (int y = 0; y < RS_SCREEN_H; y++) {
-        const u16* row = fb + y * vram::FB_STRIDE;
+        const u16* row = fb + y * RS_SCREEN_W;
         u8* out = rgb + y * RS_SCREEN_W * 3;
         for (int x = 0; x < RS_SCREEN_W; x++) {
             const u16 v = row[x];
@@ -161,12 +195,16 @@ void Renderer::captureNow() {
     stbi_write_png(m_capturePath, RS_SCREEN_W, RS_SCREEN_H, 3, rgb,
                    RS_SCREEN_W * 3);
     std::free(rgb);
+    std::free(snapshot);
     m_capturePath[0] = 0;
 }
 
 void Renderer::setScissor(int x, int y, int w, int h) {
-    sceGuScissor(rsClamp(x, 0, RS_SCREEN_W), rsClamp(y, 0, RS_SCREEN_H),
-                 rsClamp(w, 0, RS_SCREEN_W), rsClamp(h, 0, RS_SCREEN_H));
+    const int x1 = rsClamp(x, 0, RS_SCREEN_W);
+    const int y1 = rsClamp(y, 0, RS_SCREEN_H);
+    const int x2 = rsClamp(x + rsClamp(w, 0, RS_SCREEN_W), x1, RS_SCREEN_W);
+    const int y2 = rsClamp(y + rsClamp(h, 0, RS_SCREEN_H), y1, RS_SCREEN_H);
+    sceGuScissor(x1, y1, x2, y2);
 }
 
 void Renderer::resetScissor() { sceGuScissor(0, 0, RS_SCREEN_W, RS_SCREEN_H); }
@@ -188,6 +226,11 @@ void Renderer::bind(const Texture* t) {
     }
     sceGuTexMode(t->psm, 0, 0, t->swizzled ? 1 : 0);
     sceGuTexImage(0, t->texW, t->texH, t->texW, t->pixels);
+    /* Emulator BGR555 frames use the top bit as spare colour data, not
+     * alpha. Ignore texture alpha for 5551 so the upstream PSP-native
+     * Snes9x layout remains opaque; vertex alpha still controls overlays. */
+    sceGuTexFunc(GU_TFX_MODULATE,
+                 t->psm == GU_PSM_5551 ? GU_TCC_RGB : GU_TCC_RGBA);
     const int f = (m_filter == TexFilter::Linear) ? GU_LINEAR : GU_NEAREST;
     sceGuTexFilter(f, f);
     sceGuTexFlush();

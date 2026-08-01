@@ -83,6 +83,117 @@ bool listDir(const char* path, std::vector<DirEntry>& out) {
 }
 
 namespace {
+bool copyLegacyFile(const char* source, const char* destination) {
+    SceUID in = sceIoOpen(source, PSP_O_RDONLY, 0);
+    if (in < 0) return false;
+    SceUID out = sceIoOpen(destination,
+                          PSP_O_WRONLY | PSP_O_CREAT | PSP_O_TRUNC, 0666);
+    if (out < 0) {
+        sceIoClose(in);
+        return false;
+    }
+
+    alignas(64) u8 buffer[16 * 1024];
+    s64 copied = 0;
+    bool ok = true;
+    for (;;) {
+        const int got = sceIoRead(in, buffer, sizeof buffer);
+        if (got < 0) {
+            ok = false;
+            break;
+        }
+        if (got == 0) break;
+        int written = 0;
+        while (written < got) {
+            const int put = sceIoWrite(out, buffer + written, got - written);
+            if (put <= 0) {
+                ok = false;
+                break;
+            }
+            written += put;
+            copied += put;
+        }
+        if (!ok) break;
+    }
+    if (sceIoClose(out) < 0) ok = false;
+    sceIoClose(in);
+
+    SceIoStat sourceStat{}, destinationStat{};
+    if (ok && (sceIoGetstat(source, &sourceStat) < 0 ||
+               sceIoGetstat(destination, &destinationStat) < 0 ||
+               sourceStat.st_size != destinationStat.st_size ||
+               copied != sourceStat.st_size)) {
+        ok = false;
+    }
+    if (!ok) {
+        sceIoRemove(destination);
+        return false;
+    }
+    if (sceIoRemove(source) < 0 && exists(source)) return false;
+    return true;
+}
+
+bool mergeLegacyTree(const char* source, const char* destination) {
+    if (!mkdirs(destination)) return false;
+    std::vector<DirEntry> entries;
+    if (!listDir(source, entries)) return false;
+    bool ok = true;
+    for (const auto& entry : entries) {
+        char from[384], to[384];
+        const int fn = std::snprintf(from, sizeof from, "%s/%s", source,
+                                     entry.name.c_str());
+        const int tn = std::snprintf(to, sizeof to, "%s/%s", destination,
+                                     entry.name.c_str());
+        if (fn <= 0 || fn >= int(sizeof from) ||
+            tn <= 0 || tn >= int(sizeof to)) {
+            ok = false;
+            continue;
+        }
+        if (entry.isDir) {
+            if (!mergeLegacyTree(from, to)) ok = false;
+            if (sceIoRmdir(from) < 0 && exists(from)) ok = false;
+            continue;
+        }
+        if (!exists(to)) {
+            if (!copyLegacyFile(from, to)) ok = false;
+            continue;
+        }
+
+        /* A release copied before first boot already contributes cores and
+         * notices to the new tree. Preserve any conflicting legacy file next
+         * to it rather than silently deleting either version. */
+        bool preserved = false;
+        for (int suffix = 0; suffix < 10 && !preserved; ++suffix) {
+            char alternate[416];
+            const int an = suffix == 0
+                ? std::snprintf(alternate, sizeof alternate, "%s.legacy", to)
+                : std::snprintf(alternate, sizeof alternate, "%s.legacy%d", to,
+                                suffix);
+            if (an <= 0 || an >= int(sizeof alternate)) break;
+            if (!exists(alternate) && copyLegacyFile(from, alternate))
+                preserved = true;
+        }
+        if (!preserved) ok = false;
+    }
+    return ok;
+}
+}  // namespace
+
+RootMigration migrateLegacyRoot() {
+    if (!exists(LEGACY_ROOT)) return RootMigration::None;
+    if (!exists(ROOT) && sceIoRename(LEGACY_ROOT, ROOT) >= 0) {
+        sceIoSync("ms0:", 0);
+        return RootMigration::Renamed;
+    }
+    if (!mkdirs(ROOT)) return RootMigration::Failed;
+    const bool merged = mergeLegacyTree(LEGACY_ROOT, ROOT);
+    const bool removed = sceIoRmdir(LEGACY_ROOT) >= 0 || !exists(LEGACY_ROOT);
+    sceIoSync("ms0:", 0);
+    return merged && removed ? RootMigration::Merged
+                             : RootMigration::Failed;
+}
+
+namespace {
 bool writeAll(const char* path, const void* data, u32 size) {
     SceUID fd = sceIoOpen(path, PSP_O_WRONLY | PSP_O_CREAT | PSP_O_TRUNC, 0666);
     if (fd < 0) return false;

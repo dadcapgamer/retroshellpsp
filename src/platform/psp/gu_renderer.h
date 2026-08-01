@@ -80,7 +80,14 @@ public:
     VertT* beginSprites(const Texture& t, int spriteCount);
     void   endSprites(VertT* verts, int spriteCount);
 
-    void setTexFilter(TexFilter f) { m_filter = f; }
+    void setTexFilter(TexFilter f) {
+        if (m_filter == f) return;
+        m_filter = f;
+        /* Filtering is GE bind state. Force the current texture to be
+         * rebound even when the caller draws the same atlas again. */
+        m_bound = nullptr;
+    }
+    TexFilter texFilter() const { return m_filter; }
 
     /* --- textures -------------------------------------------------------- */
     /* `pixels` is tightly packed w*h at `psm` depth. Static textures are
@@ -104,7 +111,10 @@ private:
     bool  m_texturing        = false;
     TexFilter m_filter       = TexFilter::Linear;
     bool  m_displayOn        = false;
-    bool  m_drawIsFb1        = false;
+    /* sceGuSwapBuffers() is the source of truth. GU implementations may
+     * return either an EDRAM-relative offset or an absolute PSP VRAM
+     * address, so captureNow() normalizes this value before reading it. */
+    void* m_drawBuffer       = nullptr;
     float m_frameMs          = 0.f;
     float m_fps              = 0.f;
     u32   m_lastFrameStart   = 0;

@@ -1,7 +1,8 @@
 /** Memory Stick filesystem access — the only place sceIo* is called.
  *
- * All RetroSuite data lives under ms0:/RETROSUITE/ except ROMs, which the
- * user keeps in ms0:/ROMS/<System>/ per the documented layout.
+ * All RetroShell data lives under ms0:/RETROSHELL/ except ROMs, which the
+ * user keeps anywhere below ms0:/ROMS/. Older ms0:/RETROSUITE installs are
+ * migrated before any persistent frontend service starts.
  */
 #pragma once
 
@@ -13,7 +14,8 @@
 
 namespace rs::fs {
 
-constexpr const char* ROOT     = "ms0:/RETROSUITE";
+constexpr const char* ROOT        = "ms0:/RETROSHELL";
+constexpr const char* LEGACY_ROOT = "ms0:/RETROSUITE";
 constexpr const char* ROM_ROOT = "ms0:/ROMS";
 constexpr u32 DEFAULT_MAX_FILE = 4u * 1024u * 1024u;
 
@@ -23,6 +25,13 @@ struct DirEntry {
     u32  mtime  = 0;       /* packed local time, monotonic per file change */
     bool isDir  = false;
 };
+
+enum class RootMigration { None, Renamed, Merged, Failed };
+
+/* Moves a legacy RETROSUITE tree into RETROSHELL. If a freshly installed
+ * release already created RETROSHELL, user data is merged without replacing
+ * the new package; collisions are retained with a .legacy suffix. */
+RootMigration migrateLegacyRoot();
 
 bool exists(const char* path);
 bool mkdirs(const char* path);              /* creates parents as needed  */

@@ -27,6 +27,23 @@ bool safeCoreName(const char* s) {
     return true;
 }
 
+bool disqualifiedCore(const char* name) {
+    /* Hardware safety tombstones. Keep stale modules left by an older
+     * candidate bundle from becoming selectable after an upgrade. Remove
+     * an entry only after a replacement passes the real PSP-1000 gate. */
+    if (!name) return false;
+    static const char* const BLOCKED[] = {
+        "fceumm",          /* PPSSPP state-path stall; 80% median speed */
+        "gearboy",         /* PSP-1000: 65% median, continuous starvation */
+        "snes9x2005_plus", /* PSP-1000: 56% median, continuous starvation */
+        "snes9x2010",      /* PSP-1000: native freeze and power-off */
+        "tgbdual",         /* PSP-1000: output stopped after two uploads */
+    };
+    for (const char* blocked : BLOCKED)
+        if (std::strcmp(name, blocked) == 0) return true;
+    return false;
+}
+
 bool knownSystems(const char* systems) {
     if (!systems || !*systems || std::strlen(systems) > 64) return false;
     const char* p = systems;
@@ -112,7 +129,7 @@ void CoreRegistry::discover() {
         const RSCoreAPI* api = CoreManager::staticCoreApi(i);
         if (!api || api->api_version != RS_CORE_API_VERSION) continue;
         m_cores.push_back({api->name, api->version, api->systems,
-                           0, false, true, true});
+                           0, false, true, true, false, true});
     }
     sortCores(m_cores);
     RS_LOGI("cores: %d linked in", int(m_cores.size()));
@@ -132,6 +149,9 @@ void CoreRegistry::discover() {
     }
 
     for (const auto& e : entries) {
+        /* Finder writes AppleDouble sidecars on FAT volumes. They are not
+         * manifests and parsing them only produces alarming startup noise. */
+        if (e.name.rfind("._", 0) == 0) continue;
         const size_t dot = e.name.rfind(".json");
         if (e.isDir || dot == std::string::npos ||
             dot + 5 != e.name.size())
@@ -150,18 +170,34 @@ void CoreRegistry::discover() {
         const cJSON* systems = cJSON_GetObjectItem(root, "systems");
         const cJSON* priority = cJSON_GetObjectItem(root, "priority");
         const cJSON* testOnly = cJSON_GetObjectItem(root, "testOnly");
+        const cJSON* psp1000Safe =
+            cJSON_GetObjectItem(root, "psp1000Safe");
         const cJSON* requiresFullContent =
             cJSON_GetObjectItem(root, "requiresFullContent");
+        const cJSON* preferVfs = cJSON_GetObjectItem(root, "preferVfs");
         if (cJSON_IsString(name) && cJSON_IsString(systems) &&
             safeCoreName(name->valuestring) &&
             knownSystems(systems->valuestring)) {
+            if (disqualifiedCore(name->valuestring)) {
+                RS_LOGW("cores: blocked disqualified core '%s'",
+                        name->valuestring);
+                cJSON_Delete(root);
+                continue;
+            }
             const bool isTest = cJSON_IsTrue(testOnly);
+            const bool isPsp1000Safe = cJSON_IsTrue(psp1000Safe);
 #ifndef RS_INCLUDE_TEST_CORES
             if (isTest) {
                 cJSON_Delete(root);
                 continue;
             }
 #endif
+            if (cfg::get().psp1000SafeMode && !isPsp1000Safe) {
+                RS_LOGI("cores: hiding '%s' in PSP-1000 Safe Mode",
+                        name->valuestring);
+                cJSON_Delete(root);
+                continue;
+            }
             /* The module itself must be present, not just its manifest. */
             std::snprintf(path, sizeof path, "%s/%s.prx", dir,
                           name->valuestring);
@@ -173,7 +209,9 @@ void CoreRegistry::discover() {
                                        ? rsClamp(priority->valueint, -1000, 1000)
                                        : 0,
                                    isTest,
+                                   isPsp1000Safe,
                                    cJSON_IsTrue(requiresFullContent) != 0,
+                                   cJSON_IsTrue(preferVfs) != 0,
                                    false});
             } else {
                 RS_LOGW("cores: manifest %s has no %s.prx", e.name.c_str(),

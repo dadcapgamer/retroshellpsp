@@ -1,0 +1,101 @@
+/* gameplaySP
+ *
+ * Copyright (C) 2024 David Guillen Fandos <david@davidgf.net>
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License as
+ * published by the Free Software Foundation; either version 2 of
+ * the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
+ */
+
+#include "common.h"
+
+static const u32 gbp_seq[16] = {
+  0x0000494E,
+  0x0000494E,
+  0xB6B1494E,
+  0xB6B1544E,
+  0xABB1544E,
+  0xABB14E45,
+  0xB1BA4E45,
+  0xB1BA4F44,
+  0xB0BB4F44,
+  0xB0BB8002,
+  0x10000010,
+  0x20000013,
+  0x30000003,
+  0x30000003,
+  0x30000003,
+  0x30000003, // Responds with rumble amount
+};
+
+static u32 gbp_seq_n = 0;
+static bool gbp_rumble = false;
+static bool gbp_allow_rumble = false;
+
+/* Savestate accessors for the GBP SIO handshake state.  Without these,
+ * a state captured mid-handshake (the first ~16 SIO transfers after
+ * game boot) resumes at the wrong step in the sequence: gbp_transfer
+ * reads gbp_seq[gbp_seq_n] which is the canned response for "where
+ * are we in the handshake", and the GB Player ROM verifies those
+ * responses against its expected sequence.  Late-handshake states are
+ * less affected (gbp_seq_n loops over indices 12..15 once connected)
+ * but the rumble-active flag and the allow-rumble safety latch must
+ * also persist - the latch is set on first execution from ROM space
+ * and saving before it triggers would defer rumble forever otherwise.
+ *
+ * Packed as one u32 since the values are small: 4 bits of sequence
+ * counter (0..15) + 1 bit each of rumble flags. */
+u32 gbp_get_state(void) {
+  return (gbp_seq_n & 0xF)
+       | (gbp_rumble ? 0x10 : 0)
+       | (gbp_allow_rumble ? 0x20 : 0);
+}
+
+void gbp_set_state(u32 v) {
+  gbp_seq_n = v & 0xF;
+  gbp_rumble = (v & 0x10) != 0;
+  gbp_allow_rumble = (v & 0x20) != 0;
+}
+
+void gbp_reset(void) {
+  write_rumble(gbp_rumble, false);
+  gbp_rumble = false;
+  gbp_seq_n = 0;
+  gbp_allow_rumble = false;
+}
+
+// GB Player sequencing
+u32 gbp_transfer(u32 value) {
+  u32 ret = gbp_seq[gbp_seq_n++];
+
+  if (!gbp_allow_rumble &&
+      reg[REG_PC] >= 0x08000000 && reg[REG_PC] < 0x0E000000)
+    gbp_allow_rumble = true;
+
+  if (gbp_seq_n == 16) {
+    if (!gbp_allow_rumble) {
+      if (gbp_rumble) {
+        write_rumble(gbp_rumble, false);
+        gbp_rumble = false;
+      }
+      gbp_seq_n = 0;
+      return ret;
+    }
+
+    bool rumble_active = (value & 2);
+    write_rumble(gbp_rumble, rumble_active);
+    gbp_rumble = rumble_active;
+    gbp_seq_n = 0;
+  }
+  return ret;
+}

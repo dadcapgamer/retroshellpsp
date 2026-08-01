@@ -1,0 +1,10 @@
+{
+  "name": "pcefast",
+  "version": "1.0.0-9e65100-rs3",
+  "systems": "pce",
+  "priority": 100,
+  "testOnly": true,
+  "psp1000Safe": false,
+  "requiresFullContent": true,
+  "preferVfs": false
+}

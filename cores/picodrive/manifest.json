@@ -1,7 +1,8 @@
 {
   "name": "picodrive",
-  "version": "1.99",
+  "version": "2.05-78a662e-rs5",
   "systems": "md|sms|gg",
   "priority": 100,
-  "testOnly": false
+  "testOnly": false,
+  "psp1000Safe": true
 }

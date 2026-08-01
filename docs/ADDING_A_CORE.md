@@ -1,4 +1,4 @@
-# Adding an emulator core to RetroSuite
+# Adding an emulator core to RetroShell
 
 A core is one directory under `cores/` with four things:
 
@@ -6,7 +6,8 @@ A core is one directory under `cores/` with four things:
 cores/mycore/
 ├── CMakeLists.txt      rs_add_core(mycore SOURCES …)
 ├── exports.exp         PRX export table (copy dummy's verbatim)
-├── manifest.json       { "name", "version", "systems", "priority", "testOnly" }
+├── manifest.json       { "name", "version", "systems", "priority",
+│                         "testOnly", "psp1000Safe" }
 └── …sources…           the emulator + a thin adapter
 ```
 
@@ -34,7 +35,8 @@ Two ways in, easiest first:
   "version": "1.2.0",
   "systems": "gb|gbc",
   "priority": 100,
-  "testOnly": true
+  "testOnly": true,
+  "psp1000Safe": false
 }
 ```
 
@@ -43,8 +45,10 @@ field. `systems` is a pipe-separated list of the stable core-ids from
 `db::SystemInfo::coreId` in `src/frontend/database/systems.h`
 (`gb gbc gba nes snes md sms gg pce`). Higher `priority` wins, with core
 name as the stable tie-breaker. New cores stay `testOnly` until they pass
-the PSP-1000 release gate. `rs_add_core` copies the manifest next to the
-built `.prx`.
+the general release gate. `psp1000Safe` must remain `false` until real
+PSP-1000 hardware passes the memory, stability, save, audio, and performance
+gates; unqualified or missing declarations are hidden by PSP-1000 Safe Mode.
+`rs_add_core` copies the manifest next to the built `.prx`.
 
 ## The contract
 
@@ -96,7 +100,7 @@ core exports the same global `retro_*` symbol set.
 
 1. `cores/CMakeLists.txt`: `add_subdirectory(mycore)`.
 2. Build. PRX mode drops `build/cores/mycore.prx` and `mycore.json` —
-   install both to `ms0:/RETROSUITE/cores/`.
+   install both to `ms0:/RETROSHELL/cores/`.
 3. Add the exact upstream commit, retained-source hash, license, patches,
    flags, and expected PRX hash to `core-provenance.lock.json`.
 
@@ -112,17 +116,17 @@ to open the picker when a system has two or more installed cores.
 `dist/cores/<name>-<version>.rscore.zip` file per candidate. An `.rscore.zip`
 is a deterministic, drag-and-drop archive containing:
 
-- the PRX and manifest under `RETROSUITE/cores/`;
+- the PRX and manifest under `RETROSHELL/cores/`;
 - the upstream license;
 - pinned provenance and artifact-hash metadata;
 - an installation and native-code trust warning.
 
 Extract the archive at the root of the Memory Stick. A `testOnly` package
 is intentionally invisible to a normal production EBOOT, so testers must
-install the candidate EBOOT from `RetroSuite-PSP-Candidates.zip` first.
+install the candidate EBOOT from the current versioned beta ZIP first.
 Core packages are native PSP executables, not sandboxed themes or data:
 community distribution should publish source, the exact commit and patches,
-and a reproducible artifact hash. RetroSuite does not treat an unsigned
+and a reproducible artifact hash. RetroShell does not treat an unsigned
 third-party package as trusted.
 
 ## Porting a libretro core
@@ -143,7 +147,7 @@ The shim also supplies the C/C++ runtime a bare PRX lacks (an arena-backed
 `malloc`, static-constructor init, single-threaded `__cxa_guard_*`), so C++
 cores link cleanly with `-nostartfiles`. Upstream keeps its own license —
 vendor it under `cores/<name>/upstream/` with its `COPYING` intact
-(gambatte is GPLv2; RetroSuite itself is MIT).
+(gambatte is GPLv2; RetroShell itself is MIT).
 
 Budget checklist for the PSP-1000:
 

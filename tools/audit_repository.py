@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fast, dependency-free release invariants for RetroSuite."""
+"""Fast, dependency-free release invariants for RetroShell."""
 
 from __future__ import annotations
 
@@ -30,6 +30,13 @@ def tree_hash(root: Path) -> str:
 def fail(errors: list[str], message: str) -> None:
     errors.append(message)
 
+def png_dimensions(path: Path) -> tuple[int, int] | None:
+    data = path.read_bytes()[:24] if path.is_file() else b""
+    if len(data) != 24 or data[:8] != b"\x89PNG\r\n\x1a\n":
+        return None
+    return (int.from_bytes(data[16:20], "big"),
+            int.from_bytes(data[20:24], "big"))
+
 
 def main() -> int:
     parser = argparse.ArgumentParser()
@@ -57,6 +64,14 @@ def main() -> int:
             fail(errors, f"{path}: priority must be an integer")
         if type(data.get("testOnly")) is not bool:
             fail(errors, f"{path}: testOnly must be a boolean")
+        if type(data.get("psp1000Safe")) is not bool:
+            fail(errors, f"{path}: psp1000Safe must be a boolean")
+        if "requiresFullContent" in data and type(data["requiresFullContent"]) is not bool:
+            fail(errors, f"{path}: requiresFullContent must be a boolean")
+        if "preferVfs" in data and type(data["preferVfs"]) is not bool:
+            fail(errors, f"{path}: preferVfs must be a boolean")
+        if data.get("requiresFullContent") and data.get("preferVfs"):
+            fail(errors, f"{path}: cannot require full content and prefer VFS")
         if name in manifests:
             fail(errors, f"{path}: duplicate core name {name}")
         manifests[name] = data
@@ -79,6 +94,8 @@ def main() -> int:
             fail(errors, f"{system}: expected one production default, found {sorted(defaults)}")
 
     for name, entry in locked.items():
+        if entry.get("delivery") not in {"production", "candidate", "archived"}:
+            fail(errors, f"{name}: invalid delivery classification")
         if not COMMIT.fullmatch(entry.get("commit", "")):
             fail(errors, f"{name}: commit is not a full Git object ID")
         expected = entry.get("sourceTreeSha256", "")
@@ -95,6 +112,25 @@ def main() -> int:
     cmake = (ROOT / "CMakeLists.txt").read_text()
     if "RS_STATIC_CORES is disabled" not in cmake:
         fail(errors, "static multi-core build is not explicitly blocked")
+    frontend_cmake = (ROOT / "src" / "CMakeLists.txt").read_text()
+    if 'TITLE "RetroShell"' not in frontend_cmake:
+        fail(errors, "PSP package title is not RetroShell")
+    branding_assets = {
+        "assets/branding/retroshell-splash-2x.png": (960, 544),
+        "assets/branding/retroshell-logo-light-2x.png": (124, 124),
+        "assets/SPLASH.PNG": (480, 272),
+        "assets/ICON0.PNG": (144, 80),
+        "assets/PIC1.PNG": (480, 272),
+    }
+    for relative, expected in branding_assets.items():
+        actual = png_dimensions(ROOT / relative)
+        if actual != expected:
+            fail(errors, f"{relative}: expected PNG dimensions "
+                         f"{expected}, found {actual}")
+    package_script = (ROOT / "tools" / "package_release.py").read_text()
+    if ("RetroShell-PSP" not in package_script or
+            "PSP/GAME/RetroShell/EBOOT.PBP" not in package_script):
+        fail(errors, "release packaging does not use RetroShell identity")
     if "add_subdirectory(dummy)" in (ROOT / "cores" / "CMakeLists.txt").read_text().replace(
         "if(RS_INCLUDE_TEST_CORES)\n  add_subdirectory(dummy)\nendif()", ""
     ):
@@ -117,7 +153,17 @@ def main() -> int:
         for error in errors:
             print(f"FAIL: {error}", file=sys.stderr)
         return 1
-    print(f"OK: {len(production)} production and {len(integrated - production)} candidate cores; manifests, provenance, and PRX policy valid")
+    active_candidates = {
+        name for name, entry in locked.items()
+        if entry.get("delivery") == "candidate"
+    }
+    archived = {
+        name for name, entry in locked.items()
+        if entry.get("delivery") == "archived"
+    }
+    print(f"OK: {len(production)} production, {len(active_candidates)} "
+          f"candidate, and {len(archived)} archived cores; manifests, "
+          "provenance, and PRX policy valid")
     return 0
 
 

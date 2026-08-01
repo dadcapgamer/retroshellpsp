@@ -37,13 +37,50 @@ target_include_directories(rs_core_snes9x2005 PRIVATE
 target_compile_definitions(rs_core_snes9x2005 PRIVATE
   RS_CORE_NAME="snes9x2005"
   RS_CORE_SYSTEMS="snes"
+  # Generate the upstream PSP BGR555 layout, but keep PSP itself undefined:
+  # defining PSP would let libretro.c issue GU commands behind the host.
+  # The shim borrows this buffer as GU_PSM_5551 without a conversion copy.
+  RS_PSP_NATIVE_PIXELS
+  RS_PSP_NATIVE_STORAGE_HEIGHT=512
+  RS_PSP_BALANCED_AUDIO
+  RS_PSP_SECRET_OF_MANA_HIRES_RESOLVE
   __LIBRETRO__
   FRONTEND_SUPPORTS_RGB565
+  # Required by upstream's BGR555 path: the newer colour helpers assume
+  # red occupies the high bits, while BGR555 intentionally puts it low.
+  USE_OLD_COLOUR_OPS
+  # Upstream enables this for every release build. It exits the specialised
+  # CPU loop as soon as the PPU finishes a frame instead of waiting for a
+  # later scan-key event.
+  LAGFIX
+  NDEBUG
   RIGHTSHIFT_IS_SEDATE
   INLINE=inline)
 
 target_compile_options(rs_core_snes9x2005 PRIVATE
   -O3
+  # Match upstream's PSP/Allegrex release target. The generic PSP CMake
+  # defaults omit these on PRX targets, leaving avoidable ABI/PIC overhead in
+  # the core's instruction-heavy CPU, APU, and tile loops.
+  -march=allegrex
+  -mno-abicalls
+  -fno-pic
+  -fomit-frame-pointer
+  -ffunction-sections
+  -fdata-sections
+  # Safe parts of Snes9xTYL's PSP compiler profile. The TYL GU renderer,
+  # Media Engine ownership, and whole-program mode are deliberately excluded:
+  # RetroSuite owns the GU and must be able to unload this PRX cleanly.
+  -fsingle-precision-constant
+  -fpredictive-commoning
+  -frename-registers
+  -fno-gcse
+  -finline-functions
+  -finline-limit=20000
+  -falign-functions=64
+  -falign-loops=64
+  -fno-align-jumps
+  -fno-align-labels
   -UPSP -U__PSP__ -U_PSP
   # The core gated its stdint/stdbool includes behind the platform macros
   # we just cancelled; force them so the fixed-width types resolve. SHELL:
@@ -56,3 +93,6 @@ target_compile_options(rs_core_snes9x2005 PRIVATE
   -Wno-error=implicit-function-declaration
   -Wno-error=int-conversion
   -Wno-sign-compare -Wno-unused-variable -Wno-unused-but-set-variable)
+
+target_link_options(rs_core_snes9x2005 PRIVATE
+  -Wl,--gc-sections)

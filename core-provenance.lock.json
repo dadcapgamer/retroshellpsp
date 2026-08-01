@@ -13,11 +13,11 @@
       "sourceTreeSha256": "a68623148cbb06f62882cb7830aad48e9c030aa022e4b5ac8ac4050dc17f414e",
       "localPatches": ["cores/shared/rs_libretro_shim.cpp"],
       "compilerFlags": ["-O2", "-G0", "-fno-exceptions", "-fno-rtti", "-fno-strict-overflow", "-fno-strict-aliasing", "-DPSP"],
-      "expectedArtifactSha256": "f5c0f16cf265ade820c6bd0ed8fa14bf73a7f94546118986019f16d6b3ff2228"
+      "expectedArtifactSha256": "ac9822c329395be0b53abd699201786c366da8eb4a1012b754a40caa69a2b458"
     },
     {
       "name": "gearboy",
-      "delivery": "candidate",
+      "delivery": "archived",
       "repository": "https://github.com/drhelius/Gearboy.git",
       "commit": "511189b71b1a9479a3f95fda3e1b833276bf36c5",
       "license": "GPL-3.0",
@@ -26,11 +26,24 @@
       "sourceTreeSha256": "7e0a9d5c5f3f503c307c7c4a58d24b66ee8d66dd43eea2429e1aa4bf4433594d",
       "localPatches": ["cores/shared/rs_libretro_shim.cpp", "cores/shared/psp_posix_stubs.c"],
       "compilerFlags": ["-O2", "-G0", "-fno-exceptions", "-fno-rtti", "-fno-strict-overflow", "-fno-strict-aliasing", "-DPSP"],
-      "expectedArtifactSha256": "17d05a3519916be8adb410925d31ce090fcca411677015b147550b2242ccdbcb"
+      "expectedArtifactSha256": "c3623a817c001e848acb20e6aba46d95e80b51ff40c4ac72830cf334f444d566"
+    },
+    {
+      "name": "gpsp",
+      "delivery": "candidate",
+      "repository": "https://github.com/libretro/gpsp.git",
+      "commit": "5b6e751f4abf368509146cd143c949c1946ac1ae",
+      "license": "GPL-2.0",
+      "licenseFile": "cores/gpsp/upstream/COPYING",
+      "retainedSource": "cores/gpsp/upstream",
+      "sourceTreeSha256": "8c1045d1e0a1d9a2c4254de558de4907454cde3c19cfd5de60a13af0932a6e3b",
+      "localPatches": ["cores/gpsp/CMakeLists.txt: enable the PSP MIPS dynarec with an 8 MiB paged ROM cache and PSP-specific audio defaults", "cores/gpsp/upstream/libretro/libretro.c: honour the standard frontend video-disable bit on PSP audio-recovery frames", "cores/shared/rs_libretro_shim.cpp: provide read-only libretro VFS v2 and PSP gpSP option defaults"],
+      "compilerFlags": ["-O3", "-G0", "-DPSP", "-DHAVE_DYNAREC", "-DMIPS_ARCH", "-DSMALL_TRANSLATION_CACHE", "-DROM_BUFFER_SIZE=8", "-DRS_GPSP_PSP_DEFAULTS", "-march=allegrex", "-ffast-math", "-fno-strict-overflow", "-fno-strict-aliasing"],
+      "expectedArtifactSha256": "58a1ac62ec71a17752c77fa0250559a2223b4e37adff4958e76bcec82b679866"
     },
     {
       "name": "tgbdual",
-      "delivery": "candidate",
+      "delivery": "archived",
       "repository": "https://github.com/libretro/tgbdual-libretro.git",
       "commit": "bf816b096f1dca55ea805337d7c9e78d6b98d839",
       "license": "GPL-2.0",
@@ -39,11 +52,11 @@
       "sourceTreeSha256": "6c66ca65bc2eb036e37f625097f3c94a46f7509e7956500b6ebdf024d3faf554",
       "localPatches": ["cores/shared/rs_libretro_shim.cpp"],
       "compilerFlags": ["-O2", "-G0", "-fno-exceptions", "-fno-rtti", "-fno-strict-overflow", "-fno-strict-aliasing", "-DPSP"],
-      "expectedArtifactSha256": "557bd2a093f718b7a9dec3c00833aac5ac74e9d41924512ea4c387441bfd5b1c"
+      "expectedArtifactSha256": "9d3b2f93535d7b340f6625a0ae74663d728845187695f579fdadc0239f0d9e60"
     },
     {
       "name": "fceumm",
-      "delivery": "production",
+      "delivery": "archived",
       "repository": "https://github.com/libretro/libretro-fceumm.git",
       "commit": "76f68314ce4213703174108f461c431001dcc204",
       "license": "GPL-2.0",
@@ -52,20 +65,20 @@
       "sourceTreeSha256": "075ec03fe266514df0f99d505930e8504717b6b03218422b9e7282a4e60d6dff",
       "localPatches": ["cores/shared/rs_libretro_shim.cpp", "cores/shared/psp_posix_stubs.c"],
       "compilerFlags": ["-O2", "-G0", "-fno-exceptions", "-fno-rtti", "-fno-strict-overflow", "-fno-strict-aliasing", "-DPSP"],
-      "expectedArtifactSha256": "e71b9933b76cf9e2d3605b23508c3999efd7a5eaad0511da160cd3348f3e4bf7"
+      "expectedArtifactSha256": "e73ba5ee55b859536c60a7258248ac520697c4c179dbad358dac27fe4f335d4a"
     },
     {
       "name": "quicknes",
-      "delivery": "candidate",
+      "delivery": "production",
       "repository": "https://github.com/libretro/QuickNES_Core.git",
       "commit": "26bb785c9deddb66a17717b21bb4e328f03ade32",
       "license": "GPL-2.0",
       "licenseFile": "cores/quicknes/upstream/LICENSE",
       "retainedSource": "cores/quicknes/upstream",
-      "sourceTreeSha256": "d77710796e3b29f0d6f34ed507fedf6e17d5fa1eb60890ad82f7c7ffdef95fd8",
-      "localPatches": ["cores/quicknes/CMakeLists.txt: select portable RGB565 callback path", "cores/shared/rs_libretro_shim.cpp"],
+      "sourceTreeSha256": "b08b89f7f25795bbc79ea2fd22ce750fc75c040c0192e8c0446504b83135d21b",
+      "localPatches": ["cores/quicknes/CMakeLists.txt: select portable RGB565 callback path", "cores/quicknes/upstream/libretro/libretro.cpp: initialize turbo input state", "cores/shared/rs_libretro_shim.cpp"],
       "compilerFlags": ["-O3", "-G0", "-ffast-math", "-fno-exceptions", "-fno-rtti", "-fno-strict-overflow", "-fno-strict-aliasing", "-UPSP"],
-      "expectedArtifactSha256": "00434bb5fe615e6c3264d13dbcd79199b8ee19e1ba1039695c2b772a2ba361af"
+      "expectedArtifactSha256": "414c0553bba6652e8a0157ad27c06aea6e15440f9b50161bfbc544e3bfcd0531"
     },
     {
       "name": "snes9x2005",
@@ -75,44 +88,23 @@
       "license": "Snes9x non-commercial",
       "licenseFile": "cores/snes9x2005/upstream/copyright",
       "retainedSource": "cores/snes9x2005/upstream",
-      "sourceTreeSha256": "113417cf06dde4873fdc382df208e4a80a0f57b948eed0e97a8ae89b3ad26bb6",
-      "localPatches": ["cores/shared/rs_libretro_shim.cpp"],
-      "compilerFlags": ["-O2", "-G0", "-fno-exceptions", "-fno-rtti", "-fno-strict-overflow", "-fno-strict-aliasing", "-DPSP"],
-      "expectedArtifactSha256": "e452732ffaf2168e4b96669ffa1c54856d7e1147f284b1997a7cf7c8ad11c9fd"
+      "sourceTreeSha256": "7c4bc0e84d81f800d5030999e72cc0d03e4e3293c8e88a34728fb7213e059845",
+      "localPatches": ["cores/snes9x2005/upstream/source/port.h: select the upstream PSP BGR555 layout without enabling direct GU access", "cores/snes9x2005/upstream/source/pixform.h: expose BGR555 definitions to the isolated PSP build", "cores/snes9x2005/upstream/libretro.c: pad the primary PSP framebuffer for safe direct GE binding, use a PSP-balanced 22050 Hz mixer, and identify the verified clean-US Secret of Mana high-resolution output", "cores/snes9x2005/upstream/source/memmap.c: apply the exact byte-validated SNESAdvance/Snes9xTYL idle-loop substitutions for clean US Secret of Mana", "cores/snes9x2005/upstream/source/gfx.c: port Snes9xTYL's strict pseudo-hires detection and main/sub layer masks", "cores/shared/rs_libretro_shim.cpp: borrow PSP-native frames, write dirty CPU cache lines back before GE texture access, resolve ordinary 512-wide output by averaging, and preserve Secret of Mana's intended blue/text sample from each high-resolution pair", "cores/snes9x2005/CMakeLists.txt: restore upstream Allegrex/LAGFIX settings and apply the PRX-safe compiler portions of the Snes9xTYL PSP profile"],
+      "compilerFlags": ["-O3", "-G0", "-march=allegrex", "-mno-abicalls", "-fno-pic", "-fomit-frame-pointer", "-ffunction-sections", "-fdata-sections", "-fsingle-precision-constant", "-fpredictive-commoning", "-frename-registers", "-fno-gcse", "-finline-functions", "-finline-limit=20000", "-falign-functions=64", "-falign-loops=64", "-fno-align-jumps", "-fno-align-labels", "-DLAGFIX", "-DNDEBUG", "-DRS_PSP_NATIVE_PIXELS", "-DRS_PSP_BALANCED_AUDIO", "-DRS_PSP_SECRET_OF_MANA_HIRES_RESOLVE", "-DRS_PSP_NATIVE_STORAGE_HEIGHT=512", "-DUSE_OLD_COLOUR_OPS", "-fno-strict-overflow", "-fno-strict-aliasing", "-UPSP"],
+      "expectedArtifactSha256": "8dfbf72eb312f317b7a6c07f2ee35ef04f6ea9f822d41256ab258c61b32488ec"
     },
     {
       "name": "snes9x2005_plus",
-      "delivery": "candidate",
+      "delivery": "archived",
       "repository": "https://github.com/libretro/snes9x2005.git",
       "commit": "deb49d80d1836e3e737480a326e31a54c46c04ae",
       "license": "Snes9x non-commercial",
       "licenseFile": "cores/snes9x2005/upstream/copyright",
       "retainedSource": "cores/snes9x2005/upstream",
-      "sourceTreeSha256": "113417cf06dde4873fdc382df208e4a80a0f57b948eed0e97a8ae89b3ad26bb6",
-      "localPatches": ["cores/snes9x2005_plus/CMakeLists.txt: enable Blargg APU and portable RGB565 callback path", "cores/shared/rs_libretro_shim.cpp"],
-      "compilerFlags": ["-O3", "-G0", "-DUSE_BLARGG_APU", "-fno-strict-overflow", "-fno-strict-aliasing", "-UPSP"],
-      "expectedArtifactSha256": "aaed68959ff23b4e07d93c6cbc80fc17756e73995c7b2cddbe507ea992bb6805"
-    },
-    {
-      "name": "snes9x2010",
-      "delivery": "candidate",
-      "repository": "https://github.com/libretro/snes9x2010.git",
-      "commit": "da064275845dfa57e14eb0e5b5c7ddcc117e9f06",
-      "license": "Snes9x non-commercial",
-      "licenseFile": "cores/snes9x2010/upstream/LICENSE.txt",
-      "retainedSource": "cores/snes9x2010/upstream",
-      "sourceTreeSha256": "5d595d3876142f4296bd4444d84c970c3f4b28668a3e6027a2306cca8e7b53d0",
-      "localPatches": [
-        "cores/snes9x2010/upstream/src/memmap.h: 4 MiB PSP ROM allocation",
-        "cores/snes9x2010/upstream/src/memmap.c: host-VFS ROM streaming",
-        "cores/snes9x2010/upstream/libretro/libretro.c: PSP streaming and desktop-filter removal",
-        "cores/snes9x2010/upstream/src/hdpack_stub.c: remove desktop HD-pack dependencies",
-        "cores/snes9x2010/upstream/build/Makefile.common: PSP source selection",
-        "cores/snes9x2010/upstream/Makefile.libretro: PSP optimization flags",
-        "cores/shared/rs_libretro_shim.cpp"
-      ],
-      "compilerFlags": ["platform=psp1", "-O3", "-G0", "-fomit-frame-pointer", "-fno-strict-overflow", "-fno-strict-aliasing", "-DPSP"],
-      "expectedArtifactSha256": "2734e3b780d2af672afb4071c7036147eed5d4fc2ec226698456092fe7d8e4cd"
+      "sourceTreeSha256": "7c4bc0e84d81f800d5030999e72cc0d03e4e3293c8e88a34728fb7213e059845",
+      "localPatches": ["cores/snes9x2005_plus/CMakeLists.txt: enable Blargg APU and PSP-native isolated video", "cores/snes9x2005/upstream/source/port.h: select the upstream PSP BGR555 layout without enabling direct GU access", "cores/snes9x2005/upstream/source/pixform.h: expose BGR555 definitions to the isolated PSP build", "cores/snes9x2005/upstream/libretro.c: pad the primary PSP framebuffer for safe direct GE binding", "cores/snes9x2005/upstream/source/memmap.c: apply the exact byte-validated SNESAdvance/Snes9xTYL idle-loop substitutions for clean US Secret of Mana", "cores/snes9x2005/upstream/source/gfx.c: port Snes9xTYL's strict pseudo-hires detection and main/sub layer masks", "cores/shared/rs_libretro_shim.cpp: borrow PSP-native frames, write dirty CPU cache lines back before GE texture access, and resolve 512-wide pseudo-hires into PSP-safe blended output"],
+      "compilerFlags": ["-O3", "-G0", "-DUSE_BLARGG_APU", "-DRS_PSP_NATIVE_PIXELS", "-DRS_PSP_NATIVE_STORAGE_HEIGHT=512", "-DUSE_OLD_COLOUR_OPS", "-fno-strict-overflow", "-fno-strict-aliasing", "-UPSP"],
+      "expectedArtifactSha256": "d98e5010aadda0fa092ed7be759609d068f0467ea9ae87b213b0c6703ac0898b"
     },
     {
       "name": "picodrive",
@@ -122,10 +114,10 @@
       "license": "GPL-2.0",
       "licenseFile": "cores/picodrive/upstream/COPYING",
       "retainedSource": "cores/picodrive/upstream",
-      "sourceTreeSha256": "d6884576b71d767090273810c45d311e0cd3fa6d72f883dd67ad0cbcce7e6c75",
-      "localPatches": ["cores/picodrive/upstream/platform/libretro/libretro.c: add PSP kernel declaration", "cores/picodrive/upstream/Makefile.libretro: relocatable include path", "cores/shared/rs_libretro_shim.cpp"],
-      "compilerFlags": ["platform=psp1", "LOW_MEMORY=1", "use_libchdr=0", "PLATFORM_TREMOR=1", "-O2", "-G0", "-fno-strict-overflow", "-fno-strict-aliasing"],
-      "expectedArtifactSha256": "d7de641774750863fd26f37516be43cc7edf6e823344985927f030e7e3c81b7c"
+      "sourceTreeSha256": "b9f79e3e59709282e5e05b7abc90e2e5d395918cba43f81f6433cd1b1b6d5627",
+      "localPatches": ["cores/picodrive/upstream/platform/libretro/libretro.c: add PSP kernel declaration, select the compatibility-conscious Good renderer, and honour frontend video suppression on recovery frames", "cores/picodrive/upstream/Makefile.libretro: relocatable include path and PSP-native BGR565 output", "cores/shared/rs_libretro_shim.cpp: borrow PicoDrive's PSP-native frames without per-pixel conversion and select the supported 32 kHz PSP audio default", "src/frontend/game_session.cpp: retain the hardware-proven six-frame recovery profile after the three-frame experiment caused persistent PSP-1000 slowdown and underruns"],
+      "compilerFlags": ["platform=psp1", "LOW_MEMORY=1", "use_libchdr=0", "PLATFORM_TREMOR=1", "-O2", "-G0", "-ftracer", "-DUSE_BGR565", "-DRS_PSP_NATIVE_RGB565", "-DRS_PICODRIVE_PSP_DEFAULTS", "-fno-strict-overflow", "-fno-strict-aliasing"],
+      "expectedArtifactSha256": "eef28c02a0283f64bc1815304df2be3d11ec8bfc15cfc70c9cc45ad45e178e68"
     },
     {
       "name": "smsplus",
@@ -138,7 +130,20 @@
       "sourceTreeSha256": "f4a4f6855fd91588050870a52ae9c05fa42db31884feb6971b7a6e80e7905248",
       "localPatches": ["cores/smsplus/CMakeLists.txt: minimal PSP source selection", "cores/shared/rs_libretro_shim.cpp"],
       "compilerFlags": ["-O3", "-G0", "-DNOZIP_SUPPORT", "-DMAXIM_PSG", "-fno-strict-overflow", "-fno-strict-aliasing"],
-      "expectedArtifactSha256": "56d7705cc4ea5cf5bfe6b7e2347d5eaeae68c38e278a32f16337398e802524e1"
+      "expectedArtifactSha256": "d1bf5ac53a26b307efb8680dec23e6ec6681dafb272fa20cf5c772ed266ce3ac"
+    },
+    {
+      "name": "pcefast",
+      "delivery": "candidate",
+      "repository": "https://github.com/libretro/beetle-pce-fast-libretro.git",
+      "commit": "9e6510023545007e235117753329946cbc5f311a",
+      "license": "GPL-2.0",
+      "licenseFile": "cores/pcefast/upstream/COPYING",
+      "retainedSource": "cores/pcefast/upstream",
+      "sourceTreeSha256": "30906cedea372ad178defaa5df8507112773900345da2665d7e51d75debcade3",
+      "localPatches": ["cores/pcefast/CMakeLists.txt: use the upstream PSP target, enable native BGR565 frames, and exclude CHD/LZMA/Zstd for PSP-1000 HuCard qualification", "cores/pcefast/upstream/Makefile: select Allegrex O3 and native PSP BGR565 output", "cores/pcefast/upstream/libretro.c: use a 32 kHz PSP mixer and honour frontend video suppression on recovery frames", "cores/pcefast/upstream/mednafen/video.h: generate PSP-native BGR565 pixels without a per-frame channel conversion", "cores/pcefast/upstream/mednafen/tremor/sharedbook.c: use fixed-width point variables required by the current PSP SDK ABI", "cores/shared/rs_libretro_shim.cpp: borrow the PSP-native PCE frame directly", "src/frontend/game_session.cpp: use a four-frame recovery cap and guarantee its shortened recovery batch ends on a rendered frame"],
+      "compilerFlags": ["platform=psp1", "NEED_TREMOR=1", "HAVE_CHD=0", "-O3", "-G0", "-march=allegrex", "-fomit-frame-pointer", "-DRS_PSP_BGR565", "-DRS_PSP_NATIVE_RGB565", "-fno-strict-overflow", "-fno-strict-aliasing"],
+      "expectedArtifactSha256": "cf25ff4145cbeadc4d7dd30f7d7f3fb28c731aea55e455a62dc2d38b60e15e9e"
     }
   ]
 }

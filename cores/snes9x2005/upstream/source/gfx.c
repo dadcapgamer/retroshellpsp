@@ -2735,7 +2735,13 @@ void S9xUpdateScreen(void)
    GFX.r212c = Memory.FillRAM [0x212c];
    GFX.r212d = Memory.FillRAM [0x212d];
    GFX.r2130 = Memory.FillRAM [0x2130];
-   GFX.Pseudo = Memory.FillRAM [0x2133] & 8;
+   /* Match Snes9xTYL's stricter pseudo-hires detection. Treating the mode bit
+    * alone as sufficient enables the transparency path when main/sub layers
+    * are identical or ordinary colour math is active, producing striped
+    * dialogue fills in games such as Secret of Mana. */
+   GFX.Pseudo = (Memory.FillRAM [0x2133] & 8) != 0 &&
+                (GFX.r212c & 15) != (GFX.r212d & 15) &&
+                (GFX.r2131 & 0x3f) == 0;
 
    if (IPPU.OBJChanged)
       S9xSetupOBJ();
@@ -2819,8 +2825,9 @@ void S9xUpdateScreen(void)
    if (GFX.Pseudo)
    {
       GFX.r2131 = 0x5f;
-      GFX.r212c &= (Memory.FillRAM [0x212d] | 0xf0);
-      GFX.r212d |= (Memory.FillRAM [0x212c] & 0x0f);
+      GFX.r212d = (Memory.FillRAM [0x212c] ^
+                   Memory.FillRAM [0x212d]) & 15;
+      GFX.r212c &= ~GFX.r212d;
       GFX.r2130 |= 2;
    }
 

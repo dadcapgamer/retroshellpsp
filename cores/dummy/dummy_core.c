@@ -169,6 +169,9 @@ static RSVideoFrame core_get_frame(void) {
     f.pitch  = FB_W * 2;
     f.format = RS_PIXFMT_RGB565;
     f._pad   = 0;
+    f.storage_height = FB_H;
+    f._pad2 = 0;
+    f.sequence = g_frame;
     return f;
 }
 

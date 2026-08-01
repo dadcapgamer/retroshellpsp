@@ -1,4 +1,4 @@
-/** The systems RetroSuite emulates: directory layout, display names,
+/** The systems RetroShell emulates: display names, legacy directory names,
  * accents and ROM extensions. Single source of truth used by the scanner,
  * the home UI and (Phase 3+) core selection.
  */
@@ -23,7 +23,7 @@ enum class System : u8 {
 
 struct SystemInfo {
     System id;
-    const char* dirName;      /* under ms0:/ROMS/ */
+    const char* dirName;      /* legacy/category hint; not required by scanner */
     const char* displayName;
     const char* badge;        /* short label on the category tile */
     const char* coreId;       /* stable token used in core manifests */

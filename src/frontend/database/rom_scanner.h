@@ -1,8 +1,9 @@
 /** Background ROM scanner.
  *
- * Walks ms0:/ROMS/<System>/ on a low-priority worker thread, matching files
- * by extension and peeking inside .zip archives (central directory only —
- * no decompression) for the first ROM entry, whose CRC32 comes for free.
+ * Recursively walks one ms0:/ROMS/ tree on a low-priority worker thread.
+ * Console folders are optional: files are assigned to systems by extension.
+ * ZIP archives are identified from their first supported ROM entry (central
+ * directory only — no decompression), whose CRC32 comes for free.
  * Results are handed to the main thread which swaps them into the GameIndex
  * and refreshes the cache.
  */
@@ -32,6 +33,7 @@ public:
 private:
     static int threadMain(void* self);
     void scan();
+    void scanDirectory(const std::string& directory, int depth);
 
     std::atomic<bool> m_running{false};
     std::atomic<bool> m_done{false};

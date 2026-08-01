@@ -2,6 +2,29 @@
 
 namespace rs::theme {
 
+const AccentOption& accentOption(int index) {
+    static const AccentOption OPTIONS[ACCENT_COUNT] = {
+        {"Gold",   0xD6A646},
+        {"Amber",  0xD9893D},
+        {"Coral",  0xD56B61},
+        {"Rose",   0xBE6685},
+        {"Violet", 0x8874CF},
+        {"Blue",   0x4E86CF},
+        {"Teal",   0x4C958C},
+        {"Sage",   0x748A74},
+    };
+    return OPTIONS[rsClamp(index, 0, ACCENT_COUNT - 1)];
+}
+
+Palette personalize(const Palette& base, int accentIndex) {
+    Palette p = base;
+    const u32 rgb = accentOption(accentIndex).rgb;
+    p.accent = rsHex(rgb);
+    p.waveA = rsHex(rgb, base.dark ? 12 : 8);
+    p.waveB = rsHex(rgb, base.dark ? 7 : 5);
+    return p;
+}
+
 Palette blend(const Palette& a, const Palette& b, float t) {
     if (t <= 0.f) return a;
     if (t >= 1.f) return b;

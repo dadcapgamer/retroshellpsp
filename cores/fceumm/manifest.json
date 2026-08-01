@@ -2,6 +2,7 @@
   "name": "fceumm",
   "version": "1.0",
   "systems": "nes",
-  "priority": 100,
-  "testOnly": false
+  "priority": 80,
+  "testOnly": true,
+  "psp1000Safe": false
 }

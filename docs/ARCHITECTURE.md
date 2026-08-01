@@ -1,8 +1,8 @@
-# RetroSuite PSP — Architecture
+# RetroShell PSP — Architecture
 
 ## The bi-layer runtime
 
-RetroSuite treats the PSP's RAM as belonging to the *emulator*, borrowed by
+RetroShell treats the PSP's RAM as belonging to the *emulator*, borrowed by
 the *frontend* between games. Two layers, strictly separated:
 
 ```
@@ -81,14 +81,17 @@ for cores and (eventually) UI sounds.
 
 ## Library
 
-- Scanner (worker thread) walks `ms0:/ROMS/<System>/`, matching by
+- Scanner (worker thread) recursively walks the single `ms0:/ROMS/` tree.
+  Folder names are ignored and each game is assigned to a system by its
   extension; ZIPs are identified from the central directory only (CRC32
   comes free, nothing is decompressed at scan time).
 - `GameIndex` keeps per-system sorted lists and a binary cache
-  (`RETROSUITE/cache/index.bin`) so boot shows the library instantly.
+  (`RETROSHELL/cache/index.bin`) so boot shows the library instantly.
 - Games are keyed by the FNV-1a hash of their path (`pathHash`) for
-  favorites/recents/per-game config; metadata and box art are keyed by
-  file name so users can hand-author them.
+  favorites/recents/per-game config. Box art first resolves beside the ROM
+  using the same base filename, then falls back to
+  `RETROSHELL/boxart/<System>/` for community packs. Metadata remains keyed
+  by filename under `RETROSHELL/metadata/<System>/`.
 
 ## Themes
 
@@ -101,8 +104,8 @@ crossfade live.
 ## Save data
 
 ```
-RETROSUITE/saves/<System>/<pathHash>/sram.bin      battery save
-RETROSUITE/saves/<System>/<pathHash>/state<N>.rst  states (header +
+RETROSHELL/saves/<System>/<pathHash>/sram.bin      battery save
+RETROSHELL/saves/<System>/<pathHash>/state<N>.rst  states (header +
                                                    RGB565 thumbnail +
                                                    core payload)
 ```

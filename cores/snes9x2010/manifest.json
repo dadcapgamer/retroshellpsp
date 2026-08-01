@@ -1,7 +1,0 @@
-{
-  "name": "snes9x2010",
-  "version": "1.52.4",
-  "systems": "snes",
-  "priority": 90,
-  "testOnly": true
-}

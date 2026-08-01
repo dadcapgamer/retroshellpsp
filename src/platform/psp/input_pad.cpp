@@ -60,4 +60,23 @@ void Pad::poll() {
     }
 }
 
+void Pad::refreshHeld() {
+    SceCtrlData data{};
+    sceCtrlPeekBufferPositive(&data, 1);
+
+    u32 held = data.Buttons | m_simHeld;
+    const int ax = int(data.Lx) - 128;
+    const int ay = int(data.Ly) - 128;
+    if (ax < -ANALOG_DEADZONE) held |= PSP_CTRL_LEFT;
+    if (ax > ANALOG_DEADZONE)  held |= PSP_CTRL_RIGHT;
+    if (ay < -ANALOG_DEADZONE) held |= PSP_CTRL_UP;
+    if (ay > ANALOG_DEADZONE)  held |= PSP_CTRL_DOWN;
+
+    m_held = held;
+    m_analogX = rsClamp((float(ax) / 128.f), -1.f, 1.f);
+    m_analogY = rsClamp((float(ay) / 128.f), -1.f, 1.f);
+    if (ax * ax + ay * ay < ANALOG_DEADZONE * ANALOG_DEADZONE)
+        m_analogX = m_analogY = 0.f;
+}
+
 }  // namespace rs::input

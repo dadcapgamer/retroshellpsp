@@ -4,6 +4,7 @@
 #include "platform/psp/audio_out.h"
 #include "platform/psp/fs_psp.h"
 #include "platform/psp/power.h"
+#include "platform/psp/threading.h"
 #include "platform/psp/vram.h"
 #include "runtime/arena.h"
 #include "runtime/bounds.h"
@@ -26,9 +27,37 @@ namespace rs {
 namespace {
 constexpr u32 MENU_COMBO = PSP_CTRL_LTRIGGER | PSP_CTRL_RTRIGGER;
 constexpr float SRAM_FLUSH_SECONDS = 10.f;
-/* Most emulation frames to run in one display frame before conceding the
- * game must slow down — bounds catch-up so a slow frame can't spiral. */
-constexpr int MAX_CATCHUP = 4;
+constexpr int MAX_WALL_CATCHUP = 3;
+/* PicoDrive's six-frame profile is the measured PSP-1000 baseline: reducing
+ * it made both tested Genesis workloads slower and starved their audio. */
+constexpr int MAX_DEEP_RECOVERY = 6;
+/* Secret of Mana's byte-validated idle-loop substitutions reduced skipped
+ * frames to roughly 8-10 ms while expensive colour-math frames remain around
+ * 25-30 ms. A six-frame batch now over-recovers and limits presentation to
+ * about 15 Hz. Four frames still provide approximately one net audio frame
+ * per demanding 50 ms batch, but should present closer to 20 Hz. Keep this
+ * separate from PicoDrive so its proven profile cannot regress again. */
+constexpr int MAX_SNES_RECOVERY = 4;
+/* Four-frame SNES batches gave smoother visual cadence, but a sustained
+ * colour-math workload could consume the queue faster than they replenish
+ * it. Deepen only below ~35 ms of audio, then return to four as soon as the
+ * emergency has passed. This retains tyl4's cadence without repeating its
+ * steadily increasing real-hardware underruns. */
+constexpr int MAX_SNES_EMERGENCY_RECOVERY = 6;
+constexpr u32 AUDIO_SNES_EMERGENCY =
+    audio::OUTPUT_BLOCK_FRAMES * 6u;
+/* PCE Fast nearly sustained native speed with three-frame recovery on the
+ * PSP-1000, but could not replenish the queue and accumulated persistent
+ * underruns. Four frames give it one bounded catch-up frame while retaining
+ * a shallower exit watermark than the deep SNES/PicoDrive profile. */
+constexpr int MAX_PCE_RECOVERY = 4;
+/* Enter recovery while there is still ~46 ms queued, not at the old
+ * ~23 ms emergency boundary. Exit around 81 ms so normal workload spikes
+ * have room without pushing latency toward the full 186 ms ring capacity. */
+constexpr u32 AUDIO_RECOVERY_ENTER = audio::OUTPUT_BLOCK_FRAMES * 8u;
+constexpr u32 AUDIO_RECOVERY_EXIT  = audio::OUTPUT_BLOCK_FRAMES * 14u;
+constexpr u32 AUDIO_BALANCED_EXIT  = audio::OUTPUT_BLOCK_FRAMES * 10u;
+constexpr u32 AUDIO_PRIME_TARGET   = AUDIO_RECOVERY_EXIT;
 constexpr u32 MIN_CORE_HEADROOM = 2u * 1024u * 1024u;
 constexpr u32 MIN_BUFFERED_CORE_HEADROOM = 1u * 1024u * 1024u;
 constexpr u32 MAX_ROM_BYTES = 16u * 1024u * 1024u;
@@ -37,9 +66,28 @@ constexpr u32 MAX_ZIP_ENTRIES = 4096;
 constexpr u64 MAX_COMPRESSION_RATIO = 200;
 
 const char* MENU_LABELS[] = {
-    "Resume", "Save state", "Load state", "Reset", "Screenshot", "Exit game",
+    "Resume", "Save state", "Load state", "Reset", "Aspect", "Filter",
+    "Screenshot", "Exit game",
 };
 }  // namespace
+
+const char* GameSession::scaleOptionName(ScaleMode mode) {
+    switch (mode) {
+        case ScaleMode::FourThree: return "4:3";
+        case ScaleMode::Stretch:   return "stretch";
+        case ScaleMode::OneToOne:  return "1:1";
+        default:                   return "fit";
+    }
+}
+
+const char* GameSession::scaleDisplayName(ScaleMode mode) {
+    switch (mode) {
+        case ScaleMode::FourThree: return "4:3";
+        case ScaleMode::Stretch:   return "Stretch";
+        case ScaleMode::OneToOne:  return "1:1";
+        default:                   return "Original";
+    }
+}
 
 bool GameSession::injectFailure(const char* stage) const {
 #ifdef RS_FAILURE_INJECTION
@@ -61,6 +109,16 @@ bool GameSession::startCore(App& app) {
                       m_coreName.c_str());
         return false;
     }
+
+    /* Resolve frontend settings while the menu heap is still intact.
+     * Large cores must not trigger JSON parsing/allocation after load. */
+    const std::string scale = cfg::gameOption(m_game.pathHash, "scale");
+    m_scaleMode = scale == "1:1"     ? ScaleMode::OneToOne
+                : scale == "4:3"     ? ScaleMode::FourThree
+                : scale == "stretch" ? ScaleMode::Stretch
+                                     : ScaleMode::Fit;
+    m_nearestFilter =
+        cfg::gameOption(m_game.pathHash, "filter") == "nearest";
 
     /* 1. Evict frontend caches (the arena/vram space becomes the core's). */
     app.evictForCore();
@@ -110,6 +168,11 @@ bool GameSession::startCore(App& app) {
     u8* romData = nullptr;
     u32 romSize = 0;
     if (!m_game.zipEntry.empty()) {
+        if (info->preferVfs) {
+            std::snprintf(m_error, sizeof m_error,
+                          "this core requires an uncompressed ROM");
+            return false;
+        }
         mz_zip_archive zip;
         std::memset(&zip, 0, sizeof zip);
         if (!mz_zip_reader_init_file(&zip, m_game.path.c_str(), 0)) {
@@ -163,7 +226,7 @@ bool GameSession::startCore(App& app) {
                                          ? MIN_BUFFERED_CORE_HEADROOM
                                          : MIN_CORE_HEADROOM;
         const bool canBuffer =
-            u32(size) <= MAX_ROM_BYTES &&
+            !info->preferVfs && u32(size) <= MAX_ROM_BYTES &&
             mem::available() > requiredHeadroom &&
             u32(size) <= mem::available() - requiredHeadroom;
         if (canBuffer) {
@@ -197,23 +260,32 @@ bool GameSession::startCore(App& app) {
         std::snprintf(m_error, sizeof m_error, "core rejected rom");
         return false;
     }
-    save::loadSram(m_game, m_cores.core());
+    RS_LOGI("session: ROM loaded; %u KB arena free before SRAM",
+            unsigned(mem::available() / 1024));
+    if (!save::loadSram(m_game, m_cores.core()))
+        RS_LOGW("session: SRAM restore skipped; continuing with core defaults");
+    RS_LOGI("session: post-load restore complete");
+    m_romLoaded = true;   /* only now is it safe to persist SRAM on exit */
+    power::setCpuMhz(cfg::get().cpuGameMhz);
+    RS_LOGI("session: game clock set to %d MHz", cfg::get().cpuGameMhz);
+    audio::setPaused(true);
     audio::clear();
     audio::resetTelemetry();
-    m_romLoaded = true;   /* only now is it safe to persist SRAM on exit */
-
-    /* Resolve per-game video options once, here, not per frame. */
-    const std::string scale = cfg::gameOption(m_game.pathHash, "scale");
-    m_scaleMode = scale == "1:1"     ? ScaleMode::OneToOne
-                : scale == "stretch" ? ScaleMode::Stretch
-                                     : ScaleMode::Fit;
-    m_nearestFilter = cfg::gameOption(m_game.pathHash, "filter") == "nearest";
-
-    power::setCpuMhz(cfg::get().cpuGameMhz);
-    app.library().notePlayed(m_game.pathHash);
-    /* Pin the game to this core from now on: its save states and SRAM
-     * belong to this core's format. */
-    cfg::setGameOption(m_game.pathHash, "core", m_coreName.c_str());
+    primeAudio();
+    audio::setPaused(false);
+    RS_LOGI("session: audio reset and primed");
+    if (m_coreName == "pcefast")
+        RS_LOGI("session: PCE recovery cap %d, exit %u frames",
+                MAX_PCE_RECOVERY, unsigned(AUDIO_BALANCED_EXIT));
+    else if (m_coreName == "snes9x2005")
+        RS_LOGI("session: SNES adaptive recovery %d-%d, emergency %u, "
+                "exit %u frames",
+                MAX_SNES_RECOVERY, MAX_SNES_EMERGENCY_RECOVERY,
+                unsigned(AUDIO_SNES_EMERGENCY),
+                unsigned(AUDIO_RECOVERY_EXIT));
+    else
+        RS_LOGI("session: deep recovery cap %d, exit %u frames",
+                MAX_DEEP_RECOVERY, unsigned(AUDIO_RECOVERY_EXIT));
     RS_LOGI("session: '%s' running (%u KB arena free)", m_game.name.c_str(),
             unsigned(mem::available() / 1024));
     return true;
@@ -222,20 +294,28 @@ bool GameSession::startCore(App& app) {
 void GameSession::enter(App& app) {
     if (startCore(app)) {
         m_state = State::Running;
-        app.toast("L + R + START for menu");
+        app.toast("L + R + SELECT for menu");
     } else {
         RS_LOGE("session: launch failed: %s", m_error);
         m_state = State::Failed;
     }
 }
 
-void GameSession::exitToHome(App& app) {
+void GameSession::teardown(App& app, bool restoreFrontend) {
+    if (m_teardownComplete) return;
+    m_teardownComplete = true;
+
+    audio::setPaused(true);
+    const bool completedLaunch = m_romLoaded;
+    finishPeriodicSram();
     /* Persist SRAM only if a ROM actually loaded and ran. A failed launch
      * leaves the core "loaded" (module up) but with default/empty SRAM —
      * saving that would clobber the user's real .srm. */
     if (m_romLoaded) {
-        save::saveSram(m_game, m_cores.core());
+        if (m_cores.core().sramDirty())
+            save::saveSram(m_game, m_cores.core());
         m_cores.core().unloadROM();
+        m_romLoaded = false;
     }
     gfx::Renderer::freeTexture(m_frameTex);
     gfx::Renderer::freeTexture(m_thumbTex);
@@ -249,7 +329,7 @@ void GameSession::exitToHome(App& app) {
         host::endCoreSession();
         m_coreSessionStarted = false;
     }
-    if (m_frontendEvicted) {
+    if (restoreFrontend && m_frontendEvicted) {
         if (m_arenaReady) mem::shutdown();
         m_arenaReady = mem::init();
     }
@@ -259,17 +339,41 @@ void GameSession::exitToHome(App& app) {
         host::endCoreSession();
         m_coreSessionStarted = false;
     }
-    if (m_frontendEvicted) mem::reset(0);
+    if (restoreFrontend && m_frontendEvicted) mem::reset(0);
 #endif
     audio::clear();
     host::setActiveGame(0);
     power::setCpuMhz(cfg::get().cpuMenuMhz);
 
-    if (m_frontendEvicted) {
+    /* Persist launch bookkeeping only after the PRX and its heap have been
+     * released. cJSON and Library::save use the small newlib heap, so these
+     * writes must not compete with a loaded emulator core. */
+    if (completedLaunch) {
+        app.library().notePlayed(m_game.pathHash, power::localTimestamp());
+        cfg::setGameOption(m_game.pathHash, "core", m_coreName.c_str());
+        if (m_videoOptionsDirty) {
+            cfg::setGameOption(m_game.pathHash, "scale",
+                               scaleOptionName(m_scaleMode));
+            cfg::setGameOption(m_game.pathHash, "filter",
+                               m_nearestFilter ? "nearest" : "linear");
+        }
+    }
+
+    if (restoreFrontend && m_frontendEvicted) {
         app.restoreAfterCore();
         m_frontendEvicted = false;
     }
     m_state = State::Exiting;
+    RS_LOGI("session: teardown complete%s",
+            restoreFrontend ? "; returning to frontend" : "; application exit");
+}
+
+void GameSession::shutdown(App& app) {
+    teardown(app, /*restoreFrontend=*/false);
+}
+
+void GameSession::exitToHome(App& app) {
+    teardown(app, /*restoreFrontend=*/true);
     app.switchScene(std::make_unique<HomeScene>());
 }
 
@@ -296,6 +400,64 @@ u32 GameSession::mapButtons(const input::Pad& pad) const {
     return out;
 }
 
+int GameSession::sramWriter(void* arg) {
+    auto* self = static_cast<GameSession*>(arg);
+    const u32 start = sceKernelGetSystemTimeLow();
+    self->m_sramWriteOk = save::writeSramSnapshot(
+        self->m_game, self->m_sramSnapshot, self->m_sramSnapshotSize);
+    self->m_sramWriteUs = sceKernelGetSystemTimeLow() - start;
+    return 0;
+}
+
+void GameSession::finishPeriodicSram() {
+    if (m_sramThread < 0) return;
+    thread::join(m_sramThread);
+    m_sramThread = -1;
+    RS_LOGI("save: async SRAM flush %s (%u bytes, %u ms)",
+            m_sramWriteOk ? "ok" : "FAILED", unsigned(m_sramSnapshotSize),
+            unsigned(m_sramWriteUs / 1000u));
+    if (m_sramSnapshot) {
+        host::table()->mem_free(m_sramSnapshot);
+        m_sramSnapshot = nullptr;
+    }
+    m_sramSnapshotSize = 0;
+}
+
+void GameSession::queuePeriodicSram() {
+    /* Reap the previous job before reusing its bounded snapshot. With a
+     * ten-second interval a normal 150 ms Memory Stick write has long since
+     * finished, so this join does not touch frame pacing. */
+    finishPeriodicSram();
+
+    const u32 size = m_cores.core().sramSize();
+    const void* data = m_cores.core().sramData();
+    if (!size || !data || size > 1024u * 1024u) {
+        RS_LOGW("save: invalid async SRAM snapshot (%u bytes)",
+                unsigned(size));
+        return;
+    }
+    m_sramSnapshot = host::table()->mem_alloc(size, 16);
+    if (!m_sramSnapshot) {
+        RS_LOGW("save: no arena space for async SRAM snapshot (%u bytes)",
+                unsigned(size));
+        return;
+    }
+    std::memcpy(m_sramSnapshot, data, size);
+    m_sramSnapshotSize = size;
+    m_sramWriteOk = false;
+    m_sramWriteUs = 0;
+    m_sramThread = thread::spawn("rs_sram_write", sramWriter, this, 32);
+    if (m_sramThread < 0) {
+        RS_LOGW("save: SRAM writer thread failed to start");
+        host::table()->mem_free(m_sramSnapshot);
+        m_sramSnapshot = nullptr;
+        m_sramSnapshotSize = 0;
+        return;
+    }
+    RS_LOGI("save: async SRAM snapshot queued (%u bytes, audio %u)",
+            unsigned(size), unsigned(audio::buffered()));
+}
+
 /* ---------------------------------------------------------------------- */
 /* Update                                                                  */
 /* ---------------------------------------------------------------------- */
@@ -304,34 +466,99 @@ void GameSession::updateRunning(App& app, float dt) {
     const auto& pad = app.pad();
 
     if ((pad.held() & MENU_COMBO) == MENU_COMBO &&
-        pad.isPressed(PSP_CTRL_START)) {
+        pad.isPressed(PSP_CTRL_SELECT)) {
         openMenu(app);
         return;
     }
 
-    const u32 buttons = mapButtons(pad);
+    u32 buttons = mapButtons(pad);
     host::setInputState(buttons);
 
-    /* Pace emulation by wall clock at the core's native rate, decoupled
-     * from the vsync'd display. If the display drops to 30fps, we run the
-     * two emulation frames that 33ms represents rather than let the game
-     * clock — and its audio — run at half speed. Video may skip; game
-     * speed stays correct. MAX_CATCHUP bounds the work so a machine that
-     * genuinely can't keep up slows down gracefully instead of spiralling. */
+    /* Pace normal emulation by wall clock at the core's native rate.
+     * Recovery may run a small bounded logic/audio-only catch-up burst:
+     * producing exactly one frame of audio per wall frame can maintain a
+     * depleted queue, but can never refill it. */
     const float period = 1.f / float(m_cores.core().fps());
+    const bool pceRecovery = m_coreName == "pcefast";
+    const bool snesRecovery = m_coreName == "snes9x2005";
+    int recoveryFrameCap = pceRecovery
+        ? MAX_PCE_RECOVERY
+        : snesRecovery ? MAX_SNES_RECOVERY : MAX_DEEP_RECOVERY;
+    const u32 recoveryExit =
+        pceRecovery ? AUDIO_BALANCED_EXIT : AUDIO_RECOVERY_EXIT;
     m_emuAccum += dt;
+    int framesDue = int(m_emuAccum / period);
+    framesDue = rsClamp(framesDue, 0, MAX_WALL_CATCHUP);
+    /* Hysteresis prevents recovery mode from flapping every time the audio
+     * thread consumes one block. Recovery uses a bounded six-frame batch,
+     * but must still present its final frame: on real PSP hardware a core
+     * may only maintain (not increase) the queue while the display loop is
+     * vblank paced. Suppressing the entire batch would then freeze video
+     * forever because the exit threshold can never be reached. */
+    const u32 bufferedAudio = audio::buffered();
+    if (snesRecovery && bufferedAudio < AUDIO_SNES_EMERGENCY)
+        recoveryFrameCap = MAX_SNES_EMERGENCY_RECOVERY;
+    if (!m_audioRecovery && bufferedAudio < AUDIO_RECOVERY_ENTER)
+        m_audioRecovery = true;
+    else if (m_audioRecovery && bufferedAudio >= recoveryExit)
+        m_audioRecovery = false;
+    if (m_audioRecovery)
+        framesDue = recoveryFrameCap;
     int ran = 0;
-    while (m_emuAccum >= period && ran < MAX_CATCHUP) {
+    while (ran < framesDue) {
+        /* A slow presentation pass can contain multiple emulated frames.
+         * Re-sample immediately before each one instead of applying the
+         * input captured before the entire 30-50 ms batch. */
+        app.padMutable().refreshHeld();
+        buttons = mapButtons(app.pad());
+        host::setInputState(buttons);
         const u32 frameStart = sceKernelGetSystemTimeLow();
-        m_cores.core().runFrame(buttons);
+        /* With multiple wall-due or recovery frames, skip obsolete
+         * intermediate images and present the newest. This guarantees
+         * forward visual progress even when recovery cannot reach its high
+         * watermark on native hardware. */
+        const bool renderVideo = (ran == framesDue - 1);
+        const u32 sequenceBefore = m_cores.core().frame().sequence;
+        m_cores.core().runFrame(buttons, renderVideo);
         const u32 frameUs = sceKernelGetSystemTimeLow() - frameStart;
+        const bool producedVideo =
+            m_cores.core().frame().sequence != sequenceBefore;
         m_perfEmuUs += frameUs;
         if (m_perfSampleCount < PERF_SAMPLES)
             m_perfSamples[m_perfSampleCount++] = frameUs;
-        m_emuAccum -= period;
+        if (producedVideo) {
+            m_perfRenderedUs += frameUs;
+            m_perfRenderedFrames++;
+            if (m_perfRenderedSampleCount < PERF_SAMPLES)
+                m_perfRenderedSamples[m_perfRenderedSampleCount++] = frameUs;
+        } else {
+            m_perfSkippedUs += frameUs;
+            m_perfSkippedFrames++;
+            if (m_perfSkippedSampleCount < PERF_SAMPLES)
+                m_perfSkippedSamples[m_perfSkippedSampleCount++] = frameUs;
+        }
+        if (m_emuAccum >= period) m_emuAccum -= period;
+        else m_emuAccum = 0.f;  /* audio recovery frame ran ahead of wall */
         ran++;
+        /* A recovery batch is only an upper bound. Some cores emit more
+         * audio per retro_run() than others, so re-check after every frame
+         * and stop as soon as the safe high-water mark is restored. Without
+         * this, the remaining frames in a fixed four-frame burst can
+         * overflow an otherwise healthy queue. */
+        if (m_audioRecovery && audio::buffered() >= recoveryExit) {
+            m_audioRecovery = false;
+            /* Never leave a recovery batch before its presentation frame.
+             * PCE Fast can refill the queue in an early skipped frame; the
+             * old early break then left the last uploaded image frozen even
+             * though logic and audio continued at 60 Hz. Shorten the batch
+             * to exactly one final rendered frame instead. */
+            if (!renderVideo)
+                framesDue = ran + 1;
+            else
+                break;
+        }
     }
-    if (ran >= MAX_CATCHUP) m_emuAccum = 0.f;
+    if (m_emuAccum > period) m_emuAccum = period;
     if (ran > 0) {
         m_videoProbe.observe(m_cores.core().frame());
         if (m_videoProbe.blackFrames() == FrameProbe::BLACK_WARNING_FRAMES) {
@@ -347,30 +574,67 @@ void GameSession::updateRunning(App& app, float dt) {
         }
     }
 
-    /* Timing report once per second. m_perfFrames counts emulated frames,
-     * so it reads ~60 when the game is running at full speed. */
+    /* Report against an independent wall-clock window. This avoids
+     * attributing the work of a boundary frame to the next dt window and
+     * claiming 60 fps when core calls take more than the native budget. */
     m_perfFrames += ran;
-    m_perfElapsed += dt;
-    if (m_perfElapsed >= 1.f) {
+    const u32 perfNowUs = sceKernelGetSystemTimeLow();
+    if (!m_perfWindowStartUs) m_perfWindowStartUs = perfNowUs;
+    const u32 perfWallUs = perfNowUs - m_perfWindowStartUs;
+    if (perfWallUs >= 1000000u) {
         std::sort(m_perfSamples, m_perfSamples + m_perfSampleCount);
+        std::sort(m_perfRenderedSamples,
+                  m_perfRenderedSamples + m_perfRenderedSampleCount);
+        std::sort(m_perfSkippedSamples,
+                  m_perfSkippedSamples + m_perfSkippedSampleCount);
         const int p95Index = m_perfSampleCount
             ? (m_perfSampleCount * 95 - 1) / 100 : 0;
         const u32 p95 = m_perfSampleCount ? m_perfSamples[p95Index] : 0;
-        RS_LOGI("perf: %d fps | avg %u us | p95 %u us | cpu %d MHz | "
-                "arena %u/%u KB | allocfail %u | audio underrun %u drop %u | "
+        const int renderP95Index = m_perfRenderedSampleCount
+            ? (m_perfRenderedSampleCount * 95 - 1) / 100 : 0;
+        const int skipP95Index = m_perfSkippedSampleCount
+            ? (m_perfSkippedSampleCount * 95 - 1) / 100 : 0;
+        const u32 renderP95 = m_perfRenderedSampleCount
+            ? m_perfRenderedSamples[renderP95Index] : 0;
+        const u32 skipP95 = m_perfSkippedSampleCount
+            ? m_perfSkippedSamples[skipP95Index] : 0;
+        const u32 actualFps = u32(
+            (u64(m_perfFrames) * 1000000u + perfWallUs / 2u) / perfWallUs);
+        const u32 speedPercent = u32(
+            double(actualFps) * 100.0 / m_cores.core().fps() + 0.5);
+        RS_LOGI("perf: %u emu fps (%u%% speed) | avg %u us | p95 %u us | "
+                "cpu %d MHz | "
+                "arena %u/%u KB | allocfail %u | audio buf %u underrun %u "
+                "drop %u | "
                 "video %s nonblack %u/64",
-                m_perfFrames,
+                unsigned(actualFps), unsigned(speedPercent),
                 unsigned(m_perfEmuUs / u32(m_perfFrames > 0 ? m_perfFrames : 1)),
                 unsigned(p95), power::cpuMhz(),
                 unsigned(mem::used() / 1024), unsigned(mem::highWater() / 1024),
                 unsigned(host::allocationFailures()),
+                unsigned(audio::buffered()),
                 unsigned(audio::underruns()), unsigned(audio::droppedFrames()),
                 m_videoProbe.status(),
                 unsigned(m_videoProbe.nonBlackSamples()));
-        m_perfElapsed = 0.f;
+        RS_LOGI("perf detail: rendered %d avg %u us p95 %u us | "
+                "skipped %d avg %u us p95 %u us | uploaded seq %u | "
+                "recovery %s",
+                m_perfRenderedFrames,
+                unsigned(m_perfRenderedUs /
+                    u32(m_perfRenderedFrames ? m_perfRenderedFrames : 1)),
+                unsigned(renderP95),
+                m_perfSkippedFrames,
+                unsigned(m_perfSkippedUs /
+                    u32(m_perfSkippedFrames ? m_perfSkippedFrames : 1)),
+                unsigned(skipP95), unsigned(m_uploadedFrameSequence),
+                m_audioRecovery ? "on" : "off");
+        m_perfWindowStartUs = perfNowUs;
         m_perfEmuUs = 0;
         m_perfFrames = 0;
         m_perfSampleCount = 0;
+        m_perfRenderedUs = m_perfSkippedUs = 0;
+        m_perfRenderedFrames = m_perfSkippedFrames = 0;
+        m_perfRenderedSampleCount = m_perfSkippedSampleCount = 0;
     }
 
     /* Periodic battery-save flush. */
@@ -378,24 +642,67 @@ void GameSession::updateRunning(App& app, float dt) {
     if (m_sramTimer >= SRAM_FLUSH_SECONDS) {
         m_sramTimer = 0.f;
         if (cfg::get().autosave && m_cores.core().sramDirty())
-            save::saveSram(m_game, m_cores.core());
+            queuePeriodicSram();
     }
 }
 
 void GameSession::openMenu(App& app) {
     (void)app;
+    audio::setPaused(true);
+    /* Keep save-state and screenshot I/O serialized with the background SRAM
+     * writer. This wait occurs only after gameplay audio has been paused. */
+    finishPeriodicSram();
+    resetPerfWindow();
     m_state = State::Menu;
     m_menuRow = 0;
     m_menuPos.snap(0.f);
+    m_menuScroll.snap(0.f);
     m_menuFade.start(0.18f);
     save::querySlots(m_game, m_slots);
     m_thumbSlot = -1;
 }
 
+void GameSession::resetPerfWindow() {
+    m_perfWindowStartUs = 0;
+    m_perfEmuUs = 0;
+    m_perfFrames = 0;
+    m_perfSampleCount = 0;
+    m_perfRenderedUs = m_perfSkippedUs = 0;
+    m_perfRenderedFrames = m_perfSkippedFrames = 0;
+    m_perfRenderedSampleCount = m_perfSkippedSampleCount = 0;
+}
+
+void GameSession::primeAudio() {
+    int primedFrames = 0;
+    while (audio::buffered() < AUDIO_PRIME_TARGET && primedFrames < 8) {
+        m_cores.core().runFrame(0, /*renderVideo=*/false);
+        primedFrames++;
+    }
+    m_emuAccum = 0.f;
+    m_audioRecovery = audio::buffered() < AUDIO_RECOVERY_EXIT;
+    RS_LOGI("audio: primed %d frames to %u/%u", primedFrames,
+            unsigned(audio::buffered()), unsigned(AUDIO_PRIME_TARGET));
+}
+
+void GameSession::resumeGame(bool discardAudio) {
+    if (discardAudio) {
+        audio::clear();
+        primeAudio();
+    } else {
+        m_audioRecovery = audio::buffered() < AUDIO_RECOVERY_ENTER;
+    }
+    audio::setPaused(false);
+    m_emuAccum = 0.f;
+    resetPerfWindow();
+    m_state = State::Running;
+}
+
 void GameSession::makeThumb(u16* out) const {
     /* Nearest-neighbour downsample of the core frame to thumbnail size. */
     const RSVideoFrame f = const_cast<CoreManager&>(m_cores).core().frame();
-    if (!f.pixels || f.format != RS_PIXFMT_RGB565) {
+    if (!f.pixels ||
+        (f.format != RS_PIXFMT_RGB565 &&
+         f.format != RS_PIXFMT_RGBA5551)) {
         std::memset(out, 0, save::THUMB_W * save::THUMB_H * 2);
         return;
     }
@@ -403,8 +710,16 @@ void GameSession::makeThumb(u16* out) const {
     for (int y = 0; y < save::THUMB_H; y++) {
         const int sy = y * f.height / save::THUMB_H;
         const u16* row = reinterpret_cast<const u16*>(src + sy * f.pitch);
-        for (int x = 0; x < save::THUMB_W; x++)
-            out[y * save::THUMB_W + x] = row[x * f.width / save::THUMB_W];
+        for (int x = 0; x < save::THUMB_W; x++) {
+            const u16 pixel = row[x * f.width / save::THUMB_W];
+            /* Save thumbnails are GU_PSM_5650. Native SNES frames are
+             * BGR555, so expand the green field and discard the spare bit. */
+            out[y * save::THUMB_W + x] =
+                f.format == RS_PIXFMT_RGBA5551
+                    ? u16((pixel & 0x001Fu) | ((pixel & 0x03E0u) << 1) |
+                          ((pixel & 0x7C00u) << 1))
+                    : pixel;
+        }
     }
 }
 
@@ -416,21 +731,37 @@ void GameSession::updateMenu(App& app) {
     if (pad.navPressed(PSP_CTRL_DOWN) && m_menuRow < MENU_COUNT - 1)
         m_menuRow++;
 
-    if ((m_menuRow == MENU_SAVE || m_menuRow == MENU_LOAD)) {
+    if (m_menuRow == MENU_SAVE || m_menuRow == MENU_LOAD) {
         if (pad.navPressed(PSP_CTRL_LEFT) && m_slot > 0) m_slot--;
         if (pad.navPressed(PSP_CTRL_RIGHT) && m_slot < save::SLOTS - 1)
             m_slot++;
     }
 
+    const auto cycleAspect = [this](int direction) {
+        int mode = static_cast<int>(m_scaleMode);
+        mode = (mode + direction + 4) % 4;
+        m_scaleMode = static_cast<ScaleMode>(mode);
+        m_videoOptionsDirty = true;
+    };
+    if (m_menuRow == MENU_ASPECT) {
+        if (pad.navPressed(PSP_CTRL_LEFT)) cycleAspect(-1);
+        if (pad.navPressed(PSP_CTRL_RIGHT)) cycleAspect(1);
+    } else if (m_menuRow == MENU_FILTER &&
+               (pad.navPressed(PSP_CTRL_LEFT) ||
+                pad.navPressed(PSP_CTRL_RIGHT))) {
+        m_nearestFilter = !m_nearestFilter;
+        m_videoOptionsDirty = true;
+    }
+
     if (pad.isPressed(PSP_CTRL_CIRCLE)) {
-        m_state = State::Running;
+        resumeGame();
         return;
     }
 
     if (!pad.isPressed(PSP_CTRL_CROSS)) return;
     switch (m_menuRow) {
         case MENU_RESUME:
-            m_state = State::Running;
+            resumeGame();
             break;
         case MENU_SAVE: {
             u16 thumb[save::THUMB_W * save::THUMB_H];
@@ -447,28 +778,35 @@ void GameSession::updateMenu(App& app) {
                 app.toast(save::loadState(m_game, core, m_slot)
                               ? "State loaded"
                               : "Load failed");
-                audio::clear();
-                m_state = State::Running;
+                resumeGame(/*discardAudio=*/true);
             } else {
                 app.toast("Empty slot");
             }
             break;
         case MENU_RESET:
             core.reset();
-            audio::clear();
-            m_state = State::Running;
+            resumeGame(/*discardAudio=*/true);
             app.toast("Reset");
+            break;
+        case MENU_ASPECT:
+            cycleAspect(1);
+            break;
+        case MENU_FILTER:
+            m_nearestFilter = !m_nearestFilter;
+            m_videoOptionsDirty = true;
             break;
         case MENU_SCREENSHOT: {
             char path[128];
-            fs::mkdirs("ms0:/RETROSUITE/screenshots");
+            char dir[64];
+            std::snprintf(dir, sizeof dir, "%s/screenshots", fs::ROOT);
+            fs::mkdirs(dir);
             std::snprintf(path, sizeof path,
-                          "ms0:/RETROSUITE/screenshots/%08x_%u.png",
+                          "%s/screenshots/%08x_%u.png", fs::ROOT,
                           unsigned(m_game.pathHash),
                           unsigned(app.time() * 10.f));
             app.renderer().requestCapture(path);
             app.toast("Screenshot saved");
-            m_state = State::Running;
+            resumeGame();
             break;
         }
         case MENU_EXIT:
@@ -485,6 +823,9 @@ void GameSession::update(App& app, float dt) {
         case State::Menu:
             m_menuPos.to(float(m_menuRow));
             m_menuPos.update(dt, 14.f);
+            m_menuScroll.to(float(rsClamp(m_menuRow - 2, 0,
+                                          MENU_COUNT - 5)));
+            m_menuScroll.update(dt, 14.f);
             m_menuFade.update(dt);
             updateMenu(app);
             break;
@@ -507,15 +848,53 @@ void GameSession::drawFrame(App& app) {
     const RSVideoFrame f = m_cores.core().frame();
     if (!f.pixels || !f.width || !f.height) return;
 
-    if (!m_frameTex.valid() || m_frameW != f.width || m_frameH != f.height) {
+    const int psm = f.format == RS_PIXFMT_RGBA8888
+                        ? GU_PSM_8888
+                        : f.format == RS_PIXFMT_RGBA5551 ? GU_PSM_5551
+                                                        : GU_PSM_5650;
+    const int bpp = f.format == RS_PIXFMT_RGBA8888 ? 4 : 2;
+    const u32 sourceTexW = f.pitch / u32(bpp);
+    const bool direct =
+        f.pitch % bpp == 0 && sourceTexW >= f.width && sourceTexW <= 512 &&
+        f.storage_height >= f.height && f.storage_height <= 512 &&
+        sourceTexW == rsNextPow2(sourceTexW) &&
+        f.storage_height == rsNextPow2(f.storage_height);
+
+    /* Width and height alone do not identify a libretro video surface.
+     * Snes9x can change from its ordinary 256-wide buffer (512-pixel
+     * backing stride) to the shim's 256-wide pseudo-hires resolve without
+     * changing the reported logical dimensions.  Keeping the old binding
+     * in that case draws the left half of the 512-wide source and bypasses
+     * the resolve entirely.  Rebind whenever any direct-texture identity or
+     * layout property changes. */
+    const bool layoutChanged =
+        !m_frameTex.valid() || m_frameW != f.width || m_frameH != f.height ||
+        m_frameTex.psm != psm || m_directFrameTexture != direct ||
+        (direct &&
+         (m_frameTex.pixels != f.pixels || m_frameTex.texW != sourceTexW ||
+          m_frameTex.texH != f.storage_height));
+
+    if (layoutChanged) {
         gfx::Renderer::freeTexture(m_frameTex);
-        const int psm = f.format == RS_PIXFMT_RGBA8888
-                            ? GU_PSM_8888
-                            : f.format == RS_PIXFMT_RGBA5551 ? GU_PSM_5551
-                                                            : GU_PSM_5650;
-        if (!gfx::Renderer::createTexture(m_frameTex, f.width, f.height, psm,
-                                          nullptr, /*dynamic=*/true) ||
-            injectFailure("framebuffer_allocation")) {
+        m_directFrameTexture = false;
+        if (direct) {
+            m_frameTex.pixels = const_cast<void*>(f.pixels);
+            m_frameTex.width = f.width;
+            m_frameTex.height = f.height;
+            m_frameTex.texW = u16(sourceTexW);
+            m_frameTex.texH = f.storage_height;
+            m_frameTex.psm = u8(psm);
+            m_frameTex.swizzled = false;
+            m_directFrameTexture = true;
+            RS_LOGI("video: direct core texture %ux%u storage %ux%u",
+                    unsigned(f.width), unsigned(f.height),
+                    unsigned(sourceTexW), unsigned(f.storage_height));
+        } else if (!gfx::Renderer::createTexture(
+                       m_frameTex, f.width, f.height, psm, nullptr,
+                       /*dynamic=*/true)) {
+            m_directFrameTexture = false;
+        }
+        if (!m_frameTex.valid() || injectFailure("framebuffer_allocation")) {
             gfx::Renderer::freeTexture(m_frameTex);
             std::snprintf(m_error, sizeof m_error,
                           "framebuffer allocation failed");
@@ -525,7 +904,10 @@ void GameSession::drawFrame(App& app) {
         m_frameW = f.width;
         m_frameH = f.height;
     }
-    gfx::Renderer::updateTexture(m_frameTex, f.pixels, f.pitch);
+    if (!m_directFrameTexture && m_uploadedFrameSequence != f.sequence) {
+        gfx::Renderer::updateTexture(m_frameTex, f.pixels, f.pitch);
+    }
+    m_uploadedFrameSequence = f.sequence;
 
     /* Scale mode resolved at launch (see m_scaleMode). */
     float dw, dh;
@@ -535,6 +917,14 @@ void GameSession::drawFrame(App& app) {
     } else if (m_scaleMode == ScaleMode::Stretch) {
         dw = RS_SCREEN_W;
         dh = RS_SCREEN_H;
+    } else if (m_scaleMode == ScaleMode::FourThree) {
+        constexpr float aspect = 4.f / 3.f;
+        dw = RS_SCREEN_W;
+        dh = dw / aspect;
+        if (dh > RS_SCREEN_H) {
+            dh = RS_SCREEN_H;
+            dw = dh * aspect;
+        }
     } else {
         const float s = rsClamp(float(RS_SCREEN_W) / f.width,
                                 0.f, float(RS_SCREEN_H) / f.height);
@@ -557,33 +947,61 @@ void GameSession::drawMenu(App& app) {
 
     r.rect(0, 0, RS_SCREEN_W, RS_SCREEN_H, rsHex(0x06080C, u32(k * 170.f)));
 
-    const float px = 40.f, pw = 220.f;
-    const float py = 42.f, rowH = 27.f;
-    const float ph = rowH * MENU_COUNT + 24.f;
-    ui::prim::roundedRect(r, px, py, pw, ph, 12.f, rsHex(0x141A24, a));
-    ui::prim::roundedOutline(r, px, py, pw, ph, 12.f,
-                             rsWithAlpha(pal.accent, a / 3u));
+    constexpr int VISIBLE_ROWS = 5;
+    const float px = 16.f, pw = 264.f;
+    const float py = 24.f, rowH = 32.f;
+    const float ph = rowH * VISIBLE_ROWS + 48.f;
+    ui::prim::roundedRect(r, px, py, pw, ph, 8.f,
+                          rsWithAlpha(pal.menuBg, a));
+    ui::prim::roundedOutline(r, px, py, pw, ph, 8.f,
+                             rsWithAlpha(pal.panelOutline, a));
 
+    /* A long ROM title must never escape the pause panel. */
+    r.setScissor(int(px + 16.f), int(py + 8.f), int(pw - 32.f), 12);
     fonts.small.draw(r, px + 16.f, py + 8.f, m_game.name.c_str(),
-                     rsWithAlpha(rsHex(0x8A93A6), a));
+                     rsWithAlpha(pal.textDim, a));
+    r.resetScissor();
 
-    const float listY = py + 26.f;
-    const float hy = listY + m_menuPos.v * rowH;
-    ui::prim::focusRow(r, px + 8.f, hy, pw - 16.f, rowH - 3.f,
-                       rsHex(0xFFFFFF, a / 9u), rsWithAlpha(pal.accent, a));
+    const float listY = py + 40.f;
+    const float listH = rowH * VISIBLE_ROWS;
+    const float hy = listY + (m_menuPos.v - m_menuScroll.v) * rowH;
+
+    /* Keep both the animated focus surface and labels inside the list viewport.
+     * During rapid navigation the two smooth values can briefly be more than
+     * one row apart, so clipping only the labels allowed the focus surface to
+     * bleed onto the dimmed game behind the panel. */
+    r.setScissor(int(px + 16.f), int(listY), int(pw - 32.f), int(listH));
+    ui::prim::focusRow(r, px + 16.f, hy, pw - 32.f, rowH,
+                       rsWithAlpha(pal.tileFocusBg,
+                                   rsAlphaOf(pal.tileFocusBg) * a / 255u),
+                       rsWithAlpha(pal.accent, a),
+                       rsWithAlpha(pal.shadow,
+                                   rsAlphaOf(pal.shadow) * a / (255u * 2u)));
 
     for (int i = 0; i < MENU_COUNT; i++) {
+        const float rowY =
+            listY + (float(i) - m_menuScroll.v) * rowH;
+        if (rowY + rowH <= listY || rowY >= listY + listH) continue;
         const bool sel = i == m_menuRow;
         char label[48];
         if (i == MENU_SAVE || i == MENU_LOAD) {
             std::snprintf(label, sizeof label, "%s  < %d%s >", MENU_LABELS[i],
                           m_slot + 1, m_slots[m_slot].exists ? "" : " ·");
+        } else if (i == MENU_ASPECT) {
+            std::snprintf(label, sizeof label, "%s  < %s >", MENU_LABELS[i],
+                          scaleDisplayName(m_scaleMode));
+        } else if (i == MENU_FILTER) {
+            std::snprintf(label, sizeof label, "%s  < %s >", MENU_LABELS[i],
+                          m_nearestFilter ? "Sharp" : "Smooth");
         } else {
             std::snprintf(label, sizeof label, "%s", MENU_LABELS[i]);
         }
-        fonts.body.draw(r, px + 24.f, listY + float(i) * rowH + 4.f, label,
-                        rsHex(sel ? 0xF2F5FA : 0xA9B3C4, a));
+        fonts.body.draw(r, px + 32.f, rowY + 8.f, label,
+                        rsWithAlpha(sel ? pal.textPrimary
+                                            : pal.textSecondary,
+                                    a));
     }
+    r.resetScissor();
 
     /* Slot thumbnail preview beside the panel. */
     if ((m_menuRow == MENU_SAVE || m_menuRow == MENU_LOAD) &&
@@ -601,17 +1019,19 @@ void GameSession::drawMenu(App& app) {
             }
         }
         if (m_thumbSlot == m_slot && m_thumbTex.valid()) {
-            const float tx = px + pw + 18.f, ty = py + 30.f;
-            ui::prim::roundedRect(r, tx - 4.f, ty - 4.f,
-                                  save::THUMB_W + 8.f, save::THUMB_H + 8.f,
-                                  8.f, rsHex(0x141A24, a));
+            const float tx = px + pw + 16.f, ty = py + 40.f;
+            ui::prim::roundedRect(r, tx - 8.f, ty - 8.f,
+                                  save::THUMB_W + 16.f,
+                                  save::THUMB_H + 36.f,
+                                  8.f, rsWithAlpha(pal.menuBg, a));
             r.sprite(m_thumbTex, 0, 0, save::THUMB_W, save::THUMB_H, tx, ty,
                      save::THUMB_W, save::THUMB_H, rsHex(0xFFFFFF, a));
             char cap[24];
             std::snprintf(cap, sizeof cap, "Slot %d", m_slot + 1);
             fonts.small.draw(r, tx + save::THUMB_W / 2.f,
                              ty + save::THUMB_H + 8.f, cap,
-                             rsHex(0x8A93A6, a), text::Align::Center);
+                             rsWithAlpha(pal.textDim, a),
+                             text::Align::Center);
         }
     }
 
@@ -619,6 +1039,8 @@ void GameSession::drawMenu(App& app) {
         {ui::prim::Button::Cross, "Select"},
         {ui::prim::Button::Circle, "Resume"},
     };
+    r.rect(0.f, 240.f, RS_SCREEN_W, 32.f,
+           rsWithAlpha(pal.menuBg, 232u * a / 255u));
     app.drawHintBar(hints, 2);
 }
 

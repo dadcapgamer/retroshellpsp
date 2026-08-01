@@ -47,7 +47,7 @@
 #define THIRD_COLOR_MASK_RGB555   0x001F
 #define ALPHA_BITS_MASK_RGB555    0x0000
 
-#if defined(PSP)
+#if defined(PSP) || defined(RS_PSP_NATIVE_PIXELS)
 /* BGR555 format */
 #define BUILD_PIXEL_BGR555(R,G,B) (((int32_t) (B) << 10) | ((int32_t) (G) << 5) | (int32_t) (R))
 #define BUILD_PIXEL2_BGR555(R,G,B) (((int32_t) (B) << 10) | ((int32_t) (G) << 5) | (int32_t) (R))

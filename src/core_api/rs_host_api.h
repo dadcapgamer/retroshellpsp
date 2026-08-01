@@ -1,5 +1,5 @@
 /**
- * RetroSuite Core API — host services table.
+ * RetroShell Core API — host services table.
  *
  * The frontend hands this table to a core at init time. It is the ONLY way a
  * core may talk to the outside world: cores never call sce* functions, never
@@ -17,7 +17,7 @@
 extern "C" {
 #endif
 
-#define RS_HOST_API_VERSION 1u
+#define RS_HOST_API_VERSION 2u
 
 /* Log levels accepted by RSHostAPI::log. */
 enum {
@@ -30,7 +30,7 @@ enum {
 /* Abstract gamepad bits passed to RSCoreAPI::run_frame and returned by
  * input_state. The frontend maps physical PSP buttons onto these according
  * to the user's per-core / per-game remapping. Modeled on a SNES-style pad,
- * which is a superset of every system RetroSuite targets. */
+ * which is a superset of every system RetroShell targets. */
 enum {
     RS_BTN_UP     = 1u << 0,
     RS_BTN_DOWN   = 1u << 1,
@@ -43,7 +43,12 @@ enum {
     RS_BTN_L      = 1u << 8,
     RS_BTN_R      = 1u << 9,
     RS_BTN_START  = 1u << 10,
-    RS_BTN_SELECT = 1u << 11
+    RS_BTN_SELECT = 1u << 11,
+
+    /* Frontend-to-core run hint, never exposed as controller input. A
+     * libretro adapter disables video for this emulated frame while still
+     * advancing game logic and producing audio. */
+    RS_RUN_SKIP_VIDEO = 1u << 31
 };
 
 typedef struct RSHostAPI {
@@ -67,6 +72,10 @@ typedef struct RSHostAPI {
      * resamples to the PSP's 44100 Hz output. */
     void (*audio_set_rate)(uint32_t hz);
     void (*audio_push)(const int16_t* stereo, uint32_t frames);
+    /* Current/capacity values are output-rate stereo frames. Libretro
+     * adapters use these to drive audio-aware automatic frameskip. */
+    uint32_t (*audio_buffered)(void);
+    uint32_t (*audio_capacity)(void);
 
     /* --- Input --------------------------------------------------------- */
     /* Current RS_BTN_* state; identical to the last run_frame argument.

@@ -204,7 +204,7 @@ else ifeq ($(platform), psp1)
 	TARGET := $(TARGET_NAME)_libretro_$(platform).a
 	CC = psp-gcc$(EXE_EXT)
 	AR = psp-ar$(EXE_EXT)
-	CFLAGS += -DPSP -G0 -ftracer
+	CFLAGS += -DPSP -G0 -ftracer -DUSE_BGR565
 	CFLAGS += -I$(shell psp-config --pspsdk-path)/include
 	PLATFORM_TREMOR ?= 1
 	STATIC_LINKING = 1

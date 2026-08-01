@@ -13,8 +13,9 @@ namespace rs {
 
 namespace {
 const char* ROW_LABELS[] = {
-    "Theme", "Menu CPU clock", "In-game CPU clock", "UI sounds",
-    "Show FPS", "Auto-save", "Rescan library",
+    "Theme", "Accent color", "Time format", "Menu CPU clock",
+    "In-game CPU clock", "UI sounds", "Show FPS", "Auto-save",
+    "PSP-1000 Safe Mode", "Rescan library",
 };
 constexpr int CPU_STEPS[] = {222, 266, 333};
 
@@ -28,6 +29,7 @@ int cpuStepIndex(int mhz) {
 void SettingsScene::enter(App& app) {
     m_row = 0;
     m_rowPos.snap(0.f);
+    m_scroll.snap(0.f);
     m_entrance.start(0.35f);
     m_themes = theme::availableThemes();
     m_themeIdx = 0;
@@ -44,6 +46,16 @@ void SettingsScene::adjust(App& app, int dir) {
             app.setThemeById(m_themes[size_t(m_themeIdx)]);
             break;
         }
+        case ROW_ACCENT: {
+            const int next =
+                (c.accent + dir + theme::ACCENT_COUNT) % theme::ACCENT_COUNT;
+            app.setAccentIndex(next);
+            break;
+        }
+        case ROW_TIME_FORMAT:
+            c.clock24Hour = !c.clock24Hour;
+            cfg::save();
+            break;
         case ROW_CPU_MENU: {
             const int i = rsClamp(cpuStepIndex(c.cpuMenuMhz) + dir, 0, 2);
             c.cpuMenuMhz = CPU_STEPS[i];
@@ -69,6 +81,15 @@ void SettingsScene::adjust(App& app, int dir) {
             c.autosave = !c.autosave;
             cfg::save();
             break;
+        case ROW_PSP1000_SAFE:
+            c.psp1000SafeMode = !c.psp1000SafeMode;
+            c.psp1000SafeModeConfigured = true;
+            cfg::save();
+            app.cores().discover();
+            app.toast(c.psp1000SafeMode
+                          ? "Showing PSP-1000 qualified cores"
+                          : "Experimental cores are now visible");
+            break;
         default:
             break;
     }
@@ -92,6 +113,11 @@ const char* SettingsScene::valueText(App& app, int row, char* buf,
         case ROW_THEME:
             std::snprintf(buf, n, "%s", app.theme().title.c_str());
             return buf;
+        case ROW_ACCENT:
+            std::snprintf(buf, n, "%s",
+                          theme::accentOption(c.accent).name);
+            return buf;
+        case ROW_TIME_FORMAT: return c.clock24Hour ? "24-hour" : "12-hour";
         case ROW_CPU_MENU:
             std::snprintf(buf, n, "%d MHz", c.cpuMenuMhz);
             return buf;
@@ -101,6 +127,7 @@ const char* SettingsScene::valueText(App& app, int row, char* buf,
         case ROW_UI_SOUNDS: return c.uiSounds ? "On" : "Off";
         case ROW_SHOW_FPS:  return c.showFps ? "On" : "Off";
         case ROW_AUTOSAVE:  return c.autosave ? "On" : "Off";
+        case ROW_PSP1000_SAFE: return c.psp1000SafeMode ? "On" : "Off";
         case ROW_RESCAN:
             return app.scanner().running() ? "Scanning…" : "Press ×";
         default: return "";
@@ -119,6 +146,9 @@ void SettingsScene::update(App& app, float dt) {
 
     m_rowPos.to(float(m_row));
     m_rowPos.update(dt, 14.f);
+    constexpr int VISIBLE_ROWS = 4;
+    m_scroll.to(float(rsClamp(m_row - 2, 0, ROW_COUNT - VISIBLE_ROWS)));
+    m_scroll.update(dt, 14.f);
     m_entrance.update(dt);
 }
 
@@ -134,38 +164,76 @@ void SettingsScene::draw(App& app) {
     const u32 a = u32(enter * 255.f);
     const float slide = (1.f - enter) * 14.f;
 
-    fonts.large.drawShadow(r, 24.f, 30.f + slide, "Settings",
+    fonts.large.drawShadow(r, 16.f, 32.f + slide, "Settings",
                            rsWithAlpha(pal.textPrimary, a), pal.shadow);
 
-    const float px = 24.f, pw = 432.f, py = 62.f + slide;
-    const float rowH = 24.f;
+    constexpr int VISIBLE_ROWS = 4;
+    const float px = 16.f, pw = 448.f, py = 64.f + slide;
+    const float rowH = 40.f;
+    const float ph = float(VISIBLE_ROWS) * rowH;
 
-    ui::prim::roundedRect(r, px, py, pw, rowH * ROW_COUNT + 16.f, 12.f,
-                          rsWithAlpha(pal.panelBg,
-                                      rsAlphaOf(pal.panelBg) * a / 255u));
-    ui::prim::roundedOutline(r, px, py, pw, rowH * ROW_COUNT + 16.f, 12.f,
-                             rsWithAlpha(pal.panelOutline,
-                                         rsAlphaOf(pal.panelOutline) * a /
-                                             255u));
-
-    /* Sliding highlight. */
-    const float hy = py + 8.f + m_rowPos.v * rowH;
-    ui::prim::focusRow(r, px + 8.f, hy, pw - 16.f, rowH - 2.f,
+    /* Full-width rows align to the same 16px content rail as the heading.
+     * Selection, not an enclosing card, supplies the necessary grouping. */
+    const float hy = py + (m_rowPos.v - m_scroll.v) * rowH;
+    ui::prim::focusRow(r, px, hy + 4.f, pw, 32.f,
                        rsWithAlpha(pal.tileFocusBg,
                                    rsAlphaOf(pal.tileFocusBg) * a / 255u),
-                       rsWithAlpha(pal.accent, a));
+                       rsWithAlpha(pal.accent, a),
+                       rsWithAlpha(pal.shadow,
+                                   rsAlphaOf(pal.shadow) * a / (255u * 2u)));
 
     char buf[48];
+    r.setScissor(int(px), int(py), int(pw), int(ph));
     for (int i = 0; i < ROW_COUNT; i++) {
-        const float y = py + 8.f + float(i) * rowH + 3.f;
+        const float rowY = py + (float(i) - m_scroll.v) * rowH;
+        if (rowY < py || rowY >= py + ph) continue;
+        /* Font::draw receives the top of its 15px line box. Centre that
+         * box in the 40px logical row rather than aligning it to the
+         * 32px focus shape's top edge. */
+        const float y =
+            rowY + float(int((rowH - fonts.body.lineHeight()) * .5f));
         const bool sel = i == m_row;
-        fonts.body.draw(r, px + 24.f, y, ROW_LABELS[i],
+        fonts.body.draw(r, px + 16.f, y, ROW_LABELS[i],
                         rsWithAlpha(sel ? pal.textPrimary : pal.textSecondary,
                                     a));
-        fonts.body.draw(r, px + pw - 24.f, y, valueText(app, i, buf, sizeof buf),
-                        rsWithAlpha(sel ? pal.accent : pal.textDim, a),
-                        text::Align::Right);
+        if (!(i == ROW_ACCENT && sel))
+            fonts.body.draw(r, px + pw - 16.f, y,
+                            valueText(app, i, buf, sizeof buf),
+                            rsWithAlpha(sel ? pal.textPrimary : pal.textDim, a),
+                            text::Align::Right);
+        if (i < ROW_COUNT - 1)
+            r.rect(px + 16.f, rowY + 39.f, pw - 32.f, 1.f,
+                   rsWithAlpha(pal.panelOutline,
+                               rsAlphaOf(pal.panelOutline) * a / 255u));
+        /* The expanded palette replaces, rather than overlays, the normal
+         * one-color value indicator while this row is selected. */
+        if (i == ROW_ACCENT && !sel) {
+            ui::prim::circle(
+                r, px + pw - 104.f, rowY + rowH * .5f, 4.f,
+                rsWithAlpha(
+                    rsHex(theme::accentOption(cfg::get().accent).rgb), a));
+        }
     }
+    if (m_row == ROW_ACCENT) {
+        /* Palette contents belong to the selected data row, not to the
+         * animated focus outline. Anchoring to the row prevents the dots
+         * floating above their label for several frames after navigation. */
+        const float selectedRowY =
+            py + (float(m_row) - m_scroll.v) * rowH;
+        for (int i = 0; i < theme::ACCENT_COUNT; i++) {
+            const float cx =
+                px + pw - 32.f -
+                float(theme::ACCENT_COUNT - 1 - i) * 16.f;
+            const float cy = selectedRowY + rowH * .5f;
+            if (i == cfg::get().accent)
+                ui::prim::ring(r, cx, cy, 6.f,
+                               rsWithAlpha(pal.textPrimary, a));
+            ui::prim::circle(
+                r, cx, cy, 4.f,
+                rsWithAlpha(rsHex(theme::accentOption(i).rgb), a));
+        }
+    }
+    r.resetScissor();
 
     const App::Hint hints[] = {
         {ui::prim::Button::Cross, "Change"},

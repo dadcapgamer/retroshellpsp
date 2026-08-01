@@ -50,7 +50,16 @@ int one_c, slow_one_c, two_c;
 
 #define VIDEO_REFRESH_RATE_PAL  (SNES_CLOCK_SPEED * 6.0 / (SNES_CYCLES_PER_SCANLINE * SNES_MAX_PAL_VCOUNTER))
 #define VIDEO_REFRESH_RATE_NTSC (SNES_CLOCK_SPEED * 6.0 / (SNES_CYCLES_PER_SCANLINE * SNES_MAX_NTSC_VCOUNTER))
+#ifdef RS_PSP_BALANCED_AUDIO
+/* The original 32.04 kHz mixer can consume a material share of one Allegrex
+ * core in echo-heavy games. Mix at 22.05 kHz on PSP, then let RetroSuite's
+ * shared linear resampler feed the fixed 44.1 kHz hardware channel. This
+ * preserves interpolation and stereo/echo correctness while reducing the
+ * number of old Snes9x mixer iterations by about 31%. */
+#define AUDIO_SAMPLE_RATE       22050
+#else
 #define AUDIO_SAMPLE_RATE       32040
+#endif
 
 static int16_t *audio_out_buffer       = NULL;
 #ifdef USE_BLARGG_APU
@@ -79,6 +88,17 @@ static bool retro_audio_buff_underrun      = false;
 #define FRAMESKIP_MAX 30
 
 static unsigned retro_audio_latency        = 0;
+
+#ifdef RS_PSP_SECRET_OF_MANA_HIRES_RESOLVE
+static bool rs_psp_secret_of_mana = false;
+
+/* Read by RetroSuite's core-local shim. This remains an ordinary libretro
+ * core externally; the symbol is linked only inside this PRX. */
+bool rs_psp_hires_prefer_blue(void)
+{
+   return rs_psp_secret_of_mana;
+}
+#endif
 static bool update_audio_latency           = false;
 
 #ifdef PERF_TEST
@@ -249,16 +269,23 @@ void S9xDeinitDisplay(void)
 void S9xInitDisplay(void)
 {
    int32_t h = IMAGE_HEIGHT;
+   int32_t screen_h = h;
    int32_t safety = 32;
 
    GFX.Pitch = IMAGE_WIDTH * 2;
+#ifdef RS_PSP_NATIVE_PIXELS
+   /* RetroSuite binds this buffer directly as a 512x512 linear GE texture.
+    * Only the primary screen needs padding; auxiliary buffers retain their
+    * original size to keep the PSP-1000 memory cost to about 34 KiB. */
+   screen_h = 512;
+#endif
 #ifdef DS2_DMA
-   GFX.Screen_buffer = (uint8_t *) AlignedMalloc(GFX.Pitch * h + safety, 32, &PtrAdj.GFXScreen);
+   GFX.Screen_buffer = (uint8_t *) AlignedMalloc(GFX.Pitch * screen_h + safety, 32, &PtrAdj.GFXScreen);
 #elif defined(_3DS)
    safety = 0x80;
-   GFX.Screen_buffer = (uint8_t *) linearMemAlign(GFX.Pitch * h + safety, 0x80);
+   GFX.Screen_buffer = (uint8_t *) linearMemAlign(GFX.Pitch * screen_h + safety, 0x80);
 #else
-   GFX.Screen_buffer = (uint8_t *) malloc(GFX.Pitch * h + safety);
+   GFX.Screen_buffer = (uint8_t *) malloc(GFX.Pitch * screen_h + safety);
 #endif
    GFX.SubScreen_buffer = (uint8_t *) malloc(GFX.Pitch * h + safety);
    GFX.ZBuffer_buffer = (uint8_t *) malloc((GFX.Pitch >> 1) * h + safety);
@@ -1101,6 +1128,14 @@ bool retro_load_game(const struct retro_game_info* game)
    if (!LoadROM(game->path))
 #endif
       return false;
+
+#ifdef RS_PSP_SECRET_OF_MANA_HIRES_RESOLVE
+   /* Match the same verified clean-US identity as the byte-validated
+    * SNESAdvance/TYL speed substitutions in memmap.c. */
+   rs_psp_secret_of_mana =
+      Memory.CalculatedSize == 0x200000 &&
+      strncmp("Secret of MANA", (char *)&Memory.ROM[0xFFC0], 14) == 0;
+#endif
 
    Settings.FrameTime = (Settings.PAL ? Settings.FrameTimePAL : Settings.FrameTimeNTSC);
 

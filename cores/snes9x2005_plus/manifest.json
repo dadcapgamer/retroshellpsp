@@ -4,5 +4,6 @@
   "systems": "snes",
   "priority": 80,
   "testOnly": true,
+  "psp1000Safe": false,
   "requiresFullContent": true
 }

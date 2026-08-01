@@ -32,6 +32,13 @@ add_executable(retrosuite
 
 target_include_directories(retrosuite PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
+if(RS_INCLUDE_TEST_CORES)
+  # Candidate visibility is a frontend policy. Do not leak this definition
+  # into every PRX or identical core sources produce different artifacts in
+  # stable and candidate bundles.
+  target_compile_definitions(retrosuite PRIVATE RS_INCLUDE_TEST_CORES=1)
+endif()
+
 # First-party code is held to strict diagnostics. Vendored emulator sources
 # keep their narrowly scoped compatibility suppressions in each core target.
 target_compile_options(retrosuite PRIVATE
@@ -56,11 +63,22 @@ rs_embed_assets(retrosuite
   ${CMAKE_SOURCE_DIR}/assets/fonts/font_title.rsf
   ${CMAKE_SOURCE_DIR}/assets/fonts/font_large.rsf
   ${CMAKE_SOURCE_DIR}/assets/fonts/font_body.rsf
-  ${CMAKE_SOURCE_DIR}/assets/fonts/font_small.rsf)
+  ${CMAKE_SOURCE_DIR}/assets/fonts/font_small.rsf
+  ${CMAKE_SOURCE_DIR}/assets/SPLASH.PNG
+  ${CMAKE_SOURCE_DIR}/assets/branding/retroshell-logo-light-2x.png
+  ${CMAKE_SOURCE_DIR}/assets/icons/consoles/game-boy.png
+  ${CMAKE_SOURCE_DIR}/assets/icons/consoles/game-boy-color.png
+  ${CMAKE_SOURCE_DIR}/assets/icons/consoles/game-boy-advance.png
+  ${CMAKE_SOURCE_DIR}/assets/icons/consoles/nes.png
+  ${CMAKE_SOURCE_DIR}/assets/icons/consoles/snes.png
+  ${CMAKE_SOURCE_DIR}/assets/icons/consoles/megadrive.png
+  ${CMAKE_SOURCE_DIR}/assets/icons/consoles/master-system.png
+  ${CMAKE_SOURCE_DIR}/assets/icons/consoles/game-gear.png
+  ${CMAKE_SOURCE_DIR}/assets/icons/consoles/pc-engine.png)
 
 create_pbp_file(
   TARGET retrosuite
-  TITLE "RetroSuite"
+  TITLE "RetroShell"
   ICON_PATH ${CMAKE_SOURCE_DIR}/assets/ICON0.PNG
   BACKGROUND_PATH ${CMAKE_SOURCE_DIR}/assets/PIC1.PNG
-  VERSION 00.10)
+  VERSION 01.00)

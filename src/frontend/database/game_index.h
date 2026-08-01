@@ -1,6 +1,6 @@
 /** The in-memory game library and its binary cache.
  *
- * The cache (ms0:/RETROSUITE/cache/index.bin) makes cold boot instant: the
+ * The cache (ms0:/RETROSHELL/cache/index.bin) makes cold boot instant: the
  * previous library is shown immediately while the scanner revalidates in
  * the background and swaps in changes.
  */

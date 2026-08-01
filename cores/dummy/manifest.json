@@ -3,5 +3,6 @@
   "version": "1.0",
   "systems": "gb|gbc|gba|nes|snes|md|sms|gg|pce",
   "priority": -1000,
-  "testOnly": true
+  "testOnly": true,
+  "psp1000Safe": false
 }

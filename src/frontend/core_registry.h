@@ -4,8 +4,8 @@
  * PRX builds discover cores at boot from manifest files the core drops
  * next to its module:
  *
- *     ms0:/RETROSUITE/cores/gambatte.prx
- *     ms0:/RETROSUITE/cores/gambatte.json
+ *     ms0:/RETROSHELL/cores/gambatte.prx
+ *     ms0:/RETROSHELL/cores/gambatte.json
  *       { "name": "gambatte", "version": "0.5.0", "systems": "gb|gbc" }
  *
  * The manifest exists so the frontend never has to load a module just to
@@ -38,7 +38,9 @@ struct CoreInfo {
     std::string systems;   /* pipe-separated coreIds, e.g. "gb|gbc"   */
     int priority = 0;      /* higher sorts first and becomes the default */
     bool testOnly = false; /* never exposed in a production build */
+    bool psp1000Safe = false; /* explicitly qualified for the 32 MB model */
     bool requiresFullContent = false; /* core cannot use host VFS/fullpath */
+    bool preferVfs = false; /* avoid a duplicate in-arena ROM when possible */
     bool isStatic = false;
 
     bool serves(db::System s) const;

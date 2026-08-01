@@ -2060,7 +2060,18 @@ static void update_variables(bool first_run)
    old_vout_format = vout_format;
    var.value = NULL;
    var.key = "picodrive_renderer";
-   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value) {
+   environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var);
+#if defined(PSP)
+   if (!var.value) {
+      /* Accurate is the desktop default but is too expensive for sustained
+       * 60 Hz on PSP. Good retains scanline palette handling and is the
+       * compatibility-conscious middle ground; Fast remains opt-in. */
+      var.value = "good";
+      if (log_cb)
+         log_cb(RETRO_LOG_INFO, "PSP default: picodrive_renderer=good\n");
+   }
+#endif
+   if (var.value) {
       if (strcmp(var.value, "fast") == 0)
          vout_format = PDF_NONE;
       else if (strcmp(var.value, "good") == 0)
@@ -2435,6 +2446,19 @@ void retro_run(void)
       } else
          frameskip_counter++;
    }
+
+#if defined(PSP)
+   /* RetroSuite may run several emulation/audio catch-up frames before the
+    * next presentation. Honour the standard frontend video-disable bit so
+    * these obsolete intermediate images do not pay PicoDrive's rendering
+    * cost. The final frame in each batch remains enabled and visible. */
+   if (!PicoIn.skipFrame) {
+      int audio_video_enable = 3;
+      if (environ_cb(RETRO_ENVIRONMENT_GET_AUDIO_VIDEO_ENABLE,
+            &audio_video_enable) && !(audio_video_enable & 1))
+         PicoIn.skipFrame = 1;
+   }
+#endif
 
    /* If frameskip settings have changed, update
     * frontend audio latency */

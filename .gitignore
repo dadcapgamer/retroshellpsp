@@ -8,10 +8,16 @@ build*/
 tools/assetgen
 
 # Local ROMs (never commit copyrighted games)
+roms/
 *.gbc
 *.gb
 *.gba
 *.zip
 
 .DS_Store
+__pycache__/
+*.pyc
+.pytest_cache/
+.impeccable/
+backups/
 dist/

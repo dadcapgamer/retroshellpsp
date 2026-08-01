@@ -1,4 +1,5 @@
 #include "runtime/log.h"
+#include "platform/psp/fs_psp.h"
 
 #include <pspiofilemgr.h>
 
@@ -15,8 +16,8 @@ const char* LEVEL_TAG[4] = {"D", "I", "W", "E"};
 
 void init(bool toFile) {
     if (!toFile) return;
-    sceIoMkdir("ms0:/RETROSUITE", 0777);
-    s_fd = sceIoOpen("ms0:/RETROSUITE/retrosuite.log",
+    sceIoMkdir(fs::ROOT, 0777);
+    s_fd = sceIoOpen("ms0:/RETROSHELL/retroshell.log",
                      PSP_O_WRONLY | PSP_O_CREAT | PSP_O_TRUNC, 0777);
 }
 

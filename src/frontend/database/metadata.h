@@ -1,9 +1,11 @@
 /** Optional per-game metadata and box art.
  *
- * Both are keyed by the ROM's base file name (what users see), so a
- * community metadata pack is just files dropped into:
- *   ms0:/RETROSUITE/metadata/<SystemDir>/<rom name>.json
- *   ms0:/RETROSUITE/boxart/<SystemDir>/<rom name>.png
+ * Box art first follows the ROM itself:
+ *   ms0:/ROMS/.../<rom name>.(png|jpg|jpeg)
+ * with the same base name as the ROM. The legacy centralized location
+ * remains supported for community packs:
+ *   ms0:/RETROSHELL/metadata/<SystemDir>/<rom name>.json
+ *   ms0:/RETROSHELL/boxart/<SystemDir>/<rom name>.(png|jpg|jpeg)
  *
  * Box art decoding happens synchronously but is throttled to one image per
  * frame and cached; textures are dropped wholesale when the launch protocol
@@ -31,6 +33,9 @@ public:
     /* Returns the texture for this game, kicking off at most one decode per
      * call. Never blocks scrolling: returns nullptr until ready. */
     const gfx::Texture* get(const GameEntry& g);
+    /* Cache-only lookup used by multi-thumbnail shelves. It never touches
+     * the Memory Stick or decodes an image. */
+    const gfx::Texture* peek(const GameEntry& g) const;
 
     /* Drop every cached texture (theme switch / core launch eviction). */
     void clear();

@@ -1,6 +1,6 @@
 /** Theme engine.
  *
- * A theme is a directory ms0:/RETROSUITE/themes/<name>/ containing
+ * A theme is a directory ms0:/RETROSHELL/themes/<name>/ containing
  * theme.json and optional assets:
  *
  *   {
@@ -8,7 +8,7 @@
  *     "dark": true,
  *     "colors": { "bgTop": "#0E1218", "accent": "#4C9AFF", ... },
  *     "background": "bg.png",     // optional 480x272 image
- *     "waves": true               // draw the animated ribbons
+ *     "waves": true               // optional legacy animated ribbons
  *   }
  *
  * Unspecified colors inherit from the built-in Light or Dark palette
@@ -29,7 +29,7 @@ struct Theme {
     std::string id;        /* "dark", "light", or directory name */
     std::string title;     /* display name */
     Palette palette;
-    bool waves = true;
+    bool waves = false;
     gfx::Texture background;   /* optional; check .valid() */
 
     void freeAssets() { gfx::Renderer::freeTexture(background); }

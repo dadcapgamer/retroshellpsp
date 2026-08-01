@@ -20,6 +20,16 @@ void clockNow(int& hour, int& minute) {
     minute = t.minute;
 }
 
+u64 localTimestamp() {
+    ScePspDateTime t{};
+    sceRtcGetCurrentClockLocalTime(&t);
+    return u64(t.year) * 100000000ull +
+           u64(t.month) * 1000000ull +
+           u64(t.day) * 10000ull +
+           u64(t.hour) * 100ull +
+           u64(t.minute);
+}
+
 void setCpuMhz(int mhz) {
     if (mhz != 222 && mhz != 266 && mhz != 333) mhz = 222;
     scePowerSetClockFrequency(mhz, mhz, mhz / 2);

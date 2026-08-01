@@ -35,9 +35,12 @@ target_include_directories(rs_core_snes9x2005_plus PRIVATE
 target_compile_definitions(rs_core_snes9x2005_plus PRIVATE
   RS_CORE_NAME="snes9x2005_plus"
   RS_CORE_SYSTEMS="snes"
+  RS_PSP_NATIVE_PIXELS
+  RS_PSP_NATIVE_STORAGE_HEIGHT=512
   __LIBRETRO__
   FRONTEND_SUPPORTS_RGB565
   USE_BLARGG_APU
+  USE_OLD_COLOUR_OPS
   RIGHTSHIFT_IS_SEDATE
   INLINE=inline)
 

@@ -12,7 +12,7 @@
 namespace rs::db {
 
 namespace {
-const char* LIB_PATH = "ms0:/RETROSUITE/library.json";
+const char* LIB_PATH = "ms0:/RETROSHELL/library.json";
 
 void readHashArray(const cJSON* root, const char* key, std::vector<u32>& out) {
     const cJSON* arr = cJSON_GetObjectItemCaseSensitive(root, key);
@@ -41,6 +41,15 @@ void Library::load() {
             m_playCounts.push_back({u32(std::strtoul(it->string, nullptr, 16)),
                                     it->valueint});
     }
+    const cJSON* played = cJSON_GetObjectItemCaseSensitive(root, "lastPlayed");
+    cJSON_ArrayForEach(it, played) {
+        if (!cJSON_IsNumber(it) || !it->string) continue;
+        const u64 stamp = u64(it->valuedouble);
+        /* Bound malformed values before they reach the date formatter. */
+        if (stamp < 200001010000ull || stamp > 219912312359ull) continue;
+        m_lastPlayed.push_back(
+            {u32(std::strtoul(it->string, nullptr, 16)), stamp});
+    }
     cJSON_Delete(root);
 }
 
@@ -53,6 +62,12 @@ void Library::save() const {
         char key[12];
         std::snprintf(key, sizeof key, "%08x", unsigned(hash));
         cJSON_AddNumberToObject(counts, key, n);
+    }
+    cJSON* played = cJSON_AddObjectToObject(root, "lastPlayed");
+    for (const auto& [hash, stamp] : m_lastPlayed) {
+        char key[12];
+        std::snprintf(key, sizeof key, "%08x", unsigned(hash));
+        cJSON_AddNumberToObject(played, key, double(stamp));
     }
     char* text = cJSON_Print(root);
     cJSON_Delete(root);
@@ -77,11 +92,21 @@ void Library::toggleFavorite(u32 hash) {
     save();
 }
 
-void Library::notePlayed(u32 hash) {
+void Library::notePlayed(u32 hash, u64 localTimestamp) {
     const auto it = std::find(m_recents.begin(), m_recents.end(), hash);
     if (it != m_recents.end()) m_recents.erase(it);
     m_recents.insert(m_recents.begin(), hash);
     if (int(m_recents.size()) > MAX_RECENTS) m_recents.resize(MAX_RECENTS);
+
+    bool foundTimestamp = false;
+    for (auto& [h, stamp] : m_lastPlayed) {
+        if (h == hash) {
+            stamp = localTimestamp;
+            foundTimestamp = true;
+            break;
+        }
+    }
+    if (!foundTimestamp) m_lastPlayed.push_back({hash, localTimestamp});
 
     for (auto& [h, n] : m_playCounts) {
         if (h == hash) {
@@ -97,6 +122,12 @@ void Library::notePlayed(u32 hash) {
 int Library::playCount(u32 hash) const {
     for (const auto& [h, n] : m_playCounts)
         if (h == hash) return n;
+    return 0;
+}
+
+u64 Library::lastPlayed(u32 hash) const {
+    for (const auto& [h, stamp] : m_lastPlayed)
+        if (h == hash) return stamp;
     return 0;
 }
 

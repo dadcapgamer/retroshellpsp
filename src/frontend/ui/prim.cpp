@@ -1,6 +1,17 @@
 #include "frontend/ui/prim.h"
 #include "runtime/log.h"
 
+#include "rs_asset_game_boy_png.h"
+#include "rs_asset_game_boy_color_png.h"
+#include "rs_asset_game_boy_advance_png.h"
+#include "rs_asset_nes_png.h"
+#include "rs_asset_snes_png.h"
+#include "rs_asset_megadrive_png.h"
+#include "rs_asset_master_system_png.h"
+#include "rs_asset_game_gear_png.h"
+#include "rs_asset_pc_engine_png.h"
+#include "stb_image.h"
+
 #include <pspgu.h>
 
 #include <cmath>
@@ -18,6 +29,12 @@ gfx::Texture s_round;      /* filled */
 gfx::Texture s_roundRing;  /* 1.5px outline */
 gfx::Texture s_disc;       /* 32x32 filled AA circle */
 gfx::Texture s_discRing;   /* 32x32 AA ring */
+constexpr int SYSTEM_COUNT = 10;
+constexpr int SYSTEM_CELL = 32;
+constexpr int CONSOLE_COUNT = SYSTEM_COUNT - 1;
+constexpr int SYSTEM_ATLAS_W = CONSOLE_COUNT * SYSTEM_CELL;
+constexpr int PC_ENGINE_ICON = 8;
+gfx::Texture s_systemIcons;
 
 float roundedCoverage(float px, float py, float w, float h, float rad) {
     /* Signed distance to a rounded rectangle centered in [0,w]x[0,h]. */
@@ -95,6 +112,74 @@ bool bakeMasks() {
     return true;
 }
 
+bool bakeSystemIcons() {
+    struct EmbeddedPng {
+        const unsigned char* bytes;
+        unsigned int length;
+    };
+    /* Keep this order identical to db::System. Figma places PC Engine before
+     * the Sega systems, so an explicit table prevents an atlas/order mix-up. */
+    const EmbeddedPng icons[CONSOLE_COUNT] = {
+        {rs_asset_game_boy_png,         rs_asset_game_boy_png_len},
+        {rs_asset_game_boy_color_png,   rs_asset_game_boy_color_png_len},
+        {rs_asset_game_boy_advance_png, rs_asset_game_boy_advance_png_len},
+        {rs_asset_nes_png,              rs_asset_nes_png_len},
+        {rs_asset_snes_png,             rs_asset_snes_png_len},
+        {rs_asset_megadrive_png,        rs_asset_megadrive_png_len},
+        {rs_asset_master_system_png,    rs_asset_master_system_png_len},
+        {rs_asset_game_gear_png,        rs_asset_game_gear_png_len},
+        {rs_asset_pc_engine_png,        rs_asset_pc_engine_png_len},
+    };
+
+    static u8 atlas[SYSTEM_ATLAS_W * SYSTEM_CELL * 4];
+    std::memset(atlas, 0, sizeof atlas);
+    for (int icon = 0; icon < CONSOLE_COUNT; ++icon) {
+        int w = 0, h = 0, comp = 0;
+        stbi_uc* source =
+            stbi_load_from_memory(icons[icon].bytes, int(icons[icon].length),
+                                  &w, &h, &comp, 4);
+        if (!source || w != 96 || h != 96) {
+            RS_LOGE("ui: console icon %d is not a valid 96x96 RGBA asset",
+                    icon);
+            if (source) stbi_image_free(source);
+            return false;
+        }
+
+        /* Each authored Figma pixel is a 6x6 square. Sample its center and
+         * write it as 2x2 so the 32px atlas remains pixel-perfect at both
+         * the 32px card and 64px fallback sizes. The two near-black colors
+         * are the icon-frame background in the exported nodes. */
+        for (int y = 0; y < SYSTEM_CELL; ++y) {
+            const int sy = (y / 2) * 6 + 3;
+            for (int x = 0; x < SYSTEM_CELL; ++x) {
+                const int sx = (x / 2) * 6 + 3;
+                const u8* src = source + (sy * w + sx) * 4;
+                u8* dst = atlas +
+                    (y * SYSTEM_ATLAS_W + icon * SYSTEM_CELL + x) * 4;
+                const bool frameBackground =
+                    src[0] <= 24 && src[1] <= 24 && src[2] <= 29;
+                if (!frameBackground) {
+                    /* The PC Engine's authored chassis is nearly white, so it
+                     * disappears into the light-theme cards. Use a quiet cool
+                     * gray for only those pale chassis pixels; preserve its
+                     * red and black details and every other console asset. */
+                    const bool palePcEngineChassis =
+                        icon == PC_ENGINE_ICON &&
+                        src[0] >= 224 && src[1] >= 224 && src[2] >= 224;
+                    dst[0] = palePcEngineChassis ? 0xB8 : src[0];
+                    dst[1] = palePcEngineChassis ? 0xC0 : src[1];
+                    dst[2] = palePcEngineChassis ? 0xC4 : src[2];
+                    dst[3] = src[3];
+                }
+            }
+        }
+        stbi_image_free(source);
+    }
+
+    return gfx::Renderer::createTexture(
+        s_systemIcons, SYSTEM_ATLAS_W, SYSTEM_CELL, GU_PSM_8888, atlas);
+}
+
 /* Draw `tex` 9-sliced with corner size `c` scaled from the baked CORNER. */
 void nineSlice(gfx::Renderer& r, const gfx::Texture& tex, float x, float y,
                float w, float h, float c, u32 color) {
@@ -127,7 +212,7 @@ void nineSlice(gfx::Renderer& r, const gfx::Texture& tex, float x, float y,
 
 }  // namespace
 
-bool init() { return bakeMasks(); }
+bool init() { return bakeMasks() && bakeSystemIcons(); }
 
 void roundedRect(gfx::Renderer& r, float x, float y, float w, float h,
                  float radius, u32 color) {
@@ -145,10 +230,16 @@ void roundedOutline(gfx::Renderer& r, float x, float y, float w, float h,
     nineSlice(r, s_roundRing, x, y, w, h, c, color);
 }
 
+void dropShadow(gfx::Renderer& r, float x, float y, float w, float h,
+                float radius, u32 color) {
+    roundedRect(r, x + 1.f, y + 2.f, w, h, radius, color);
+}
+
 void focusRow(gfx::Renderer& r, float x, float y, float w, float h,
-              u32 fill, u32 bar) {
+              u32 fill, u32 bar, u32 shadow) {
+    dropShadow(r, x, y, w, h, 8.f, shadow);
     roundedRect(r, x, y, w, h, 8.f, fill);
-    r.rect(x + 4.f, y + 4.f, 3.f, h - 8.f, bar);
+    roundedOutline(r, x, y, w, h, 8.f, bar);
 }
 
 void circle(gfx::Renderer& r, float cx, float cy, float radius, u32 color) {
@@ -197,6 +288,26 @@ void iconGear(gfx::Renderer& r, float cx, float cy, float radius, u32 color) {
     }
 }
 
+void iconSystem(gfx::Renderer& r, int systemIdx, float x, float y, float size,
+                u32 base, u32 detail) {
+    systemIdx = rsClamp(systemIdx, 0, SYSTEM_COUNT - 1);
+    x = float(int(x));
+    y = float(int(y));
+    size = size >= 48.f ? 64.f : 32.f;
+    if (systemIdx == CONSOLE_COUNT) {
+        iconGear(r, x + size * .5f, y + size * .5f, size * .3f, base);
+        return;
+    }
+    (void)detail;
+    const gfx::TexFilter previous = r.texFilter();
+    r.setTexFilter(gfx::TexFilter::Nearest);
+    const float sx = float(systemIdx * SYSTEM_CELL);
+    const u32 tint = rsWithAlpha(rsHex(0xFFFFFF), rsAlphaOf(base));
+    r.sprite(s_systemIcons, sx, 0.f, SYSTEM_CELL, SYSTEM_CELL,
+             x, y, size, size, tint);
+    r.setTexFilter(previous);
+}
+
 void buttonGlyph(gfx::Renderer& r, Button b, float cx, float cy, float radius,
                  u32 color) {
     const float k = radius * 0.62f;
@@ -231,24 +342,29 @@ void buttonGlyph(gfx::Renderer& r, Button b, float cx, float cy, float radius,
 
 void battery(gfx::Renderer& r, float x, float y, float level, bool charging,
              u32 color, u32 accent) {
-    constexpr float W = 22.f, H = 11.f;
-    roundedOutline(r, x, y, W, H, 3.f, color);
-    r.rect(x + W + 1.f, y + 3.f, 2.f, H - 6.f, color);  /* terminal nub */
+    /* Deliberately rectilinear and integer-aligned. The previous 22x11
+     * rounded mask was sampled across half pixels and looked blurry on an
+     * IPS PSP-1000 panel. */
+    x = float(int(x));
+    y = float(int(y));
+    constexpr float W = 18.f, H = 8.f;
+    r.rect(x, y, W, 1.f, color);
+    r.rect(x, y + H - 1.f, W, 1.f, color);
+    r.rect(x, y + 1.f, 1.f, H - 2.f, color);
+    r.rect(x + W - 1.f, y + 1.f, 1.f, H - 2.f, color);
+    r.rect(x + W, y + 2.f, 2.f, H - 4.f, color);
     if (level >= 0.f) {
-        const float fill = rsClamp(level, 0.f, 1.f) * (W - 5.f);
+        const float fill =
+            float(int(rsClamp(level, 0.f, 1.f) * (W - 4.f) + .5f));
         const u32 c = (charging || level > 0.25f) ? accent
                                                   : rsHex(0xE05252);
-        if (fill >= 1.f) roundedRect(r, x + 2.5f, y + 2.5f, fill, H - 5.f, 2.f, c);
+        if (fill >= 1.f) r.rect(x + 2.f, y + 2.f, fill, H - 4.f, c);
     } else {
-        r.line(x + 5.f, y + H * 0.5f, x + W - 5.f, y + H * 0.5f, 1.5f, color);
+        r.rect(x + 5.f, y + 3.f, W - 10.f, 1.f, color);
     }
     if (charging) {
-        /* Small bolt. */
-        const float bx = x + W * 0.5f, by = y + H * 0.5f;
-        r.tri(bx + 2.5f, by - 4.f, bx - 3.f, by + 1.f, bx + 0.5f, by + 1.f,
-              rsHex(0xFFFFFF));
-        r.tri(bx - 2.5f, by + 4.f, bx + 3.f, by - 1.f, bx - 0.5f, by - 1.f,
-              rsHex(0xFFFFFF));
+        r.rect(x + 8.f, y + 2.f, 2.f, 2.f, rsHex(0xFFFFFF));
+        r.rect(x + 7.f, y + 4.f, 2.f, 2.f, rsHex(0xFFFFFF));
     }
 }
 

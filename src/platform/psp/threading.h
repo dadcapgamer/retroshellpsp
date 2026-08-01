@@ -1,6 +1,6 @@
 /** Thin wrappers over PSP kernel threads and semaphores.
  *
- * RetroSuite uses exactly one background worker (the library scanner /
+ * RetroShell uses exactly one background worker (the library scanner /
  * asset loader); emulation itself always runs on the main thread.
  */
 #pragma once

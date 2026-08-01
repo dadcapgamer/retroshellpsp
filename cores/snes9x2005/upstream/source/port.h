@@ -8,7 +8,7 @@
 #include <sys/types.h>
 #include <retro_inline.h>
 
-#ifdef PSP
+#if defined(PSP) || defined(RS_PSP_NATIVE_PIXELS)
 #define PIXEL_FORMAT BGR555
 #else
 #define PIXEL_FORMAT RGB565

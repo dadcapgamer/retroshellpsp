@@ -39,8 +39,10 @@ public:
     void reset() {
         if (m_api) m_api->reset();
     }
-    void runFrame(u32 buttons) {
-        if (m_api) m_api->run_frame(buttons);
+    void runFrame(u32 buttons, bool renderVideo = true) {
+        if (m_api)
+            m_api->run_frame(buttons |
+                (renderVideo ? 0u : u32(RS_RUN_SKIP_VIDEO)));
     }
     RSVideoFrame frame() const {
         return m_api ? m_api->get_frame() : RSVideoFrame{};

@@ -26,9 +26,11 @@ namespace rs {
  * frontend teardown around a core launch — the "FrontendSnapshot" of the
  * bi-layer protocol. Plain data only. */
 struct FrontendSnapshot {
-    int  catIdx  = 2;      /* home category */
+    int  catIdx  = 0;      /* home console (GB) */
     int  listIdx = 0;
+    int  recentIdx = 0;
     bool inList  = false;
+    bool recentFocus = false;
 };
 
 class App {
@@ -62,7 +64,7 @@ public:
     const theme::Theme& theme() const { return m_theme; }
     bool darkTheme() const            { return m_theme.palette.dark; }
     void setThemeById(const std::string& id);   /* animated crossfade */
-    void toggleTheme();
+    void setAccentIndex(int index);
 
     /* --- scenes ---------------------------------------------------------- */
     /* Takes ownership; transitions through a brief scrim fade. */

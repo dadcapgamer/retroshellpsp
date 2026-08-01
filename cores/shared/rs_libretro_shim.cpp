@@ -15,6 +15,11 @@
 #include <cstdlib>
 #include <cstring>
 
+#if defined(RS_PSP_NATIVE_PIXELS) || defined(RS_PSP_NATIVE_RGB565)
+#define RS_PSP_NATIVE_VIDEO
+#include <pspkernel.h>
+#endif
+
 #ifndef RS_CORE_NAME
 #error "core CMakeLists must define RS_CORE_NAME"
 #endif
@@ -22,17 +27,25 @@
 #error "core CMakeLists must define RS_CORE_SYSTEMS"
 #endif
 
+#ifdef RS_PSP_SECRET_OF_MANA_HIRES_RESOLVE
+extern "C" bool rs_psp_hires_prefer_blue(void);
+#endif
+
 namespace {
 
 const RSHostAPI* g_host;
 uint32_t g_buttons;
+bool g_videoEnabled = true;
 
-/* Converted, PSP-native copy of the core's latest frame. */
+/* Converted, PSP-native copy of the core's latest frame. Native-video cores
+ * already render in the GE's channel ordering, so their ordinary frames are
+ * borrowed directly and this allocation is omitted. */
 uint16_t* g_frame;             /* also holds 8888 data (cast) */
 uint32_t  g_frameCap;          /* capacity in bytes */
 RSVideoFrame g_frameInfo;
 
 retro_pixel_format g_srcFormat = RETRO_PIXEL_FORMAT_0RGB1555;
+retro_audio_buffer_status_callback_t g_audioBufferStatus;
 
 /* The active ROM, remembered so the shim can answer both the classic
  * retro_game_info path and the newer GET_GAME_INFO_EXT query — modern
@@ -71,7 +84,7 @@ bool safeVfsPath(const char* path) {
         std::strstr(path, ".."))
         return false;
     return std::strncmp(path, "ms0:/ROMS/", 10) == 0 ||
-           std::strncmp(path, "ms0:/RETROSUITE/system/", 23) == 0;
+           std::strncmp(path, "ms0:/RETROSHELL/system/", 23) == 0;
 }
 
 const char* vfsGetPath(retro_vfs_file_handle* stream) {
@@ -138,6 +151,7 @@ int64_t vfsRead(retro_vfs_file_handle* stream, void* dst, uint64_t len) {
     return got;
 }
 
+int64_t vfsTruncate(retro_vfs_file_handle*, int64_t) { return -1; }
 int64_t vfsWrite(retro_vfs_file_handle*, const void*, uint64_t) { return -1; }
 int vfsFlush(retro_vfs_file_handle*) { return -1; }
 int vfsRemove(const char*) { return -1; }
@@ -145,9 +159,10 @@ int vfsRename(const char*, const char*) { return -1; }
 
 retro_vfs_interface g_vfs = {
     vfsGetPath, vfsOpen, vfsClose, vfsSize, vfsTell, vfsSeek, vfsRead,
-    vfsWrite, vfsFlush, vfsRemove, vfsRename
+    vfsWrite, vfsFlush, vfsRemove, vfsRename, vfsTruncate
 };
 
+#ifndef RS_PSP_NATIVE_VIDEO
 /* Maps a libretro pixel format to the matching RS_PIXFMT_*. */
 uint8_t rsPixFmt(retro_pixel_format f) {
     switch (f) {
@@ -199,6 +214,7 @@ void convertXRGB8888(const uint8_t* src, unsigned w, unsigned h, size_t pitch) {
     }
     g_frameInfo.format = RS_PIXFMT_RGBA8888;
 }
+#endif
 
 /* ------------------------------------------------------------------ */
 /* libretro callbacks                                                  */
@@ -228,22 +244,42 @@ bool environment(unsigned cmd, void* data) {
         case RETRO_ENVIRONMENT_GET_CAN_DUPE:
             *static_cast<bool*>(data) = true;
             return true;
+        case RETRO_ENVIRONMENT_GET_AUDIO_VIDEO_ENABLE:
+            /* Audio always runs. The frontend may suppress video on a
+             * recovery frame so a 30 Hz PSP presentation can carry 60 Hz
+             * game logic without irregular automatic frameskip bursts. */
+            *static_cast<int*>(data) = (g_videoEnabled ? 1 : 0) | 2;
+            return true;
         case RETRO_ENVIRONMENT_GET_LOG_INTERFACE:
             static_cast<retro_log_callback*>(data)->log = logPrintf;
             return true;
         case RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY:
-            *static_cast<const char**>(data) = "ms0:/RETROSUITE/system";
+            *static_cast<const char**>(data) = "ms0:/RETROSHELL/system";
             return true;
         case RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY:
             /* SRAM is persisted by the frontend through the API table, but
              * some cores insist on a directory existing. */
-            *static_cast<const char**>(data) = "ms0:/RETROSUITE/saves";
+            *static_cast<const char**>(data) = "ms0:/RETROSHELL/saves";
+            return true;
+        case RETRO_ENVIRONMENT_SET_AUDIO_BUFFER_STATUS_CALLBACK: {
+            if (!data) {
+                g_audioBufferStatus = nullptr;
+                return true;
+            }
+            const auto* status =
+                static_cast<const retro_audio_buffer_status_callback*>(data);
+            g_audioBufferStatus = status->callback;
+            return true;
+        }
+        case RETRO_ENVIRONMENT_SET_MINIMUM_AUDIO_LATENCY:
+            /* The PSP output ring already provides about 186 ms at 44.1 kHz,
+             * above the SNES cores' requested latency. */
             return true;
 #ifdef RETRO_ENVIRONMENT_GET_VFS_INTERFACE
         case RETRO_ENVIRONMENT_GET_VFS_INTERFACE: {
             auto* info = static_cast<retro_vfs_interface_info*>(data);
-            if (!info || info->required_interface_version > 1) return false;
-            info->required_interface_version = 1;
+            if (!info || info->required_interface_version > 2) return false;
+            info->required_interface_version = 2;
             info->iface = &g_vfs;
             return true;
         }
@@ -251,6 +287,39 @@ bool environment(unsigned cmd, void* data) {
         case RETRO_ENVIRONMENT_GET_VARIABLE: {
             auto* var = static_cast<retro_variable*>(data);
             var->value = g_host->get_option(var->key);
+#ifdef RS_GPSP_PSP_DEFAULTS
+            /* gpSP's desktop-oriented defaults mix at 65.5 kHz and never
+             * skip video when audio is close to starvation. On a 333 MHz
+             * PSP, 32.8 kHz preserves the GBA's practical audio bandwidth
+             * while halving mixer work. Auto frameskip is only activated
+             * for an imminent underrun reported by the host, so ordinary
+             * full-speed play still renders every frame. Per-game options
+             * always take precedence over these platform defaults. */
+            if (!var->value &&
+                std::strcmp(var->key, "gpsp_sound_rate") == 0) {
+                var->value = "32768";
+                g_host->log(RS_LOG_INFO,
+                            "PSP default: gpsp_sound_rate=32768");
+            } else if (!var->value &&
+                       std::strcmp(var->key, "gpsp_frameskip") == 0) {
+                var->value = "auto";
+                g_host->log(RS_LOG_INFO,
+                            "PSP default: gpsp_frameskip=auto");
+            }
+#endif
+#ifdef RS_PICODRIVE_PSP_DEFAULTS
+            /* The upstream standalone PSP port mixes at 32 kHz-class rates.
+             * Keeping the libretro desktop default of 44.1 kHz adds FM/PSG
+             * work and host resampling while real PSP Genesis workloads are
+             * already CPU-bound. This supported core option remains
+             * overridable by a per-game setting. */
+            if (!var->value &&
+                std::strcmp(var->key, "picodrive_sound_rate") == 0) {
+                var->value = "32000";
+                g_host->log(RS_LOG_INFO,
+                            "PSP default: picodrive_sound_rate=32000");
+            }
+#endif
             return var->value != nullptr;
         }
         case RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE:
@@ -338,13 +407,13 @@ void videoRefresh(const void* data, unsigned w, unsigned h, size_t pitch) {
                     int(g_srcFormat), nonzero, w * h);
     }
 #endif
-    if (!data || !g_frame) return;   /* NULL = duped frame, keep the last */
+    if (!data) return;   /* NULL = duped frame, keep the last */
 
     const unsigned bpp = (g_srcFormat == RETRO_PIXEL_FORMAT_XRGB8888) ? 4 : 2;
     const uint64_t bytes = uint64_t(w) * uint64_t(h) * bpp;
     if (!w || !h || w > MAX_GEOMETRY || h > MAX_GEOMETRY ||
         pitch < size_t(w) * bpp || bytes > g_frameCap ||
-        uint64_t(w) * bpp > UINT16_MAX) {
+        uint64_t(w) * bpp > UINT16_MAX || pitch > UINT16_MAX) {
         /* Larger than the load-time allocation — a core that grew its
          * geometry at runtime (which the shim doesn't support). Skip the
          * frame loudly rather than overrun the buffer. */
@@ -353,6 +422,83 @@ void videoRefresh(const void* data, unsigned w, unsigned h, size_t pitch) {
         return;
     }
 
+#ifdef RS_PSP_NATIVE_PIXELS
+    /* Snes9x's PSP renderer writes BGR555, the native channel ordering for
+     * GU_PSM_5551. Keep the core isolated from sceGu while avoiding the old
+     * full-frame R/B swap. The core owns this storage and guarantees it
+     * through the next run.
+     *
+     * The GE does not snoop Allegrex's data cache. Upstream's native PSP
+     * path explicitly writes this range back before binding it as a texture;
+     * the isolated callback must do the same. Without it, cache-line eviction
+     * determines which freshly rendered tiles reach the display, producing
+     * partially stale effects such as corrupted Secret of Mana window fills. */
+    if (w == 512 && g_frame) {
+        /* SNES pseudo-hires transparency interleaves main- and sub-screen
+         * pixels. Sending all 512 columns to the 480-wide PSP display creates
+         * severe vertical moire instead of the intended blended window.
+         * Resolve each adjacent BGR555 pair into one format-correct pixel.
+         * This is also the appropriate PSP tradeoff for genuine hi-res modes:
+         * their native width exceeds the physical display. */
+        const bool preferBlue =
+#ifdef RS_PSP_SECRET_OF_MANA_HIRES_RESOLVE
+            rs_psp_hires_prefer_blue();
+#else
+            false;
+#endif
+        for (unsigned y = 0; y < h; y++) {
+            const uint16_t* src = reinterpret_cast<const uint16_t*>(
+                static_cast<const uint8_t*>(data) + size_t(y) * pitch);
+            uint16_t* dst = g_frame + size_t(y) * 256u;
+            for (unsigned x = 0; x < 256; x++) {
+                const uint16_t a = src[x * 2u];
+                const uint16_t b = src[x * 2u + 1u];
+                /* Secret of Mana's hi-res dialogue alternates its intended
+                 * blue/text sample with a sub-screen sample. TYL resolves
+                 * those screens in separate GU passes. On the clean US ROM,
+                 * choose the member with the larger BGR555 blue component:
+                 * dark-blue fill and white glyphs win over the room/black
+                 * sample. Other titles retain the format-correct average. */
+                if (preferBlue && ((a ^ b) & 0x7FFFu))
+                    dst[x] = ((a >> 10) & 31u) >= ((b >> 10) & 31u) ? a : b;
+                else
+                    dst[x] = uint16_t(
+                        (((a & 0x7BDEu) + (b & 0x7BDEu)) >> 1) +
+                        (a & b & 0x0421u));
+            }
+        }
+        const size_t resolvedBytes = size_t(256u) * h * sizeof(uint16_t);
+        sceKernelDcacheWritebackRange(g_frame, resolvedBytes);
+        g_frameInfo.pixels = g_frame;
+        g_frameInfo.width  = 256;
+        g_frameInfo.pitch  = 256 * sizeof(uint16_t);
+    } else {
+        sceKernelDcacheWritebackRange(
+            const_cast<void*>(data), size_t(pitch) * size_t(h));
+        g_frameInfo.pixels = data;
+        g_frameInfo.width  = uint16_t(w);
+        g_frameInfo.pitch  = uint16_t(pitch);
+    }
+    g_frameInfo.height = uint16_t(h);
+    g_frameInfo.format = RS_PIXFMT_RGBA5551;
+    g_frameInfo.storage_height = RS_PSP_NATIVE_STORAGE_HEIGHT;
+    g_frameInfo.sequence++;
+    return;
+#elif defined(RS_PSP_NATIVE_RGB565)
+    /* PicoDrive's PSP renderer can emit the GE's native BGR565 ordering.
+     * Borrow it through drawFrame(), avoiding a 320x240 per-pixel R/B swap.
+     * Its 320-pixel stride is not a power of two, so the frontend performs
+     * one bounded texture upload before the GE samples the frame. */
+    g_frameInfo.pixels = data;
+    g_frameInfo.width = uint16_t(w);
+    g_frameInfo.height = uint16_t(h);
+    g_frameInfo.pitch = uint16_t(pitch);
+    g_frameInfo.storage_height = uint16_t(h);
+    g_frameInfo.format = RS_PIXFMT_RGB565;
+    g_frameInfo.sequence++;
+    return;
+#else
+    if (!g_frame) return;
     const auto* src = static_cast<const uint8_t*>(data);
     switch (g_srcFormat) {
         case RETRO_PIXEL_FORMAT_RGB565:   convertRGB565(src, w, h, pitch); break;
@@ -363,6 +509,9 @@ void videoRefresh(const void* data, unsigned w, unsigned h, size_t pitch) {
     g_frameInfo.width  = uint16_t(w);
     g_frameInfo.height = uint16_t(h);
     g_frameInfo.pitch  = uint16_t(w * bpp);
+    g_frameInfo.storage_height = uint16_t(h);
+    g_frameInfo.sequence++;
+#endif
 }
 
 size_t audioBatch(const int16_t* data, size_t frames) {
@@ -433,6 +582,7 @@ static int coreInit(const RSHostAPI* host) {
      * host. Refuse a mismatch instead of calling through wrong slots. */
     if (!host || host->api_version != RS_HOST_API_VERSION) return -1;
     g_host = host;
+    g_audioBufferStatus = nullptr;
 
     /* Guard construction: static ctors and retro_init may fault, and a
      * fault here must unwind to the host, not kill its main thread. */
@@ -475,6 +625,7 @@ static void coreShutdown(void) {
     g_frame = nullptr;
     g_frameCap = 0;
     g_gameLoaded = false;
+    g_audioBufferStatus = nullptr;
     g_host = nullptr;
 }
 
@@ -490,7 +641,18 @@ static void coreReset(void) {
 
 static void coreRunFrame(uint32_t buttons) {
     if (g_faulted) return;   /* frozen after a fault; user exits via menu */
-    g_buttons = buttons;
+    g_videoEnabled = (buttons & RS_RUN_SKIP_VIDEO) == 0;
+    g_buttons = buttons & ~uint32_t(RS_RUN_SKIP_VIDEO);
+    if (g_audioBufferStatus) {
+        const uint32_t capacity = g_host->audio_capacity();
+        const uint32_t buffered = g_host->audio_buffered();
+        const unsigned occupancy =
+            capacity ? unsigned((uint64_t(buffered) * 100u) / capacity) : 0;
+        /* One PSP hardware block is the immediate starvation boundary.
+         * Auto frameskip suppresses rendering until emulation has rebuilt
+         * enough audio, then resumes full video automatically. */
+        g_audioBufferStatus(true, occupancy, buffered < 512u);
+    }
     g_faultArmed = true;
     if (setjmp(g_faultJmp) == 0) retro_run();
     g_faultArmed = false;
@@ -633,6 +795,7 @@ static int coreLoadRom(const char* path, const void* data, uint32_t size) {
         return -1;
     }
     g_frameCap = uint32_t(frameBytes);
+#if !defined(RS_PSP_NATIVE_VIDEO)
     g_frame = static_cast<uint16_t*>(g_host->mem_alloc(g_frameCap, 64));
     if (!g_frame) {
         g_host->log(RS_LOG_ERROR, "libretro shim: no memory for frame buffer");
@@ -640,12 +803,40 @@ static int coreLoadRom(const char* path, const void* data, uint32_t size) {
         return -1;
     }
     std::memset(g_frame, 0, g_frameCap);
+#elif defined(RS_PSP_NATIVE_PIXELS)
+    /* Small PSP-native resolve surface for 512-wide pseudo-hires/hires
+     * frames. Ordinary 256-wide output remains zero-copy. */
+    const uint64_t resolveBytes =
+        uint64_t(256u) * av.geometry.max_height * sizeof(uint16_t);
+    g_frame = resolveBytes <= UINT32_MAX
+        ? static_cast<uint16_t*>(
+              g_host->mem_alloc(uint32_t(resolveBytes), 64))
+        : nullptr;
+    if (!g_frame) {
+        g_host->log(RS_LOG_ERROR,
+                    "libretro shim: no memory for PSP hires resolve");
+        retro_unload_game();
+        return -1;
+    }
+    std::memset(g_frame, 0, size_t(resolveBytes));
+#else
+    g_frame = nullptr;
+#endif
     g_frameInfo = {};
+#ifndef RS_PSP_NATIVE_VIDEO
     g_frameInfo.pixels = g_frame;
+#endif
     g_frameInfo.width  = uint16_t(av.geometry.base_width);
     g_frameInfo.height = uint16_t(av.geometry.base_height);
     g_frameInfo.pitch  = uint16_t(av.geometry.base_width * bpp);
+    g_frameInfo.storage_height = uint16_t(av.geometry.base_height);
+#ifdef RS_PSP_NATIVE_PIXELS
+    g_frameInfo.format = RS_PIXFMT_RGBA5551;
+#elif defined(RS_PSP_NATIVE_RGB565)
+    g_frameInfo.format = RS_PIXFMT_RGB565;
+#else
     g_frameInfo.format = rsPixFmt(g_srcFormat);
+#endif
 
     g_api.fps = av.timing.fps;
     g_api.audio_rate = uint32_t(av.timing.sample_rate);
@@ -659,6 +850,10 @@ static int coreLoadRom(const char* path, const void* data, uint32_t size) {
     g_host->log(RS_LOG_INFO, "libretro shim: %ux%u @%.2ffps, audio %u Hz",
                 av.geometry.base_width, av.geometry.base_height,
                 av.timing.fps, g_api.audio_rate);
+#ifdef RS_PSP_NATIVE_VIDEO
+    g_host->log(RS_LOG_INFO,
+                "libretro shim: PSP-native video active (zero conversion)");
+#endif
     return 0;
 }
 

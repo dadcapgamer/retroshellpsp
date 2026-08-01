@@ -1,8 +1,9 @@
 #!/bin/sh
-# RetroSuite PSP build script.
+# RetroShell PSP build script.
 #   ./build.sh            — configure (if needed) + build
 #   ./build.sh clean      — wipe the build directory
 #   ./build.sh test       — run repository audit tests
+#   ./build.sh qualify LOG — grade the latest real-PSP hardware run
 #   ./build.sh release    — build, audit, and create deterministic stable ZIP
 #   ./build.sh candidates — build a test-core EBOOT and drag-and-drop packages
 set -e
@@ -33,6 +34,22 @@ case "$1" in
     printf '{"malformed":[' | build-fuzz/fuzz_json
     printf 'PK\\003\\004broken' | build-fuzz/fuzz_zip
     exit 0
+    ;;
+  qualify)
+    if [ -z "$2" ]; then
+      echo "usage: ./build.sh qualify /path/to/retroshell.log" >&2
+      exit 2
+    fi
+    python3 tools/qualify_psp_log.py "$2"
+    exit $?
+    ;;
+  qualify-all)
+    if [ -z "$2" ]; then
+      echo "usage: ./build.sh qualify-all /path/to/retroshell.log" >&2
+      exit 2
+    fi
+    python3 tools/qualify_psp_matrix_log.py "$2"
+    exit $?
     ;;
   candidates)
     BUILD_DIR=build-candidates

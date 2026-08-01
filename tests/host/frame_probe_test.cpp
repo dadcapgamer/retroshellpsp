@@ -8,7 +8,8 @@ int main() {
     using rs::FrameProbe;
 
     std::array<std::uint16_t, 16 * 16> pixels{};
-    RSVideoFrame frame{pixels.data(), 16, 16, 32, RS_PIXFMT_RGB565, 0};
+    RSVideoFrame frame{
+        pixels.data(), 16, 16, 32, RS_PIXFMT_RGB565, 0, 16, 0, 1};
     FrameProbe probe;
 
     for (std::uint32_t i = 0; i < FrameProbe::BLACK_WARNING_FRAMES; ++i)
@@ -35,7 +36,8 @@ int main() {
         probe.observe(missing);
     assert(probe.missingWarning());
 
-    RSVideoFrame badPitch{pixels.data(), 16, 16, 2, RS_PIXFMT_RGB565, 0};
+    RSVideoFrame badPitch{
+        pixels.data(), 16, 16, 2, RS_PIXFMT_RGB565, 0, 16, 0, 1};
     probe.reset();
     probe.observe(badPitch);
     assert(probe.missingFrames() == 1);

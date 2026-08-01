@@ -1,5 +1,5 @@
 /*
- * assetgen — RetroSuite host-side asset baker (runs on the build machine).
+ * assetgen — RetroShell host-side asset baker (runs on the build machine).
  *
  * Bakes TTF fonts into .rsf atlases (format documented below and parsed by
  * src/frontend/text/font.cpp) and generates the PBP artwork (ICON0/PIC1).
@@ -25,6 +25,8 @@
 
 #define STB_TRUETYPE_IMPLEMENTATION
 #include "../external/stb_truetype.h"
+#define STB_IMAGE_IMPLEMENTATION
+#include "../external/stb_image.h"
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "../external/stb_image_write.h"
 
@@ -149,102 +151,63 @@ static Canvas canvas_new(int w, int h) {
     return c;
 }
 
-static void canvas_vgradient(Canvas* c, uint32_t top, uint32_t bottom) {
-    /* Signed component math — unsigned deltas underflow when the gradient
-     * gets darker. */
-    const int tr = (top >> 16) & 0xFF, tg = (top >> 8) & 0xFF, tb = top & 0xFF;
-    const int br = (bottom >> 16) & 0xFF, bg = (bottom >> 8) & 0xFF,
-              bb = bottom & 0xFF;
-    for (int y = 0; y < c->h; y++) {
-        float t = (float)y / (float)(c->h - 1);
-        unsigned char r = (unsigned char)(tr + t * (br - tr));
-        unsigned char g = (unsigned char)(tg + t * (bg - tg));
-        unsigned char b = (unsigned char)(tb + t * (bb - tb));
-        for (int x = 0; x < c->w; x++) {
-            unsigned char* p = c->px + (y * c->w + x) * 4;
-            p[0] = r; p[1] = g; p[2] = b; p[3] = 0xFF;
-        }
-    }
-}
+static void make_pbp_art(const char* out_dir) {
+    char source_path[1024], output_path[1024];
+    int sw = 0, sh = 0, channels = 0;
 
-static void canvas_fill_rect(Canvas* c, int x0, int y0, int w, int h, uint32_t rgb) {
-    for (int y = y0; y < y0 + h && y < c->h; y++) {
-        if (y < 0) continue;
-        for (int x = x0; x < x0 + w && x < c->w; x++) {
-            if (x < 0) continue;
-            unsigned char* p = c->px + (y * c->w + x) * 4;
-            p[0] = (rgb >> 16) & 0xFF; p[1] = (rgb >> 8) & 0xFF; p[2] = rgb & 0xFF;
-        }
+    /* The committed Figma export is exactly 2x PSP resolution. Average each
+     * 2x2 block so antialiased type survives the native-resolution bake. */
+    snprintf(source_path, sizeof source_path,
+             "%s/branding/retroshell-splash-2x.png", out_dir);
+    unsigned char* source =
+        stbi_load(source_path, &sw, &sh, &channels, 4);
+    if (!source || sw != 960 || sh != 544) {
+        fprintf(stderr, "assetgen: expected a 960x544 splash at %s\n",
+                source_path);
+        exit(1);
     }
-}
-
-static int canvas_text(Canvas* c, const stbtt_fontinfo* font, float px,
-                       int x, int baseline, const char* text, uint32_t rgb,
-                       float alpha, int measure_only) {
-    float scale = stbtt_ScaleForPixelHeight(font, px);
-    int pen = x;
-    for (const char* s = text; *s; s++) {
-        int adv, lsb, gx0, gy0, gx1, gy1;
-        stbtt_GetCodepointHMetrics(font, *s, &adv, &lsb);
-        if (!measure_only) {
-            stbtt_GetCodepointBitmapBox(font, *s, scale, scale, &gx0, &gy0, &gx1, &gy1);
-            int gw = gx1 - gx0, gh = gy1 - gy0;
-            if (gw > 0 && gh > 0) {
-                unsigned char* bmp = malloc((size_t)(gw * gh));
-                stbtt_MakeCodepointBitmap(font, bmp, gw, gh, gw, scale, scale, *s);
-                for (int yy = 0; yy < gh; yy++) {
-                    int py = baseline + gy0 + yy;
-                    if (py < 0 || py >= c->h) continue;
-                    for (int xx = 0; xx < gw; xx++) {
-                        int pxx = pen + gx0 + xx;
-                        if (pxx < 0 || pxx >= c->w) continue;
-                        float a = alpha * bmp[yy * gw + xx] / 255.0f;
-                        unsigned char* p = c->px + (py * c->w + pxx) * 4;
-                        p[0] = (unsigned char)(p[0] + a * ((int)((rgb >> 16) & 0xFF) - p[0]));
-                        p[1] = (unsigned char)(p[1] + a * ((int)((rgb >> 8) & 0xFF) - p[1]));
-                        p[2] = (unsigned char)(p[2] + a * ((int)(rgb & 0xFF) - p[2]));
-                    }
-                }
-                free(bmp);
+    Canvas splash = canvas_new(480, 272);
+    for (int y = 0; y < splash.h; y++) {
+        for (int x = 0; x < splash.w; x++) {
+            unsigned char* dst = splash.px + (y * splash.w + x) * 4;
+            for (int c = 0; c < 4; c++) {
+                unsigned sum = 0;
+                for (int yy = 0; yy < 2; yy++)
+                    for (int xx = 0; xx < 2; xx++)
+                        sum += source[
+                            (((y * 2 + yy) * sw + x * 2 + xx) * 4) + c];
+                dst[c] = (unsigned char)((sum + 2) / 4);
             }
         }
-        pen += (int)(adv * scale + 0.5f);
     }
-    return pen - x;
-}
+    snprintf(output_path, sizeof output_path, "%s/SPLASH.PNG", out_dir);
+    stbi_write_png(output_path, splash.w, splash.h, 4, splash.px,
+                   splash.w * 4);
+    printf("wrote %s\n", output_path);
+    snprintf(output_path, sizeof output_path, "%s/PIC1.PNG", out_dir);
+    stbi_write_png(output_path, splash.w, splash.h, 4, splash.px,
+                   splash.w * 4);
+    printf("wrote %s\n", output_path);
 
-static void make_pbp_art(const char* semibold_path, const char* out_dir) {
-    long size;
-    unsigned char* ttf = read_file(semibold_path, &size);
-    stbtt_fontinfo font;
-    stbtt_InitFont(&font, ttf, stbtt_GetFontOffsetForIndex(ttf, 0));
-    char path[1024];
+    /* ICON0 is authored as its own native-resolution Figma frame. Treat that
+     * export as the canonical source so a later font or splash bake cannot
+     * silently redraw the XMB identity. */
+    snprintf(source_path, sizeof source_path, "%s/xmb thumbnail.png", out_dir);
+    int iw = 0, ih = 0;
+    unsigned char* icon = stbi_load(source_path, &iw, &ih, &channels, 4);
+    if (!icon || iw != 144 || ih != 80) {
+        fprintf(stderr, "assetgen: expected a 144x80 XMB thumbnail at %s\n",
+                source_path);
+        exit(1);
+    }
 
-    /* ICON0 — 144x80 tile shown in the XMB game list. */
-    Canvas icon = canvas_new(144, 80);
-    canvas_vgradient(&icon, 0x141A24, 0x0C1017);
-    canvas_fill_rect(&icon, 0, 76, 144, 4, 0x2E7CF6);
-    int w = canvas_text(&icon, &font, 34, 0, 0, "RS", 0, 0, 1);
-    canvas_text(&icon, &font, 34, (144 - w) / 2, 40, "RS", 0xFFFFFF, 1.0f, 0);
-    w = canvas_text(&icon, &font, 13, 0, 0, "RetroSuite", 0, 0, 1);
-    canvas_text(&icon, &font, 13, (144 - w) / 2, 62, "RetroSuite", 0x7FA8E8, 1.0f, 0);
-    snprintf(path, sizeof path, "%s/ICON0.PNG", out_dir);
-    stbi_write_png(path, icon.w, icon.h, 4, icon.px, icon.w * 4);
-    printf("wrote %s\n", path);
+    stbi_image_free(source);
+    snprintf(output_path, sizeof output_path, "%s/ICON0.PNG", out_dir);
+    stbi_write_png(output_path, iw, ih, 4, icon, iw * 4);
+    printf("wrote %s\n", output_path);
 
-    /* PIC1 — 480x272 XMB background while the game is highlighted. */
-    Canvas pic = canvas_new(480, 272);
-    canvas_vgradient(&pic, 0x101722, 0x090C12);
-    w = canvas_text(&pic, &font, 30, 0, 0, "RetroSuite", 0, 0, 1);
-    canvas_text(&pic, &font, 30, 480 - w - 24, 236, "RetroSuite", 0xE8EEF8, 0.92f, 0);
-    canvas_fill_rect(&pic, 480 - w - 24, 246, w, 3, 0x2E7CF6);
-    snprintf(path, sizeof path, "%s/PIC1.PNG", out_dir);
-    stbi_write_png(path, pic.w, pic.h, 4, pic.px, pic.w * 4);
-    printf("wrote %s\n", path);
-
-    free(icon.px);
-    free(pic.px);
-    free(ttf);
+    stbi_image_free(icon);
+    free(splash.px);
 }
 
 /* ------------------------------------------------------------------ */
@@ -270,7 +233,6 @@ int main(int argc, char** argv) {
     snprintf(rsf, sizeof rsf, "%s/fonts/font_small.rsf", out);
     bake_font(ttf, 12, rsf);
 
-    snprintf(ttf, sizeof ttf, "%s/Inter-SemiBold.ttf", fdir);
-    make_pbp_art(ttf, out);
+    make_pbp_art(out);
     return 0;
 }

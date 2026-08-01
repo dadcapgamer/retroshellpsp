@@ -8,7 +8,6 @@
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
-#include <map>
 #include <string>
 
 namespace rs::host {
@@ -18,12 +17,19 @@ namespace {
 u32 s_gameHash = 0;
 volatile u32 s_input = 0;
 
-/* Options for the active game, resolved once each and cached in memory: a
- * core may call get_option every frame, and cfg::gameOption reads+parses a
- * Memory Stick file per call, which would stall real hardware. std::map
- * gives stable storage so the borrowed const char* stays valid. Cleared
- * when the active game changes. */
-std::map<std::string, std::string> s_optCache;
+/* Options for the active game, resolved once each and cached in fixed
+ * storage. A std::map used here previously retained one heap allocation per
+ * option queried by a feature-rich core. Large option sets can exhaust or
+ * fragment the PSP-1000's small newlib heap immediately after loading.
+ * The libretro callback needs stable borrowed strings, not a dynamic map. */
+struct OptionEntry {
+    char key[65] = {};
+    char value[257] = {};
+    bool used = false;
+};
+constexpr int MAX_OPTION_ENTRIES = 64;
+OptionEntry s_optCache[MAX_OPTION_ENTRIES];
+bool s_optionCacheFullLogged = false;
 
 /* The arena remains a bump allocator, but libretro cores expect free() to
  * make transient blocks reusable. Track core allocations without using the
@@ -111,6 +117,9 @@ void hostPush(const int16_t* stereo, uint32_t frames) {
     audio::push(stereo, frames);
 }
 
+uint32_t hostAudioBuffered() { return audio::buffered(); }
+uint32_t hostAudioCapacity() { return audio::capacity(); }
+
 uint32_t hostInput() { return s_input; }
 
 int32_t hostFileSize(const char* path) { return fs::fileSize(path); }
@@ -121,10 +130,26 @@ int32_t hostFileRead(const char* path, void* buf, uint32_t offset,
 }
 
 const char* hostGetOption(const char* key) {
-    auto it = s_optCache.find(key);
-    if (it == s_optCache.end())   /* first query for this key: read once */
-        it = s_optCache.emplace(key, cfg::gameOption(s_gameHash, key)).first;
-    return it->second.empty() ? nullptr : it->second.c_str();
+    if (!key || !*key || std::strlen(key) >= sizeof(OptionEntry::key))
+        return nullptr;
+    OptionEntry* empty = nullptr;
+    for (auto& entry : s_optCache) {
+        if (entry.used && std::strcmp(entry.key, key) == 0)
+            return entry.value[0] ? entry.value : nullptr;
+        if (!entry.used && !empty) empty = &entry;
+    }
+    if (!empty) {
+        if (!s_optionCacheFullLogged) {
+            RS_LOGW("core options: fixed cache full");
+            s_optionCacheFullLogged = true;
+        }
+        return nullptr;
+    }
+    std::string value = cfg::gameOption(s_gameHash, key);
+    std::snprintf(empty->key, sizeof empty->key, "%s", key);
+    std::snprintf(empty->value, sizeof empty->value, "%s", value.c_str());
+    empty->used = true;
+    return empty->value[0] ? empty->value : nullptr;
 }
 
 const RSHostAPI s_table = {
@@ -135,6 +160,8 @@ const RSHostAPI s_table = {
     &hostAvailable,
     &hostSetRate,
     &hostPush,
+    &hostAudioBuffered,
+    &hostAudioCapacity,
     &hostInput,
     &hostFileSize,
     &hostFileRead,
@@ -166,7 +193,8 @@ u32 allocationFailures() {
 
 void setActiveGame(u32 pathHash) {
     s_gameHash = pathHash;
-    s_optCache.clear();   /* options are per-game */
+    for (auto& entry : s_optCache) entry = OptionEntry{};
+    s_optionCacheFullLogged = false;
 }
 void setInputState(u32 rsButtons) { s_input = rsButtons; }
 

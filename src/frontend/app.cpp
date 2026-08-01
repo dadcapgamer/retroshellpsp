@@ -11,23 +11,79 @@
 #include "runtime/log.h"
 
 #include <pspkernel.h>
+#include <pspgu.h>
 
 #include <cmath>
 #include <cstdio>
+
+#include "stb_image.h"
 
 /* Baked font atlases embedded at build time (see cmake/rs_assets.cmake). */
 #include "rs_asset_font_title_rsf.h"
 #include "rs_asset_font_large_rsf.h"
 #include "rs_asset_font_body_rsf.h"
 #include "rs_asset_font_small_rsf.h"
+#include "rs_asset_splash_png.h"
 
 /* Set by the HOME-menu exit callback in main.cpp. */
 extern volatile bool g_exitRequested;
 
 namespace rs {
 
+namespace {
+
+bool drawStartupPlate(gfx::Renderer& renderer) {
+    int w = 0, h = 0, channels = 0;
+    stbi_uc* pixels = stbi_load_from_memory(
+        rs_asset_splash_png, int(rs_asset_splash_png_len),
+        &w, &h, &channels, 4);
+    gfx::Texture splash;
+    const bool ready = pixels && w == RS_SCREEN_W && h == RS_SCREEN_H &&
+        gfx::Renderer::createTexture(
+            splash, w, h, GU_PSM_8888, pixels, /*dynamic=*/false);
+    if (pixels) stbi_image_free(pixels);
+
+    renderer.beginFrame(rsHex(0xFAF5EE));
+    if (ready)
+        renderer.sprite(splash, 0, 0, w, h, 0, 0,
+                        RS_SCREEN_W, RS_SCREEN_H, rsHex(0xFFFFFF));
+    renderer.endFrame();
+
+    /* This is the first and only texture allocated before the persistent UI
+     * atlases. The GE has finished reading it, so reclaim its temporary VRAM
+     * immediately and let primitive/font initialization start from a clean
+     * cursor. */
+    gfx::Renderer::freeTexture(splash);
+    gfx::vram::freeAll();
+    return ready;
+}
+
+}  // namespace
+
 bool App::init() {
+    const u32 initStart = sceKernelGetSystemTimeLow();
     if (!m_renderer.init()) return false;
+
+    /* Present branding before Memory Stick logging, UI atlas creation,
+     * library loading, core discovery, or scanner startup. The framebuffer
+     * remains visible while those slower operations complete. */
+    const bool startupPlateReady = drawStartupPlate(m_renderer);
+    const u32 firstFrameUs = sceKernelGetSystemTimeLow() - initStart;
+    const fs::RootMigration migration = fs::migrateLegacyRoot();
+    log::init(/*toFile=*/true);
+    RS_LOGI("RetroShell starting");
+    if (migration != fs::RootMigration::None) {
+        const char* result = migration == fs::RootMigration::Renamed
+            ? "renamed"
+            : (migration == fs::RootMigration::Merged ? "merged" : "FAILED");
+        RS_LOGI("storage: legacy RETROSUITE migration %s", result);
+    }
+    RS_LOGI("arena: reserved %u KB (startup telemetry)",
+            static_cast<unsigned>(mem::totalSize() / 1024));
+    RS_LOGI("startup: first splash frame %u ms (%s)",
+            unsigned(firstFrameUs / 1000),
+            startupPlateReady ? "branded" : "solid fallback");
+
     if (!ui::prim::init()) {
         RS_LOGE("app: primitive bake failed");
         return false;
@@ -50,6 +106,15 @@ bool App::init() {
     if (!audio::init()) RS_LOGW("app: audio unavailable");
 
     cfg::load();
+    /* User-mode PSP applications cannot portably query the chassis model,
+     * but the constraint we care about is directly measurable: a PSP-1000
+     * yields roughly a 17 MB arena, while later 64 MB models yield far more.
+     * Leave generous separation from both values. */
+    const bool lowMemoryHardware = mem::totalSize() < 24u * 1024u * 1024u;
+    cfg::applyHardwareDefaults(lowMemoryHardware);
+    RS_LOGI("hardware: %u KB core arena, PSP-1000 Safe Mode %s",
+            unsigned(mem::totalSize() / 1024),
+            cfg::get().psp1000SafeMode ? "on" : "off");
     power::setCpuMhz(cfg::get().cpuMenuMhz);
 
     /* Fonts and primitive masks stay resident across core launches;
@@ -57,7 +122,7 @@ bool App::init() {
     gfx::vram::setBootMark();
 
     m_theme = theme::loadTheme(cfg::get().theme);
-    m_pal = m_theme.palette;
+    m_pal = theme::personalize(m_theme.palette, cfg::get().accent);
     m_themeFrom = m_pal;
 
     m_library.load();
@@ -67,7 +132,8 @@ bool App::init() {
 
     m_lastUs = sceKernelGetSystemTimeLow();
     switchScene(std::make_unique<BootScene>(), /*instant=*/true);
-    RS_LOGI("app: init complete");
+    RS_LOGI("app: init complete in %u ms",
+            unsigned((sceKernelGetSystemTimeLow() - initStart) / 1000));
     return true;
 }
 
@@ -100,7 +166,7 @@ void App::evictForCore() {
 
 void App::restoreAfterCore() {
     m_theme = theme::loadTheme(m_theme.id);
-    m_pal = m_theme.palette;
+    m_pal = theme::personalize(m_theme.palette, cfg::get().accent);
     m_themeFrom = m_pal;
     m_scanner.start();
     RS_LOGI("app: frontend restored");
@@ -108,6 +174,11 @@ void App::restoreAfterCore() {
 
 void App::shutdown() {
     m_scanner.stop();
+    if (m_scene) m_scene->shutdown(*this);
+    /* GameSession launch bookkeeping happens in the scene hook above, so
+     * save the library afterwards. This also makes HOME-button exits while
+     * a game is running retain their play statistics. */
+    m_library.save();
     m_scene.reset();
     m_pending.reset();
     m_boxart.clear();
@@ -131,8 +202,13 @@ void App::setThemeById(const std::string& id) {
     cfg::save();
 }
 
-void App::toggleTheme() {
-    setThemeById(darkTheme() ? "light" : "dark");
+void App::setAccentIndex(int index) {
+    index = rsClamp(index, 0, theme::ACCENT_COUNT - 1);
+    if (index == cfg::get().accent) return;
+    m_themeFrom = m_pal;
+    cfg::get().accent = index;
+    m_themeFade.start(0.22f);
+    cfg::save();
 }
 
 void App::switchScene(std::unique_ptr<Scene> next, bool instant) {
@@ -164,11 +240,21 @@ void App::run() {
         autopilot::tick(*this);
 #endif
         m_pad.poll();
+        if (cfg::get().uiSounds && audio::isPaused()) {
+            const u32 pressed = m_pad.pressed();
+            if (pressed & (PSP_CTRL_UP | PSP_CTRL_DOWN |
+                           PSP_CTRL_LEFT | PSP_CTRL_RIGHT)) {
+                audio::playUiSound(audio::UiSound::Move);
+            } else if (pressed & PSP_CTRL_CIRCLE) {
+                audio::playUiSound(audio::UiSound::Back);
+            } else if (pressed & (PSP_CTRL_CROSS | PSP_CTRL_SQUARE |
+                                  PSP_CTRL_TRIANGLE | PSP_CTRL_START)) {
+                audio::playUiSound(audio::UiSound::Confirm);
+            }
+        }
         update(dt);
         draw();
     }
-    /* Persist small state on the way out. */
-    m_library.save();
 }
 
 void App::update(float dt) {
@@ -177,9 +263,11 @@ void App::update(float dt) {
     /* Theme crossfade. */
     if (m_themeFade.running()) {
         const float t = ui::easeInOutQuad(m_themeFade.update(dt));
-        m_pal = theme::blend(m_themeFrom, m_theme.palette, t);
+        m_pal = theme::blend(
+            m_themeFrom,
+            theme::personalize(m_theme.palette, cfg::get().accent), t);
     } else {
-        m_pal = m_theme.palette;
+        m_pal = theme::personalize(m_theme.palette, cfg::get().accent);
     }
 
     /* Scene transition: fade out, swap, fade back in. */
@@ -198,6 +286,11 @@ void App::update(float dt) {
     if (m_scanner.takeResults(results)) {
         m_index.replaceAll(std::move(results));
         m_index.saveCache();
+        /* A rescan is also the explicit refresh path for artwork copied
+         * beside existing ROMs while the frontend is already running.
+         * Clear positive and negative entries so the next visible frame
+         * re-resolves the sibling/legacy paths. */
+        m_boxart.clear();
         RS_LOGI("index: refreshed, %d games", m_index.totalCount());
     }
 
@@ -267,43 +360,87 @@ void App::drawBackground() {
         m_renderer.sprite(m_theme.background, 0, 0,
                           m_theme.background.width, m_theme.background.height,
                           0, 0, RS_SCREEN_W, RS_SCREEN_H, rsHex(0xFFFFFF));
+    } else if (m_theme.id == "dark") {
+        /* The built-in dark theme is intentionally one uninterrupted field.
+         * Do not apply the ambient wash or watermark used by other themes. */
+        m_renderer.rect(0, 0, RS_SCREEN_W, RS_SCREEN_H, m_pal.bgTop);
+        return;
     } else {
         m_renderer.rectV(0, 0, RS_SCREEN_W, RS_SCREEN_H, m_pal.bgTop,
                          m_pal.bgBottom);
     }
     if (m_theme.waves) {
+        /* Explicit custom-theme compatibility. Built-in themes use the
+         * quieter static treatment below. */
         drawWave(158.f, 16.f, 1.0f, 0.45f, 0.0f, 130.f, m_pal.waveA);
         drawWave(186.f, 12.f, 1.4f, 0.32f, 2.1f, 100.f, m_pal.waveB);
+    } else if (!m_theme.background.valid()) {
+        /* A restrained ambient wash replaces the animated wave pattern.
+         * It is static, cheap, and keeps the center of the screen quiet. */
+        const u32 wash = rsWithAlpha(m_pal.accent, m_pal.dark ? 8u : 5u);
+        m_renderer.rectH(0.f, 26.f, RS_SCREEN_W, 88.f, wash,
+                         rsWithAlpha(wash, 0));
+
+        /* Barely-visible RetroShell cross watermark, aligned to the 8px grid. */
+        const u32 mark =
+            rsWithAlpha(m_pal.accent, m_pal.dark ? 8u : 5u);
+        m_renderer.rect(428.f, 204.f, 8.f, 8.f, mark);
+        m_renderer.rect(412.f, 204.f, 8.f, 8.f, mark);
+        m_renderer.rect(444.f, 204.f, 8.f, 8.f, mark);
+        m_renderer.rect(428.f, 188.f, 8.f, 8.f, mark);
+        m_renderer.rect(428.f, 220.f, 8.f, 8.f, mark);
     }
 }
 
 void App::drawTopBar() {
     const auto& f = m_fonts;
-    f.small.draw(m_renderer, 14.f, 8.f, "RetroSuite", m_pal.textDim);
+    f.small.draw(m_renderer, 12.f, 1.f, "RetroShell", m_pal.textDim);
 
-    /* Clock, right-aligned, with battery pill to its right. */
+    /* Clock, right-aligned, with a pixel-snapped battery to its right. */
     int hh = 0, mm = 0;
     power::clockNow(hh, mm);
-    char clock[8];
-    std::snprintf(clock, sizeof clock, "%d:%02d", hh, mm);
-    f.small.draw(m_renderer, RS_SCREEN_W - 46.f, 8.f, clock, m_pal.textSecondary,
+    char clock[12];
+    if (cfg::get().clock24Hour) {
+        std::snprintf(clock, sizeof clock, "%02d:%02d", hh, mm);
+    } else {
+        const char* suffix = hh < 12 ? "AM" : "PM";
+        const int displayHour = (hh % 12) == 0 ? 12 : hh % 12;
+        std::snprintf(clock, sizeof clock, "%d:%02d %s",
+                      displayHour, mm, suffix);
+    }
+    f.small.draw(m_renderer, RS_SCREEN_W - 40.f, 1.f, clock,
+                 m_pal.textSecondary,
                  text::Align::Right);
-    ui::prim::battery(m_renderer, RS_SCREEN_W - 38.f, 9.f,
+    ui::prim::battery(m_renderer, RS_SCREEN_W - 32.f, 3.f,
                       m_batteryPct < 0 ? -1.f : float(m_batteryPct) / 100.f,
                       m_batteryChg, m_pal.textSecondary, m_pal.accent);
+    /* One shared chrome rail for every frontend scene. */
+    m_renderer.rect(
+        0.f, 15.f, RS_SCREEN_W, 1.f,
+        rsWithAlpha(m_pal.panelOutline,
+                    rsClamp<u32>(
+                        u32(rsAlphaOf(m_pal.panelOutline) * 2u), 28u, 76u)));
 }
 
 void App::drawHintBar(const Hint* hints, int count) {
-    float x = RS_SCREEN_W - 14.f;
+    m_renderer.rect(
+        0.f, RS_SCREEN_H - 26.f, RS_SCREEN_W, 1.f,
+        rsWithAlpha(m_pal.panelOutline,
+                    rsClamp<u32>(
+                        u32(rsAlphaOf(m_pal.panelOutline) * 2u), 28u, 76u)));
+    m_fonts.small.draw(m_renderer, 20.f, RS_SCREEN_H - 17.f, "Actions",
+                       m_pal.textDim);
+
+    float x = RS_SCREEN_W - 20.f;
     for (int i = count - 1; i >= 0; i--) {
         const float w = m_fonts.small.measure(hints[i].label);
         x -= w;
-        m_fonts.small.draw(m_renderer, x, RS_SCREEN_H - 20.f, hints[i].label,
+        m_fonts.small.draw(m_renderer, x, RS_SCREEN_H - 17.f, hints[i].label,
                            m_pal.textSecondary);
-        x -= 12.f;
+        x -= 16.f;
         ui::prim::buttonGlyph(m_renderer, hints[i].button, x,
-                              RS_SCREEN_H - 13.f, 6.f, m_pal.textSecondary);
-        x -= 18.f;
+                              RS_SCREEN_H - 10.f, 6.f, m_pal.textSecondary);
+        x -= 16.f;
     }
 }
 
@@ -316,16 +453,19 @@ void App::drawToast() {
     else if (t > 0.8f) a = (1.f - t) / 0.2f;
     const u32 alpha = u32(a * 235.f);
 
-    const float w = m_fonts.body.measure(m_toastMsg) + 36.f;
+    const float w =
+        rsClamp(m_fonts.body.measure(m_toastMsg) + 32.f, 64.f, 448.f);
     const float x = (RS_SCREEN_W - w) / 2.f;
-    const float y = RS_SCREEN_H - 46.f;
-    ui::prim::roundedRect(m_renderer, x, y, w, 26.f, 12.f,
+    const float y = RS_SCREEN_H - 72.f;
+    ui::prim::roundedRect(m_renderer, x, y, w, 32.f, 12.f,
                           rsWithAlpha(darkTheme() ? rsHex(0x2A3242)
                                                   : rsHex(0x353C4A),
                                       alpha));
-    m_fonts.body.draw(m_renderer, RS_SCREEN_W / 2.f, y + 4.f, m_toastMsg,
+    m_renderer.setScissor(int(x + 16.f), int(y), int(w - 32.f), 32);
+    m_fonts.body.draw(m_renderer, RS_SCREEN_W / 2.f, y + 8.f, m_toastMsg,
                       rsWithAlpha(rsHex(0xF2F5FA), alpha),
                       text::Align::Center);
+    m_renderer.resetScissor();
 }
 
 void App::drawScanStatus() {
@@ -346,9 +486,13 @@ void App::drawDebugOverlay() {
     char buf[64];
     std::snprintf(buf, sizeof buf, "%.1f fps  %.2f ms", m_renderer.fps(),
                   m_renderer.frameMs());
-    ui::prim::roundedRect(m_renderer, 8.f, 24.f, 118.f, 18.f, 6.f,
+    /* Keep diagnostics in the otherwise-empty centre of the top bar. The
+     * old y=24 placement obscured every scene title and made correct layout
+     * look broken whenever Show FPS was enabled. */
+    ui::prim::roundedRect(m_renderer, 176.f, 4.f, 128.f, 18.f, 6.f,
                           rsHex(0x000000, 140));
-    m_fonts.small.draw(m_renderer, 14.f, 27.f, buf, rsHex(0x7CFF9B));
+    m_fonts.small.draw(m_renderer, 240.f, 7.f, buf, rsHex(0x7CFF9B),
+                       text::Align::Center);
 }
 #endif
 

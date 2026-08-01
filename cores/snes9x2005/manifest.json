@@ -1,7 +1,8 @@
 {
   "name": "snes9x2005",
-  "version": "1.0",
+  "version": "1.0-rs-tyl6",
   "systems": "snes",
   "priority": 100,
-  "testOnly": false
+  "testOnly": false,
+  "psp1000Safe": true
 }

@@ -21,11 +21,14 @@ public:
 private:
     enum Row {
         ROW_THEME = 0,
+        ROW_ACCENT,
+        ROW_TIME_FORMAT,
         ROW_CPU_MENU,
         ROW_CPU_GAME,
         ROW_UI_SOUNDS,
         ROW_SHOW_FPS,
         ROW_AUTOSAVE,
+        ROW_PSP1000_SAFE,
         ROW_RESCAN,
         ROW_COUNT
     };
@@ -36,6 +39,7 @@ private:
 
     int m_row = 0;
     ui::Smooth m_rowPos;
+    ui::Smooth m_scroll;
     ui::Tween m_entrance;
     std::vector<std::string> m_themes;
     int m_themeIdx = 0;
