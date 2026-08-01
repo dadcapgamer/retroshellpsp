@@ -35,6 +35,8 @@ async function resolveLatestRelease() {
 if (repository) {
   document.querySelectorAll("[data-github-link]").forEach((link) => {
     link.href = repository;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
   });
   setDownloadUrl(
     releaseVersion
