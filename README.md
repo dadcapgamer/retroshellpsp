@@ -72,6 +72,10 @@ The candidate command creates the versioned PSP ZIP and optional core packages u
 
 Do not submit copyrighted ROMs, BIOS files, or keys.
 
+## Credits
+
+RetroShell was built with Fable and OpenAI Codex. Product and interface design by Dadcap.
+
 ## License
 
 RetroShell is MIT licensed. Emulator cores and vendored libraries retain their upstream licenses. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
