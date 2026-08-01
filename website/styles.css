@@ -1,19 +1,3 @@
-@font-face {
-  font-family: "Geist";
-  src: url("assets/fonts/Geist.woff2") format("woff2");
-  font-style: normal;
-  font-weight: 400 600;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "Inclusive Sans";
-  src: url("assets/fonts/InclusiveSans-SemiBold.woff2") format("woff2");
-  font-style: normal;
-  font-weight: 600;
-  font-display: swap;
-}
-
 :root {
   --canvas: #faf5ee;
   --surface: #fffbf5;
@@ -38,7 +22,7 @@ body {
   overflow-x: clip;
   color: var(--ink);
   background: var(--canvas);
-  font-family: "Geist", system-ui, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-size: 16px;
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
@@ -48,7 +32,7 @@ img { display: block; max-width: 100%; }
 a { color: inherit; }
 button, a { -webkit-tap-highlight-color: transparent; }
 h1, h2, h3, p { margin: 0; }
-h1, h2, h3 { font-family: "Inclusive Sans", system-ui, sans-serif; font-weight: 600; text-wrap: balance; }
+h1, h2, h3 { font-family: inherit; font-weight: 600; text-wrap: balance; }
 p { text-wrap: pretty; }
 
 .skip-link {
@@ -258,7 +242,7 @@ p { text-wrap: pretty; }
   font-size: 16px;
   font-weight: 600;
 }
-.install-steps h3 { font-family: "Geist", system-ui, sans-serif; font-size: 16px; line-height: 1.67; }
+.install-steps h3 { font-family: inherit; font-size: 16px; line-height: 1.67; }
 .install-steps p { margin-top: 8px; color: var(--muted); line-height: 1.6; }
 .install-steps code { padding: 2px 4px; color: var(--ink); background: #eee2d6; border-radius: 4px; font-family: inherit; font-size: .88em; }
 
@@ -272,7 +256,7 @@ p { text-wrap: pretty; }
   border-top: 1px solid var(--rule);
   border-bottom: 1px solid var(--rule);
 }
-.support-heading h3 { font-family: "Geist", system-ui, sans-serif; font-size: 16px; line-height: 1.55; }
+.support-heading h3 { font-family: inherit; font-size: 16px; line-height: 1.55; }
 .support-heading p { max-width: 340px; margin-top: 8px; color: var(--muted); font-size: 12px; line-height: 1.65; }
 .support-levels { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; }
 .support-level { min-width: 0; padding-left: 16px; position: relative; }
