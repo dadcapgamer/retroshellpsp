@@ -1,6 +1,7 @@
 #include "frontend/scenes/home_scene.h"
 #include "frontend/app.h"
 #include "frontend/scenes/settings_scene.h"
+#include "frontend/ui/grid_window.h"
 #include "runtime/config.h"
 #include "runtime/save_manager.h"
 
@@ -804,8 +805,10 @@ void HomeScene::drawBrowser(App& app, float alpha) {
     if (warmIndex >= 0 && warmIndex < int(m_visible.size()))
         app.boxart().get(*m_visible[size_t(warmIndex)]);
 
+    const ui::GridWindow window = ui::visibleGridWindow(
+        int(m_visible.size()), GRID_COLS, GRID_ROWS, scrollRow);
     r.setScissor(16, int(GRID_TOP), 232, 164);
-    for (int i = 0; i < int(m_visible.size()); i++) {
+    for (int i = window.first; i < window.pastLast; i++) {
         const int row = i / GRID_COLS;
         const int col = i % GRID_COLS;
         const float x = 16.f + float(col) * GRID_STEP;

@@ -42,6 +42,9 @@ Testing and experimental cores may be hidden by **PSP-1000 Safe Mode**. Core sta
 ## ROMs and cover art
 
 RetroShell scans `ms0:/ROMS/` recursively. Folder names do not determine the system.
+After the first scan, RetroShell loads its cached index instead of walking the
+entire Memory Stick on every boot. Use **Settings → Rescan library** after
+adding, removing, or renaming ROM files.
 
 For cover art, place a PNG or JPG beside the ROM using the same base name:
 

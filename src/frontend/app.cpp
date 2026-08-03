@@ -126,9 +126,14 @@ bool App::init() {
     m_themeFrom = m_pal;
 
     m_library.load();
-    if (!m_index.loadCache()) RS_LOGI("index: no cache yet");
+    const bool libraryCached = m_index.loadCache();
+    if (!libraryCached) RS_LOGI("index: no cache yet");
     m_cores.discover();
-    m_scanner.start();
+    if (!libraryCached || m_index.totalCount() == 0) {
+        m_scanner.start();
+    } else {
+        RS_LOGI("scanner: using cached library; manual rescan available");
+    }
 
     m_lastUs = sceKernelGetSystemTimeLow();
     switchScene(std::make_unique<BootScene>(), /*instant=*/true);
@@ -168,7 +173,6 @@ void App::restoreAfterCore() {
     m_theme = theme::loadTheme(m_theme.id);
     m_pal = theme::personalize(m_theme.palette, cfg::get().accent);
     m_themeFrom = m_pal;
-    m_scanner.start();
     RS_LOGI("app: frontend restored");
 }
 
@@ -285,7 +289,9 @@ void App::update(float dt) {
     std::vector<db::GameEntry> results;
     if (m_scanner.takeResults(results)) {
         m_index.replaceAll(std::move(results));
-        m_index.saveCache();
+        if (!m_index.saveCache())
+            RS_LOGW("index: failed to save cache for %d games",
+                    m_index.totalCount());
         /* A rescan is also the explicit refresh path for artwork copied
          * beside existing ROMs while the frontend is already running.
          * Clear positive and negative entries so the next visible frame

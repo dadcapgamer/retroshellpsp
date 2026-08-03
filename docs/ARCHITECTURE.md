@@ -81,12 +81,14 @@ for cores and (eventually) UI sounds.
 
 ## Library
 
-- Scanner (worker thread) recursively walks the single `ms0:/ROMS/` tree.
-  Folder names are ignored and each game is assigned to a system by its
-  extension; ZIPs are identified from the central directory only (CRC32
-  comes free, nothing is decompressed at scan time).
+- Scanner (worker thread) recursively walks the single `ms0:/ROMS/` tree on
+  first boot, when the cache is empty, or when the user selects **Rescan
+  library**. Folder names are ignored and each game is assigned to a system
+  by its extension; ZIPs are identified from the central directory only
+  (CRC32 comes free, nothing is decompressed at scan time).
 - `GameIndex` keeps per-system sorted lists and a binary cache
-  (`RETROSHELL/cache/index.bin`) so boot shows the library instantly.
+  (`RETROSHELL/cache/index.bin`) so later boots show the library instantly
+  without repeating a full Memory Stick scan.
 - Games are keyed by the FNV-1a hash of their path (`pathHash`) for
   favorites/recents/per-game config. Box art first resolves beside the ROM
   using the same base filename, then falls back to
