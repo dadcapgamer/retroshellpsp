@@ -41,6 +41,7 @@ constexpr int   GRID_COLS     = 3;
 constexpr int   GRID_ROWS     = 2;
 constexpr int   GRID_VISIBLE  = GRID_COLS * GRID_ROWS;
 constexpr int   RECENT_VISIBLE = 5;
+constexpr float SELECTION_SETTLE_SECONDS = 0.18f;
 
 int gridStartRow(int index, int count) {
     if (count <= 0) return 0;
@@ -291,14 +292,26 @@ void HomeScene::rebuildRecents(App& app) {
 }
 
 void HomeScene::refreshSelection(App& app) {
+    (void)app;
     m_selCore = nullptr;
     m_selMultiCore = false;
+    m_selMeta = db::GameMeta{};
+    m_hydratedHash = 0;
+    m_selectionSettle = m_visible.empty() ? 0.f : SELECTION_SETTLE_SECONDS;
+}
+
+void HomeScene::hydrateSelection(App& app) {
     if (m_visible.empty()) return;
     const auto& g =
         *m_visible[size_t(rsClamp(m_listIdx, 0, int(m_visible.size()) - 1))];
-    m_selCore = app.cores().resolve(g);
+    if (m_hydratedHash == g.pathHash) return;
+    m_selCore = app.cores().defaultFor(g.system);
     m_selMultiCore = app.cores().hasChoice(g.system);
-    m_selMeta = db::loadMeta(g);   /* cached here, not re-read every frame */
+    /* The browsing panel is deliberately memory-backed. Optional metadata
+     * files remain available to explicit detail/settings flows, but moving
+     * the highlight must not parse JSON from the Memory Stick. */
+    app.boxart().get(g);
+    m_hydratedHash = g.pathHash;
 }
 
 void HomeScene::updateCats(App& app) {
@@ -593,7 +606,14 @@ void HomeScene::update(App& app, float dt) {
     m_listFocus.to(m_inList ? 1.f : 0.f);
     m_listFocus.update(dt, 11.f);
     m_scroll.to(float(gridStartRow(m_listIdx, int(m_visible.size()))));
+    const float scrollTarget = m_scroll.target;
+    if (std::fabs(scrollTarget - m_scroll.v) > 1.25f)
+        m_scroll.snap(scrollTarget);
     m_scroll.update(dt, 13.f);
+    if (m_selectionSettle > 0.f) {
+        m_selectionSettle -= dt;
+        if (m_selectionSettle <= 0.f) hydrateSelection(app);
+    }
     m_entrance.update(dt);
     m_pickerFade.update(dt);
     m_actionsFade.update(dt);
@@ -800,11 +820,6 @@ void HomeScene::drawBrowser(App& app, float alpha) {
     const float maxStartRow =
         float(rsClamp(totalRows - GRID_ROWS, 0, totalRows));
     const float scrollRow = rsClamp(m_scroll.v, 0.f, maxStartRow);
-    const int warmTile = int(app.time() * 18.f) % GRID_VISIBLE;
-    const int warmIndex = int(scrollRow) * GRID_COLS + warmTile;
-    if (warmIndex >= 0 && warmIndex < int(m_visible.size()))
-        app.boxart().get(*m_visible[size_t(warmIndex)]);
-
     const ui::GridWindow window = ui::visibleGridWindow(
         int(m_visible.size()), GRID_COLS, GRID_ROWS, scrollRow);
     r.setScissor(16, int(GRID_TOP), 232, 164);
@@ -857,7 +872,7 @@ void HomeScene::drawBrowser(App& app, float alpha) {
         rsWithAlpha(pal.panelOutline,
                     rsAlphaOf(pal.panelOutline) * a / 255u));
     const db::GameEntry& selected = *m_visible[size_t(m_listIdx)];
-    const gfx::Texture* selectedArt = app.boxart().get(selected);
+    const gfx::Texture* selectedArt = app.boxart().peek(selected);
     constexpr float ART_SIZE = 96.f;
     const float artX = px + (pw - ART_SIZE) * .5f;
     const float artY = py + 8.f;

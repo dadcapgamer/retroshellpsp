@@ -4,11 +4,11 @@ RetroShell is an open-source retro game launcher for the Sony PSP. It scans one 
 
 The project targets both the 32 MB PSP-1000 and later 64 MB models. It requires custom firmware.
 
-> **Beta:** `v1.0.0-beta.1` is the first public test release. Save data should be backed up before updating.
+> **Beta:** `v1.0.0-beta.2` is the current public test release. Save data should be backed up before updating.
 
 ## Install
 
-1. Download `RetroShell-PSP-v1.0.0-beta.1.zip` from [GitHub Releases](https://github.com/dadcapgamer/retroshellpsp/releases).
+1. Download `RetroShell-PSP-v1.0.0-beta.2.zip` from [GitHub Releases](https://github.com/dadcapgamer/retroshellpsp/releases).
 2. Extract the ZIP to the root of the PSP Memory Stick.
 3. Put ROM files anywhere inside `ms0:/ROMS/`.
 4. Open **Game → Memory Stick → RetroShell** on the PSP.
@@ -24,6 +24,14 @@ ms0:/ROMS/
 Games and BIOS files are not included.
 
 Existing `RETROSUITE` data is migrated to `RETROSHELL` on first boot. Saves, settings, artwork, logs, and installed cores are preserved.
+
+## Beta 2 changes
+
+- Keeps large libraries responsive by drawing only the visible game tiles.
+- Uses natural, case-insensitive game ordering and a persistent library cache.
+- Indexes beside-ROM cover art without repeated filesystem probes while scrolling.
+- Fixes PSP UI artifacts by isolating persistent menu textures and resetting GU state each frame.
+- Caps screenshots at 50 while leaving saves, SRAM, cores, and user ROMs untouched.
 
 ## Core status
 

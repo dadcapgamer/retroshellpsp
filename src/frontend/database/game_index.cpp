@@ -1,4 +1,5 @@
 #include "frontend/database/game_index.h"
+#include "frontend/database/natural_order.h"
 #include "platform/psp/fs_psp.h"
 #include "runtime/log.h"
 
@@ -9,7 +10,7 @@ namespace rs::db {
 
 namespace {
 constexpr u32 CACHE_MAGIC   = 0x58495352u;  /* "RSIX" */
-constexpr u32 CACHE_VERSION = 1;
+constexpr u32 CACHE_VERSION = 2;
 const char* CACHE_PATH = "ms0:/RETROSHELL/cache/index.bin";
 
 void put32(std::vector<u8>& v, u32 x) {
@@ -76,7 +77,7 @@ void GameIndex::replaceAll(std::vector<GameEntry> all) {
     for (auto& v : m_bySystem)
         std::sort(v.begin(), v.end(),
                   [](const GameEntry& a, const GameEntry& b) {
-                      return a.name < b.name;
+                      return naturalNameLess(a.name, b.name);
                   });
     m_generation++;   /* every prior GameEntry* is now dangling */
 }
@@ -97,6 +98,7 @@ bool GameIndex::saveCache() const {
             putStr(out, g.name);
             putStr(out, g.path);
             putStr(out, g.zipEntry);
+            putStr(out, g.artPath);
         }
     }
     fs::mkdirs("ms0:/RETROSHELL/cache");
@@ -124,7 +126,7 @@ bool GameIndex::loadCache() {
         if (!get32(p, end, g.pathHash) || !get32(p, end, g.crc32) ||
             !get32(p, end, g.size) || !get32(p, end, g.mtime) ||
             !getStr(p, end, g.name) || !getStr(p, end, g.path) ||
-            !getStr(p, end, g.zipEntry))
+            !getStr(p, end, g.zipEntry) || !getStr(p, end, g.artPath))
             return false;
         all.push_back(std::move(g));
     }

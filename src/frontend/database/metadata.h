@@ -2,10 +2,9 @@
  *
  * Box art first follows the ROM itself:
  *   ms0:/ROMS/.../<rom name>.(png|jpg|jpeg)
- * with the same base name as the ROM. The legacy centralized location
- * remains supported for community packs:
- *   ms0:/RETROSHELL/metadata/<SystemDir>/<rom name>.json
- *   ms0:/RETROSHELL/boxart/<SystemDir>/<rom name>.(png|jpg|jpeg)
+ * with the same base name as the ROM. Metadata can remain centralized;
+ * artwork is indexed beside ROMs so coverless entries require no failed
+ * filesystem probes during browsing.
  *
  * Box art decoding happens synchronously but is throttled to one image per
  * frame and cached; textures are dropped wholesale when the launch protocol
@@ -47,8 +46,11 @@ private:
         gfx::Texture tex;
     };
     static constexpr int SLOTS = 12;
+    static constexpr int MISSING_SLOTS = 192;
     Slot m_slots[SLOTS];
+    u32 m_missing[MISSING_SLOTS] = {};
     int m_clock = 0;
+    int m_missingClock = 0;
 };
 
 }  // namespace rs::db

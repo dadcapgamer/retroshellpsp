@@ -63,6 +63,8 @@ public:
     /* The core a plain launch would use, or nullptr when no installed core
      * claims the game's system. */
     const CoreInfo* resolve(const db::GameEntry& game) const;
+    /* Deterministic system default with no per-game Memory Stick lookup. */
+    const CoreInfo* defaultFor(db::System system) const;
 
     /* True when launching should first ask the user which core to use. */
     bool needsChoice(const db::GameEntry& game) const;

@@ -51,8 +51,13 @@ bool Font::load(const void* data, u32 size) {
     m_lineHeight = h.lineHeight;
 
     const u8* atlas = p + glyphBytes;
+    /* Persistent UI atlases stay linear in ordinary RAM. Real PSP hardware
+     * showed shared red/green corruption after the first clipped grid page
+     * when these assets used the swizzled-VRAM path. Fonts are small enough
+     * that this isolation is a better trade than sharing the emulator's
+     * texture memory and cache state. */
     if (!gfx::Renderer::createTexture(m_tex, h.atlasW, h.atlasH, GU_PSM_T8,
-                                      atlas)) {
+                                      atlas, /*dynamic=*/true)) {
         std::free(m_glyphs);
         m_glyphs = nullptr;
         return false;

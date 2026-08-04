@@ -90,10 +90,11 @@ for cores and (eventually) UI sounds.
   (`RETROSHELL/cache/index.bin`) so later boots show the library instantly
   without repeating a full Memory Stick scan.
 - Games are keyed by the FNV-1a hash of their path (`pathHash`) for
-  favorites/recents/per-game config. Box art first resolves beside the ROM
-  using the same base filename, then falls back to
-  `RETROSHELL/boxart/<System>/` for community packs. Metadata remains keyed
-  by filename under `RETROSHELL/metadata/<System>/`.
+  favorites/recents/per-game config. Box art is indexed beside the ROM using
+  the same base filename, preventing coverless games from causing repeated
+  Memory Stick probes while scrolling. Metadata remains keyed by filename
+  under `RETROSHELL/metadata/<System>/` and is not read during normal grid
+  navigation.
 
 ## Themes
 

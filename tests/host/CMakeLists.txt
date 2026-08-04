@@ -25,3 +25,11 @@ target_compile_options(grid_window_test PRIVATE -Wall -Wextra -Werror
   -fsanitize=address,undefined -fno-omit-frame-pointer)
 target_link_options(grid_window_test PRIVATE -fsanitize=address,undefined)
 add_test(NAME grid_window_test COMMAND grid_window_test)
+
+add_executable(natural_order_test natural_order_test.cpp)
+target_compile_features(natural_order_test PRIVATE cxx_std_17)
+target_include_directories(natural_order_test PRIVATE ../..)
+target_compile_options(natural_order_test PRIVATE -Wall -Wextra -Werror
+  -fsanitize=address,undefined -fno-omit-frame-pointer)
+target_link_options(natural_order_test PRIVATE -fsanitize=address,undefined)
+add_test(NAME natural_order_test COMMAND natural_order_test)

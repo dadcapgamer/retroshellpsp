@@ -8,6 +8,7 @@
 
 #include <cctype>
 #include <cstring>
+#include <unordered_map>
 
 namespace rs::db {
 
@@ -36,6 +37,13 @@ std::string displayName(const char* fileName) {
     const size_t dot = n.rfind('.');
     if (dot != std::string::npos && dot > 0) n.resize(dot);
     return n;
+}
+
+std::string foldedStem(const char* fileName) {
+    std::string stem = displayName(fileName);
+    for (char& c : stem)
+        c = char(std::tolower(static_cast<unsigned char>(c)));
+    return stem;
 }
 
 const SystemInfo* systemForExtension(const char* ext) {
@@ -154,6 +162,22 @@ void RomScanner::scanDirectory(const std::string& directory, int depth) {
     std::vector<fs::DirEntry> entries;
     if (!fs::listDir(directory.c_str(), entries)) return;
     std::vector<std::string> subdirectories;
+    std::unordered_map<std::string, std::string> siblingArt;
+
+    /* Resolve covers once while the directory is already in memory. This
+     * turns selection of a coverless game into zero Memory Stick accesses,
+     * instead of probing six extensions for every highlighted ROM. */
+    for (const auto& e : entries) {
+        if (e.isDir) continue;
+        char ext[16];
+        extOf(e.name.c_str(), ext);
+        if (std::strcmp(ext, "png") == 0 || std::strcmp(ext, "jpg") == 0 ||
+            std::strcmp(ext, "jpeg") == 0) {
+            const std::string path = directory + "/" + e.name;
+            if (path.size() <= MAX_ROM_PATH)
+                siblingArt.emplace(foldedStem(e.name.c_str()), path);
+        }
+    }
 
     for (const auto& e : entries) {
         if (m_stopRequested.load() ||
@@ -182,6 +206,9 @@ void RomScanner::scanDirectory(const std::string& directory, int depth) {
         g.name  = displayName(e.name.c_str());
         g.path  = path;
         g.mtime = e.mtime;
+        if (const auto art = siblingArt.find(foldedStem(e.name.c_str()));
+            art != siblingArt.end())
+            g.artPath = art->second;
 
         if (std::strcmp(ext, "zip") == 0) {
             if (!peekZip(g.path.c_str(), g)) continue;

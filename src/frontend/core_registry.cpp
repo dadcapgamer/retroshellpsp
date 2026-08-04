@@ -106,8 +106,12 @@ const CoreInfo* CoreRegistry::resolve(const db::GameEntry& game) const {
         if (c && c->serves(game.system)) return c;
         /* A remembered core that vanished falls through to the default. */
     }
+    return defaultFor(game.system);
+}
+
+const CoreInfo* CoreRegistry::defaultFor(db::System system) const {
     for (const auto& c : m_cores)
-        if (c.serves(game.system)) return &c;
+        if (c.serves(system)) return &c;
     return nullptr;
 }
 

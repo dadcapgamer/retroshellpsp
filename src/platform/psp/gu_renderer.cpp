@@ -17,7 +17,10 @@ namespace rs::gfx {
 
 namespace {
 
-constexpr int LIST_BYTES = 96 * 1024;
+/* GU list exhaustion is silent on hardware and manifests as repeated or
+ * corrupted sprites. The larger buffer is still tiny beside the PSP-1000
+ * frontend budget and gives transitions/modal overlays a safe ceiling. */
+constexpr int LIST_BYTES = 192 * 1024;
 alignas(64) u8 s_list[LIST_BYTES];
 
 alignas(64) u32 s_alphaClut[256];
@@ -101,6 +104,19 @@ void Renderer::shutdown() {
 void Renderer::beginFrame(u32 clearColor) {
     m_frameStart = sceKernelGetSystemTimeLow();
     sceGuStart(GU_DIRECT, s_list);
+
+    /* sceGuClear respects the active scissor rectangle. A clip left behind
+     * by any previous UI path therefore clears only part of the next back
+     * buffer, leaving old focus outlines, FPS glyphs and icons behind as
+     * green/red trails. Reset the complete baseline before clearing rather
+     * than relying on every caller to perfectly balance its clip calls. */
+    sceGuScissor(0, 0, RS_SCREEN_W, RS_SCREEN_H);
+    sceGuEnable(GU_SCISSOR_TEST);
+    sceGuDisable(GU_TEXTURE_2D);
+    sceGuEnable(GU_BLEND);
+    sceGuBlendFunc(GU_ADD, GU_SRC_ALPHA, GU_ONE_MINUS_SRC_ALPHA, 0, 0);
+    sceGuTexFunc(GU_TFX_MODULATE, GU_TCC_RGBA);
+    sceGuTexWrap(GU_CLAMP, GU_CLAMP);
     sceGuClearColor(clearColor);
     sceGuClear(GU_COLOR_BUFFER_BIT);
     m_bound = nullptr;

@@ -64,6 +64,10 @@ constexpr u32 MAX_ROM_BYTES = 16u * 1024u * 1024u;
 constexpr u32 MAX_STREAMED_ROM_BYTES = 64u * 1024u * 1024u;
 constexpr u32 MAX_ZIP_ENTRIES = 4096;
 constexpr u64 MAX_COMPRESSION_RATIO = 200;
+/* Screenshots are the only frontend-generated files whose count could grow
+ * forever. Never delete a user's captures automatically; refuse new ones at
+ * a small, predictable ceiling and let the user archive/remove them. */
+constexpr int MAX_SCREENSHOTS = 50;
 
 const char* MENU_LABELS[] = {
     "Resume", "Save state", "Load state", "Reset", "Aspect", "Filter",
@@ -800,6 +804,16 @@ void GameSession::updateMenu(App& app) {
             char dir[64];
             std::snprintf(dir, sizeof dir, "%s/screenshots", fs::ROOT);
             fs::mkdirs(dir);
+            std::vector<fs::DirEntry> captures;
+            if (fs::listDir(dir, captures)) {
+                int count = 0;
+                for (const auto& entry : captures)
+                    if (!entry.isDir) ++count;
+                if (count >= MAX_SCREENSHOTS) {
+                    app.toast("Screenshot limit reached (50)");
+                    break;
+                }
+            }
             std::snprintf(path, sizeof path,
                           "%s/screenshots/%08x_%u.png", fs::ROOT,
                           unsigned(m_game.pathHash),

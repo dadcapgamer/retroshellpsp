@@ -18,6 +18,7 @@ struct GameEntry {
     std::string name;       /* display name (file name sans extension)   */
     std::string path;       /* full ms0:/ path (the .zip when zipped)    */
     std::string zipEntry;   /* rom name inside the zip, or empty         */
+    std::string artPath;    /* sibling cover discovered during scan      */
     System system  = System::GameBoy;
     u32 pathHash   = 0;     /* FNV-1a of path — stable library key       */
     u32 crc32      = 0;     /* from zip central dir; 0 = not yet known   */

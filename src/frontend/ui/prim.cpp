@@ -32,9 +32,8 @@ gfx::Texture s_discRing;   /* 32x32 AA ring */
 constexpr int SYSTEM_COUNT = 10;
 constexpr int SYSTEM_CELL = 32;
 constexpr int CONSOLE_COUNT = SYSTEM_COUNT - 1;
-constexpr int SYSTEM_ATLAS_W = CONSOLE_COUNT * SYSTEM_CELL;
 constexpr int PC_ENGINE_ICON = 8;
-gfx::Texture s_systemIcons;
+gfx::Texture s_systemIcons[CONSOLE_COUNT];
 
 float roundedCoverage(float px, float py, float w, float h, float rad) {
     /* Signed distance to a rounded rectangle centered in [0,w]x[0,h]. */
@@ -57,7 +56,8 @@ bool bakeMasks() {
         for (int x = 0; x < TILE; x++)
             buf[y * TILE + x] = u8(255.f * roundedCoverage(
                 float(x) + .5f, float(y) + .5f, TILE, TILE, CORNER));
-    if (!gfx::Renderer::createTexture(s_round, TILE, TILE, GU_PSM_T8, buf))
+    if (!gfx::Renderer::createTexture(s_round, TILE, TILE, GU_PSM_T8, buf,
+                                      /*dynamic=*/true))
         return false;
 
     /* Rounded ring (outline). */
@@ -83,7 +83,8 @@ bool bakeMasks() {
             const float cov = outer - innerCov;
             buf[y * TILE + x] = u8(255.f * rsClamp(cov, 0.f, 1.f));
         }
-    if (!gfx::Renderer::createTexture(s_roundRing, TILE, TILE, GU_PSM_T8, buf))
+    if (!gfx::Renderer::createTexture(s_roundRing, TILE, TILE, GU_PSM_T8, buf,
+                                      /*dynamic=*/true))
         return false;
 
     /* Disc + ring. */
@@ -93,7 +94,8 @@ bool bakeMasks() {
                                       std::pow(float(y) + .5f - 16.f, 2.f));
             buf[y * TILE + x] = u8(255.f * rsClamp(15.5f - d, 0.f, 1.f));
         }
-    if (!gfx::Renderer::createTexture(s_disc, TILE, TILE, GU_PSM_T8, buf))
+    if (!gfx::Renderer::createTexture(s_disc, TILE, TILE, GU_PSM_T8, buf,
+                                      /*dynamic=*/true))
         return false;
 
     for (int y = 0; y < TILE; y++)
@@ -104,7 +106,8 @@ bool bakeMasks() {
                               rsClamp(13.2f - d, 0.f, 1.f);
             buf[y * TILE + x] = u8(255.f * rsClamp(cov, 0.f, 1.f));
         }
-    if (!gfx::Renderer::createTexture(s_discRing, TILE, TILE, GU_PSM_T8, buf))
+    if (!gfx::Renderer::createTexture(s_discRing, TILE, TILE, GU_PSM_T8, buf,
+                                      /*dynamic=*/true))
         return false;
 
     s_round.clut = s_roundRing.clut = s_disc.clut = s_discRing.clut =
@@ -131,9 +134,8 @@ bool bakeSystemIcons() {
         {rs_asset_pc_engine_png,        rs_asset_pc_engine_png_len},
     };
 
-    static u8 atlas[SYSTEM_ATLAS_W * SYSTEM_CELL * 4];
-    std::memset(atlas, 0, sizeof atlas);
     for (int icon = 0; icon < CONSOLE_COUNT; ++icon) {
+        u8 pixels[SYSTEM_CELL * SYSTEM_CELL * 4] = {};
         int w = 0, h = 0, comp = 0;
         stbi_uc* source =
             stbi_load_from_memory(icons[icon].bytes, int(icons[icon].length),
@@ -154,8 +156,7 @@ bool bakeSystemIcons() {
             for (int x = 0; x < SYSTEM_CELL; ++x) {
                 const int sx = (x / 2) * 6 + 3;
                 const u8* src = source + (sy * w + sx) * 4;
-                u8* dst = atlas +
-                    (y * SYSTEM_ATLAS_W + icon * SYSTEM_CELL + x) * 4;
+                u8* dst = pixels + (y * SYSTEM_CELL + x) * 4;
                 const bool frameBackground =
                     src[0] <= 24 && src[1] <= 24 && src[2] <= 29;
                 if (!frameBackground) {
@@ -174,10 +175,16 @@ bool bakeSystemIcons() {
             }
         }
         stbi_image_free(source);
+        /* Keep each system in its own small texture. On PSP hardware a
+         * damaged/wrapped atlas lookup contaminated every console card with
+         * the same neighbouring red/green pixels. Independent 32x32 images
+         * also make texture bounds exact and preserve the same VRAM cost. */
+        if (!gfx::Renderer::createTexture(
+                s_systemIcons[icon], SYSTEM_CELL, SYSTEM_CELL,
+                GU_PSM_8888, pixels, /*dynamic=*/true))
+            return false;
     }
-
-    return gfx::Renderer::createTexture(
-        s_systemIcons, SYSTEM_ATLAS_W, SYSTEM_CELL, GU_PSM_8888, atlas);
+    return true;
 }
 
 /* Draw `tex` 9-sliced with corner size `c` scaled from the baked CORNER. */
@@ -301,9 +308,8 @@ void iconSystem(gfx::Renderer& r, int systemIdx, float x, float y, float size,
     (void)detail;
     const gfx::TexFilter previous = r.texFilter();
     r.setTexFilter(gfx::TexFilter::Nearest);
-    const float sx = float(systemIdx * SYSTEM_CELL);
     const u32 tint = rsWithAlpha(rsHex(0xFFFFFF), rsAlphaOf(base));
-    r.sprite(s_systemIcons, sx, 0.f, SYSTEM_CELL, SYSTEM_CELL,
+    r.sprite(s_systemIcons[systemIdx], 0.f, 0.f, SYSTEM_CELL, SYSTEM_CELL,
              x, y, size, size, tint);
     r.setTexFilter(previous);
 }

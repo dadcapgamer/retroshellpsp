@@ -28,7 +28,8 @@ private:
 
     void rebuildList(App& app);
     void rebuildRecents(App& app);
-    void refreshSelection(App& app);   /* re-derives m_selCore/m_selMultiCore */
+    void refreshSelection(App& app);   /* schedules deferred stick-backed data */
+    void hydrateSelection(App& app);   /* runs only after navigation settles */
     void updateCats(App& app);
     void updateList(App& app);
     void openActions(App& app, const db::GameEntry& game);
@@ -65,6 +66,8 @@ private:
     const CoreInfo* m_selCore = nullptr;
     bool            m_selMultiCore = false;
     db::GameMeta    m_selMeta;      /* cached; loadMeta reads the stick */
+    float           m_selectionSettle = 0.f;
+    u32             m_hydratedHash = 0;
 
     /* Selected-game quick actions. Save-state headers are queried once when
      * the panel opens, never in the 60 fps draw path. */
