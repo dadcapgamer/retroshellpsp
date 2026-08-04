@@ -25,6 +25,15 @@ Games and BIOS files are not included.
 
 Existing `RETROSUITE` data is migrated to `RETROSHELL` on first boot. Saves, settings, artwork, logs, and installed cores are preserved.
 
+### Install additional cores
+
+Non-developers can install a RetroShell `.rscore.zip` package by extracting
+it to the root of the PSP Memory Stick and restarting RetroShell. Random
+RetroArch or desktop cores cannot be installed directly.
+
+See [Install RetroShell and community cores](docs/INSTALLING_CORES.md) for the
+complete drag-and-drop instructions, compatibility labels, and troubleshooting.
+
 ## Beta 2 changes
 
 - Keeps large libraries responsive by drawing only the visible game tiles.
@@ -77,6 +86,7 @@ The candidate command creates the versioned PSP ZIP and optional core packages u
 
 ## Contributing
 
+- [Install RetroShell and community cores](docs/INSTALLING_CORES.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Adding a core](docs/ADDING_A_CORE.md)
 - [Core audit and hardware status](docs/CORE_AUDIT.md)
