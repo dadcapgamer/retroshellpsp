@@ -73,7 +73,14 @@ target_compile_definitions(rs_core_gambatte PRIVATE
   HAVE_STDINT_H
   HAVE_INTTYPES_H
   CC_RESAMPLER_NO_HIGHPASS
-  VIDEO_RGB565)
+  RS_GAMBATTE_PSP_DEFAULTS
+  VIDEO_RGB565
+  # Pack the GE's channel ordering in gbcToRgb32 and the palette converter,
+  # both of which run per palette entry rather than per pixel. This removes
+  # the shim's full-frame channel swap; interframe blending is unaffected
+  # because its pack/unpack and mix mask are ordering-symmetric.
+  RS_PSP_BGR565
+  RS_PSP_NATIVE_RGB565)
 
 # Gambatte's CPU/PPU inner loops are the frame-time hot path; -O3 (over the
 # project-wide -O2) buys tighter inlining there. Wins are measured via the

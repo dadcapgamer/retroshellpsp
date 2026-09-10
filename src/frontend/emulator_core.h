@@ -59,6 +59,8 @@ public:
     u32   sramSize() const  { return m_api ? m_api->sram_size() : 0; }
     void* sramData() const  { return m_api ? m_api->sram_data() : nullptr; }
     bool  sramDirty() const { return m_api && m_api->sram_dirty() != 0; }
+    u32   rtcSize() const   { return m_api ? m_api->rtc_size() : 0; }
+    void* rtcData() const   { return m_api ? m_api->rtc_data() : nullptr; }
 
     bool setOption(const char* key, const char* value) {
         return m_api && m_api->set_option(key, value) == 0;

@@ -15,7 +15,7 @@ namespace {
 const char* ROW_LABELS[] = {
     "Theme", "Accent color", "Time format", "Menu CPU clock",
     "In-game CPU clock", "UI sounds", "Show FPS", "Auto-save",
-    "PSP-1000 Safe Mode", "Rescan library",
+    "Rescan library",
 };
 constexpr int CPU_STEPS[] = {222, 266, 333};
 
@@ -81,15 +81,6 @@ void SettingsScene::adjust(App& app, int dir) {
             c.autosave = !c.autosave;
             cfg::save();
             break;
-        case ROW_PSP1000_SAFE:
-            c.psp1000SafeMode = !c.psp1000SafeMode;
-            c.psp1000SafeModeConfigured = true;
-            cfg::save();
-            app.cores().discover();
-            app.toast(c.psp1000SafeMode
-                          ? "Showing PSP-1000 qualified cores"
-                          : "Experimental cores are now visible");
-            break;
         default:
             break;
     }
@@ -127,7 +118,6 @@ const char* SettingsScene::valueText(App& app, int row, char* buf,
         case ROW_UI_SOUNDS: return c.uiSounds ? "On" : "Off";
         case ROW_SHOW_FPS:  return c.showFps ? "On" : "Off";
         case ROW_AUTOSAVE:  return c.autosave ? "On" : "Off";
-        case ROW_PSP1000_SAFE: return c.psp1000SafeMode ? "On" : "Off";
         case ROW_RESCAN:
             return app.scanner().running() ? "Scanning…" : "Press ×";
         default: return "";

@@ -4,11 +4,17 @@ RetroShell's frontend is MIT-licensed. Emulator cores remain under their
 upstream licenses; the release archive includes the corresponding retained
 license text for every PRX.
 
+The interface includes Geist Pixel Square by the Geist Project Authors,
+licensed under the SIL Open Font License 1.1. The complete license is stored
+at `assets/fonts/OFL-Geist.txt`.
+
 | Core | Upstream | License |
 |---|---|---|
 | Gambatte | libretro/gambatte-libretro | GPL-2.0 |
 | Gearboy | drhelius/Gearboy | GPL-3.0 |
 | gpSP | libretro/gpsp | GPL-2.0 |
+| FrogGBA | tzubertowski/FrogGBA, adapted through the TempGBA libretro interface | GPL-2.0 |
+| mGBA (archived source) | libretro/mgba | MPL-2.0 |
 | Beetle PCE Fast | libretro/beetle-pce-fast-libretro | GPL-2.0 |
 | QuickNES | libretro/QuickNES_Core | GPL-2.0 |
 | TGB Dual | libretro/tgbdual-libretro | GPL-2.0 |

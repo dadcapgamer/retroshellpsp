@@ -9,16 +9,18 @@ audio stability, or PSP-1000 memory safety.
 | System | Core | Delivery | Decision and remaining evidence |
 |---|---|---|---|
 | GB/GBC | Gambatte | Production default | Keep. Pinned and reproducible; hardware compatibility/performance gate remains required for a release. |
-| GB/GBC | Gearboy | Candidate only | Optimize/evaluate. Retain only if it passes every gate and fixes a documented Gambatte failure. |
-| GB/GBC | TGB Dual | Candidate only | Evaluate/remove. Lower priority; retain only for a documented compatibility advantage. |
+| GB/GBC/GBA | mGBA | Archived/blocked | Crashed real PSP hardware during its first GBA test. Retained only as provenance/source history and rejected by package intake. |
+| GB/GBC | Gearboy | Archived/blocked | Failed the PSP performance gate; not offered to users. |
+| GB/GBC | TGB Dual | Archived/blocked | Video output failed during PSP testing; not offered to users. |
 | NES | QuickNES | Production default | PPSSPP model-0 lifecycle gate passed; real PSP-1000 workload and 20-cycle gate remain. |
-| NES | FCEUmm | Candidate only | Demoted after PPSSPP ran at 80% median speed with persistent audio starvation and stopped responding after state save. Retained only for compatibility comparison; skip state load on hardware. |
+| NES | FCEUmm | Archived/blocked | PPSSPP ran at 80% median speed with persistent audio starvation and stopped responding after state save. It is not offered to users. |
 | SNES | Snes9x 2005 | Production default | PSP-native BGR555, balanced audio, recovery frames, and a PRX-safe subset of the Snes9xTYL compiler profile. Keep as the only hardware-safe SNES baseline; demanding real-hardware workloads still require retest. |
 | SNES | Snes9x 2010 | **Removed** | Repeatedly caused a native freeze and power-off immediately after loading on real PSP-1000 hardware. It fails the mandatory safety gate and is no longer built or packaged. |
 | MD/SMS/GG | PicoDrive | Production default | Keep. Pinned-source `LOW_MEMORY=1` build with native BGR565 and 32 kHz audio. Hardware rejected the shallow recovery experiment, so the proven six-frame profile is restored. |
 | SMS/GG | SMS Plus GX | Candidate only | PPSSPP lifecycle gate passed; evaluate as a PicoDrive compatibility alternate on hardware. |
-| GBA | gpSP | Candidate only | Pinned PSP/MIPS dynarec build with VFS v2 paging and an 8 MiB ROM cache. The first PSP-1000 run passed speed, frame-time, memory, allocation, and state tests but failed the persistent-audio-underrun gate. A 32.8 kHz PSP mixer default and emergency-only automatic frame skipping now await retest. Keep hidden in PSP-1000 Safe Mode until audio, SRAM, and 20-cycle tests pass. |
-| PC Engine | Beetle PCE Fast | Candidate only | Pinned HuCard build now uses Allegrex O3, 32 kHz audio, native BGR565, and balanced recovery frames. It passes PPSSPP model-0 but remains hidden in PSP-1000 Safe Mode until the new build passes real-hardware performance/audio and 20-cycle tests. |
+| GBA | gpSP | Candidate only | Pinned PSP/MIPS dynarec build with VFS v2 paging and an 8 MiB ROM cache. The first PSP-1000 run passed speed, frame-time, memory, allocation, and state tests but failed the persistent-audio-underrun gate. A 32.8 kHz PSP mixer default and emergency-only automatic frame skipping now await retest. It is visible when installed and labelled Testing until audio, SRAM, and 20-cycle tests pass. |
+| GBA | FrogGBA | Candidate only | FrogGBA-derived PSP compatibility alternate replacing TempGBA. Direct GU/VRAM ownership is removed, SRAM is frontend-owned, and a real GBA BIOS is required. PPSSPP and both PSP hardware models remain to be qualified. |
+| PC Engine | Beetle PCE Fast | Candidate only | Pinned HuCard build now uses Allegrex O3, 32 kHz audio, native BGR565, and balanced recovery frames. It passes PPSSPP model-0 and is visible when installed, with a Testing label pending real-hardware performance/audio and 20-cycle acceptance. |
 
 “Production default” describes package selection, not final hardware approval.
 The release is still blocked until both hardware columns below contain measured
@@ -28,12 +30,20 @@ results.
 
 For every production core, record legal homebrew/test-ROM hashes and:
 
+Superseded rows are dated. The 2026-09-08 beta.15 session is the current
+authority for the underrun column; see that entry below for the run detail.
+
 | Core | PSP-1000 (32 MB) | Later PSP (64 MB) | 20 launch/exits | Persistent underruns | Save/SRAM integrity |
 |---|---|---|---|---|---|
-| Gambatte | 99.5% median, 12.634 ms p95, 1,505 KB peak; audio gate failed | NOT RUN | NOT RUN | FAIL: intermittent gameplay bursts | PASS |
-| QuickNES | PASS: 100% median, 8.236 ms p95, 968 KB peak | NOT RUN | NOT RUN | PASS | PASS |
-| Snes9x 2005 | FAIL on Secret of Mana: 80% median, 20.808 ms p95, 12,395 KB peak | NOT RUN | NOT RUN | FAIL | PASS |
-| PicoDrive | 100% median, 10.581 ms p95, 633 KB peak on SMS; audio gate failed; MD workload not recorded | NOT RUN | NOT RUN | FAIL: late sustained burst | PASS |
+| Gambatte | PASS 2026-09-08 (was 99.5%/12.634 ms on 2026-07-26) | NOT RUN | NOT RUN | PASS 2026-09-08: zero underruns, zero drops | PASS |
+| QuickNES | PASS: 100% median, 8.236 ms p95, 968 KB peak | NOT RUN | NOT RUN | PASS 2026-09-08: zero underruns, zero drops | PASS |
+| Snes9x 2005 | PASS 2026-09-08 on Secret of Mana: 100% median, ~17.5 ms p95 (was 80%/20.808 ms on 2026-07-26) | NOT RUN | NOT RUN | PASS 2026-09-08: zero underruns, zero drops | PASS |
+| PicoDrive | PASS 2026-09-08 on Mega Drive (Castle of Illusion, donkey-1.2); **Master System not re-run since the geometry fix** | NOT RUN | NOT RUN | PASS 2026-09-08: zero underruns, zero drops | PASS |
+| Beetle PCE Fast | PASS 2026-09-08 (Victory Run) | NOT RUN | NOT RUN | PASS 2026-09-08: zero underruns, zero drops | PASS |
+
+Still outstanding for every core: the 64 MB column, the 20 launch/exit cycle
+gate, and — for PicoDrive specifically — a Master System workload exercising
+the 192/224/240-line mode change that the shim fix addresses.
 
 A core is disqualified by any PSP-1000 allocation failure, save corruption,
 failed 20-cycle run, persistent underrun, or inability to sustain native speed
@@ -114,8 +124,8 @@ hardware gate remain outstanding.
   audio drops.
 - CHD, LZMA, and Zstd are excluded from the initial candidate. PC Engine CD
   support is not advertised or qualified.
-- This is a PPSSPP correctness result only; the candidate remains test-only
-  and hidden by PSP-1000 Safe Mode pending real-hardware acceptance.
+- This is a PPSSPP correctness result only; the candidate remains labelled
+  Testing pending real-hardware acceptance.
 
 ## 2026-07-26 all-core PSP-1000 hardware pass
 
@@ -431,6 +441,266 @@ Dual's static-output path, and evaluate a lighter SNES candidate before the
   save/load, frontend return, video validation, and the 32 MB arena gate with
   no allocation failures or audio drops. Dialogue appearance, enemy response,
   and underrun stability remain native-hardware acceptance checks.
+
+## 2026-09-06 runtime-geometry defect and adaptive core memory
+
+### Frames were dropped after any runtime video-mode change
+
+The shim answered `RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO` and
+`RETRO_ENVIRONMENT_SET_GEOMETRY` with `false`, so a core that enlarged its
+output after load could never update the shim's frame budget. Cores report
+`max_width`/`max_height` as the *current* mode at load (PicoDrive does this at
+`retro_get_system_av_info`), so `g_frameCap` froze at whatever mode was active
+when the ROM loaded. Every larger frame afterwards failed the capacity test in
+`videoRefresh` and was dropped.
+
+This is routine on Master System: `pico/mode4.c` switches between 192-, 224-
+and 240-line modes and 160/248/256-column widths, each raising
+`libretro_update_geometry`. Mega Drive H32/H40 and PC Engine 256/336/512 have
+the same shape; Mega Drive usually escapes because games boot in the wider
+mode, so a later narrower frame still fits.
+
+Each dropped frame also logged a warning, and `log::write` issues an
+unbuffered `sceIoWrite` per call. That is per-frame Memory Stick I/O inside
+the frame budget — the failure mode PPSSPP cannot reproduce, because the same
+write costs almost nothing against a host filesystem. It is the likely
+explanation for PicoDrive's otherwise contradictory Master System result
+(100% median speed, 10.581 ms p95, and a *late sustained* underrun burst:
+late meaning after the game changed video mode).
+
+Fixes:
+
+- The shim honours both environment calls, revalidates geometry, grows its
+  conversion buffer monotonically through the recycling core heap, and
+  republishes fps/audio rate on a genuine timing change only.
+- Cores whose frames are borrowed in the GE's native ordering own their own
+  storage, so they are no longer gated against a shim buffer that is never
+  allocated for them.
+- Recurring video warnings are throttled to a small per-game budget. No shim
+  log line can fire once per frame again.
+
+### Cores were capped below the memory the frontend already offered
+
+The launch protocol releases the arena around module load and re-reserves it
+afterwards, so a PRX core receives nearly everything left on the machine, and
+the arena already scales with the model. gpSP nonetheless claimed a fixed
+8 MiB ROM cache from a compile-time `ROM_BUFFER_SIZE`, stopping on a loop
+counter rather than on memory pressure. It left roughly 4 MB unused on a
+PSP-1000 and tens of MB on a 64 MB model, while ROM hacks paged 32 KiB at a
+time off the Memory Stick mid-frame.
+
+The shim now exports `rs_psp_core_available()` and gpSP sizes its ROM cache
+from it, keeping a 2 MiB reserve for save states and runtime allocations. One
+build now fits every model. gpSP also counts ROM page faults and JIT ROM-cache
+flushes and reports both once at unload, and `mem::init` logs total free
+memory before and after reservation.
+
+`flush_translation_cache_rom` discards every translated block above the
+watermark and clears the branch hash, so a ROM hack whose hot code exceeds the
+2 MiB `SMALL_TRANSLATION_CACHE` re-JITs repeatedly. Moving that cache off BSS
+to a runtime allocation is **not** in this build: its size depends on the free
+memory these counters are being added to measure, and shipping an untested
+size could stop gpSP loading on a PSP-1000 entirely.
+
+### PPSSPP results, this build
+
+All fourteen automation checks passed for Gambatte (Pokemon Yellow Legacy),
+gpSP (HnS v1.2.1), PicoDrive (Foxy Land) and Beetle PCE Fast (Victory Run),
+including `no_error_log`, which had been failing. The cause was
+`savePersistent` treating a zero-size SRAM as an error whenever the core still
+returned a buffer pointer, which PicoDrive does for any cartridge without
+battery backup. Zero-size SRAM is now the ordinary "no save chip" answer in
+both the save and load paths.
+
+Measured PSP-1000-model arena during a core session: 13,831 KB free before
+reservation for gpSP (12,059 KB arena, 1,772 KB left) and 11,911 KB for
+PicoDrive. gpSP's adaptive ROM cache selected 9 MiB where the fixed constant
+had taken 8. Median speed was 100% for all four cores with zero allocation
+failures and zero audio drops.
+
+Snes9x 2005's `RS_PSP_NATIVE_PIXELS` path and FrogGBA's `RS_PSP_NATIVE_BGR555`
+path compile against the changed shim but were not run: no SNES ROM or GBA
+BIOS is available in this tree. Both need a run before release.
+
+None of this is hardware evidence. The Master System defect above is the one
+that should be retested on a real PSP-1000 first, on a game that changes video
+mode (Micro Machines is named in upstream's own comment as a 224/240-line
+title).
+
+## 2026-09-07 first 64 MB measurement: GBA ROM hacks
+
+`tools/run_ppsspp_automation.py` gained `--psp-model` (0 = PSP-1000, 1 =
+64 MB). The 64 MB column had been NOT RUN for every core since the matrix was
+written; the harness had `PSPModel = 0` hardcoded.
+
+Workload: a 32 MiB Pokemon Emerald hack (game code BPEE, FLASH1M save,
+`HnS v1.2.1.gba`) — the largest size the GBA cartridge bus allows.
+
+| | PSP-1000 (model 0) | 64 MB (model 1) |
+|---|---|---|
+| Core arena during session | 12,059 KB | 44,827 KB |
+| gpSP ROM cache | 9 MiB | **32 MiB** |
+| ROM page faults | 33 | **0** |
+| JIT ROM flushes | 1 | 1 |
+| Median p95 core time | 5,913 us | 5,132 us |
+
+On a 64 MB PSP the adaptive ROM cache now holds the **entire 32 MiB ROM with
+zero paging**, which the previous fixed 8 MiB constant made impossible on any
+model. Both runs passed all fourteen checks.
+
+Two things this rules out for hacks of this family. The `gba_over.h` BPEE
+override is still correct for them: the idle-loop target `0x80008ce` still
+contains vanilla Emerald's `cmp r3,#0 / beq` wait loop in this hack (the base
+engine's early code is not relocated by ROM expansion), and the declared
+FLASH_128KB save type matches the ROM's own `FLASH1M_V` signature. So save
+detection and idle-loop skipping are not the problem; ROM residency is.
+
+The JIT flush count stayed at 1 (the initial flush) in both runs, which is
+weak evidence that the 2 MiB `SMALL_TRANSLATION_CACHE` is not the dominant
+cost for this workload. A longer hardware session is still needed before
+concluding that, since these scripted runs cover little gameplay.
+
+On a PSP-1000 a 32 MiB ROM cannot be made resident by any in-process core: the
+frontend stays in RAM and the arena tops out near 12 MB. A native adapter,
+which replaces the RetroShell process and owns the whole machine, is the only
+way to raise residency further on that model — FrogGBA's standalone build asks
+for 32 MiB and halves until it fits, so roughly 16 MiB there. That is an
+improvement, not a solution, and it costs the return-to-frontend path and
+requires a user-supplied BIOS.
+
+## 2026-09-08 real PSP-1000 run (beta.15) — shim fix validated
+
+One uninterrupted session on real PSP-1000 hardware, six core launches:
+Gambatte x2, QuickNES, Snes9x 2005, PicoDrive x2, Beetle PCE Fast.
+
+**Zero audio underruns and zero dropped frames in every sample.** This is the
+gate that had failed for Gambatte, PicoDrive, gpSP and Snes9x 2005 in every
+prior hardware run. 206 of 275 perf samples reported 100% speed, and all but
+two of the rest were 97% or better.
+
+Zero `exceeds frame buffer` / `rejected ... frame geometry` lines, and no
+per-frame warning storms — the throttle and the geometry fix both hold.
+
+Snes9x 2005 on Secret of Mana is the headline: **100% median speed, ~17.5 ms
+median p95, zero underruns**, against 80-85% and thousands of underruns across
+the July `tyl3`/`tyl4`/`tyl5` runs. This was also the first hardware test of
+`tyl6` and of the shim's `RS_PSP_NATIVE_PIXELS` path since it changed; video
+validated at 64/64 non-black. Credit is shared between `tyl6`'s speed hacks
+(never hardware-tested before) and the warning throttle; this run cannot
+separate them.
+
+The only errors in 840 lines were the two FrogGBA launch failures below.
+
+### Master System still untested
+
+Both PicoDrive launches were Mega Drive titles (320x240): Castle of Illusion
+and `donkey-1.2`. No Master System game was run, so the specific defect this
+build fixes — the 192/224/240-line mode change — remains unverified on
+hardware. It stays the top priority for the next pass.
+
+### Native adapters could never have worked
+
+`sceKernelLoadExec` returned `0x80020149`
+(`SCE_KERNEL_ERROR_ILLEGAL_PERM_CALL`). RetroShell declares
+`PSP_MODULE_INFO("RetroShell", 0, ...)` with `PSP_THREAD_ATTR_USER`, so it is
+a user-mode module, and that loader is privileged. The BIOS synchronised and
+the executable resolved correctly; the launch call itself was refused.
+
+This means no native adapter has ever been launchable on hardware, which is
+why both were still "qualification pending". The launcher now tries
+`sctrlKernelLoadExecVSHMs2` from custom firmware's SystemCtrl — the standard
+route for user-mode homebrew to chain-load an EBOOT — and keeps the direct
+call as a fallback, logging both results. Untested on hardware.
+
+### Newlib heap was 12x oversized
+
+Measured peak across boot, browsing and six core launches: **326 KB against
+the 4096 KB reserved** by `PSP_HEAP_SIZE_KB`. Reduced to 2048 KB, keeping ~6x
+margin because the library index is the part that scales with the user's
+collection and heap exhaustion is a hard failure.
+
+Effect, confirmed under PPSSPP model 0: startup arena 17,216 -> 19,263 KB, and
+gpSP's adaptive ROM cache 9 MiB -> **11 MiB** on the 32 MB model. Every core
+gains the same 2 MB.
+
+Caveat: the tested library held 15 games. The peak should be re-read against a
+large collection before trimming further.
+
+## 2026-09-09 Gambatte and QuickNES PSP-native pixel format
+
+Both cores decided their output format at a single palette-LUT chokepoint and
+then paid the shared shim's per-pixel channel swap on every frame — Gambatte
+over 23,040 pixels, QuickNES over 61,440. Packing the GE's ordering into the
+palette instead costs nothing at runtime and lets the shim borrow the frame.
+
+- Gambatte: `gbcToRgb32` and the rgb32->565 palette converter emit BGR565
+  under `RS_PSP_BGR565`. The interframe-blending paths are deliberately
+  untouched: their pack/unpack are symmetric and the `0x821` mix mask is the
+  low bit of each channel in either ordering. The DMG grey literals
+  (`0xFFFF/0xAD55/0x52AA/0x0000`) are already channel-symmetric.
+- QuickNES: the 256-entry palette emits BGR565, matching the formula the core
+  already uses on its own PSP direct-to-VRAM path.
+
+Both now report `PSP-native video active (zero conversion)`. Neither reaches
+zero-copy binding, because 160x144 and 256x224 are not power-of-two surfaces,
+so the frontend still performs one bounded `updateTexture` upload — which also
+supplies the cache writeback these cores therefore do not need to make
+themselves.
+
+Verified under PPSSPP: Gambatte 14/14 checks, and a captured gameplay frame
+renders Pikachu correctly yellow with red cheeks. That check matters because an
+inverted swap still passes the automated `video_valid` test — it only looks for
+non-black output — and would show only as blue/red inversion.
+
+QuickNES has no local NES ROM for a visual check; its palette formula is
+byte-identical to the core's own PSP path, but a hardware or PPSSPP run with a
+real NES title should confirm colour before this ships.
+
+With this, the only cores still converting per pixel are SMS Plus GX (49,152
+pixels/frame, an Experimental candidate) and the archived set.
+
+## 2026-09-09 QuickNES colour and Master System PPSSPP runs
+
+Both cores passed all fourteen checks on the PSP-1000 model.
+
+**QuickNES colour is confirmed.** Super Mario Bros renders blue sky, brown
+brick, green pipe and yellow blocks. An inverted palette would have produced
+orange sky and magenta pipes, and would still have passed `video_valid`, which
+only tests for non-black output. The BGR565 palette change is correct.
+
+**Master System renders correctly** (Shinobi title screen: red logo, correct
+skin tones, magenta backdrop) and sustains 100% speed.
+
+### Correcting the Master System hypothesis
+
+This run does **not** support the earlier theory that SMS mode changes were
+dropping frames. PicoDrive reported `320x240` to the shim at load — its Mega
+Drive default, because `retro_get_system_av_info` is answered before the SMS
+video mode is established. That is larger than any Master System mode, so
+`g_frameCap` was generous and no SMS frame could ever have exceeded it.
+
+The `SET_SYSTEM_AV_INFO`/`SET_GEOMETRY` fix remains correct and worth keeping —
+a core that reports a small geometry at load and grows later would still be
+broken without it — but it should not be credited with fixing Master System.
+The more likely explanation for the original reports is the shared audio
+scheduling, which the 2026-09-08 hardware session showed resolved across every
+core.
+
+### A test-harness artifact worth knowing
+
+The SMS perf series showed a periodic drop to 73-78% speed every four to five
+seconds, with p95 core time at only ~4,500 us against a 16,670 us budget —
+enormous headroom, so not a CPU limit. Each drop correlates exactly with an
+`autopilot: capture` line. The harness writing a PNG to the Memory Stick stalls
+the frame. Every non-capture sample was 100-105% with zero underruns.
+
+This is worth remembering when reading any automation perf series: capture
+samples are not representative, and the same effect would exaggerate any
+hardware run that took screenshots during play.
+
+Neither result is hardware evidence. The original Master System complaint came
+from real hardware, and its most plausible mechanism — per-frame Memory Stick
+I/O — is precisely what PPSSPP cannot reproduce.
 
 ## Required lab runs before tagging a release
 

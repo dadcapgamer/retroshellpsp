@@ -1,12 +1,13 @@
 #include "frontend/core_registry.h"
 
+#include "frontend/core_package_policy.h"
+
 #include "runtime/config.h"
 #include "runtime/log.h"
 
 #include <cstdio>
 #include <cstring>
 #include <algorithm>
-#include <cctype>
 
 #ifdef RS_STATIC_CORES
 #include "frontend/core_manager.h"
@@ -18,32 +19,6 @@
 namespace rs {
 
 namespace {
-bool safeCoreName(const char* s) {
-    if (!s || !*s || std::strlen(s) > 48) return false;
-    for (; *s; ++s) {
-        const unsigned char c = static_cast<unsigned char>(*s);
-        if (!(std::isalnum(c) || c == '_' || c == '-')) return false;
-    }
-    return true;
-}
-
-bool disqualifiedCore(const char* name) {
-    /* Hardware safety tombstones. Keep stale modules left by an older
-     * candidate bundle from becoming selectable after an upgrade. Remove
-     * an entry only after a replacement passes the real PSP-1000 gate. */
-    if (!name) return false;
-    static const char* const BLOCKED[] = {
-        "fceumm",          /* PPSSPP state-path stall; 80% median speed */
-        "gearboy",         /* PSP-1000: 65% median, continuous starvation */
-        "snes9x2005_plus", /* PSP-1000: 56% median, continuous starvation */
-        "snes9x2010",      /* PSP-1000: native freeze and power-off */
-        "tgbdual",         /* PSP-1000: output stopped after two uploads */
-    };
-    for (const char* blocked : BLOCKED)
-        if (std::strcmp(name, blocked) == 0) return true;
-    return false;
-}
-
 bool knownSystems(const char* systems) {
     if (!systems || !*systems || std::strlen(systems) > 64) return false;
     const char* p = systems;
@@ -100,7 +75,10 @@ int CoreRegistry::countFor(db::System s) const {
 }
 
 const CoreInfo* CoreRegistry::resolve(const db::GameEntry& game) const {
-    const std::string remembered = cfg::gameOption(game.pathHash, "core");
+    std::string remembered = cfg::gameOption(game.pathHash, "core");
+    /* TempGBA was replaced by FrogGBA. Preserve existing per-game choices
+     * without keeping the retired module installable or visible. */
+    if (remembered == "tempgba") remembered = "froggba";
     if (!remembered.empty()) {
         const CoreInfo* c = find(remembered.c_str());
         if (c && c->serves(game.system)) return c;
@@ -116,7 +94,8 @@ const CoreInfo* CoreRegistry::defaultFor(db::System system) const {
 }
 
 bool CoreRegistry::needsChoice(const db::GameEntry& game) const {
-    const std::string remembered = cfg::gameOption(game.pathHash, "core");
+    std::string remembered = cfg::gameOption(game.pathHash, "core");
+    if (remembered == "tempgba") remembered = "froggba";
     if (remembered.empty()) return false; /* deterministic default */
     /* A remembered core that was since uninstalled must re-prompt rather
      * than let resolve() silently substitute a different core (whose save
@@ -133,7 +112,8 @@ void CoreRegistry::discover() {
         const RSCoreAPI* api = CoreManager::staticCoreApi(i);
         if (!api || api->api_version != RS_CORE_API_VERSION) continue;
         m_cores.push_back({api->name, api->version, api->systems,
-                           0, false, true, true, false, true});
+                           0, false, true, true, false, true,
+                           CoreBackend::InProcessPrx, {}, 767, {}, {}, 0, {}});
     }
     sortCores(m_cores);
     RS_LOGI("cores: %d linked in", int(m_cores.size()));
@@ -179,10 +159,24 @@ void CoreRegistry::discover() {
         const cJSON* requiresFullContent =
             cJSON_GetObjectItem(root, "requiresFullContent");
         const cJSON* preferVfs = cJSON_GetObjectItem(root, "preferVfs");
+        const cJSON* backend = cJSON_GetObjectItem(root, "backend");
+        const cJSON* executable = cJSON_GetObjectItem(root, "executable");
+        const cJSON* maxRomPath = cJSON_GetObjectItem(root, "maxRomPath");
+        const cJSON* biosSource = cJSON_GetObjectItem(root, "biosSource");
+        const cJSON* biosDestination =
+            cJSON_GetObjectItem(root, "biosDestination");
+        const cJSON* biosBytes = cJSON_GetObjectItem(root, "biosBytes");
+        const cJSON* requiredDirs =
+            cJSON_GetObjectItem(root, "requiredDirectories");
+        const cJSON* adapterProtocol =
+            cJSON_GetObjectItem(root, "adapterProtocol");
+        const cJSON* pauseMode = cJSON_GetObjectItem(root, "pauseMode");
+        const cJSON* pauseHotkey = cJSON_GetObjectItem(root, "pauseHotkey");
+        const cJSON* returnMode = cJSON_GetObjectItem(root, "returnMode");
         if (cJSON_IsString(name) && cJSON_IsString(systems) &&
-            safeCoreName(name->valuestring) &&
+            corepkg::safeCoreName(name->valuestring) &&
             knownSystems(systems->valuestring)) {
-            if (disqualifiedCore(name->valuestring)) {
+            if (corepkg::disqualifiedCoreName(name->valuestring)) {
                 RS_LOGW("cores: blocked disqualified core '%s'",
                         name->valuestring);
                 cJSON_Delete(root);
@@ -190,22 +184,90 @@ void CoreRegistry::discover() {
             }
             const bool isTest = cJSON_IsTrue(testOnly);
             const bool isPsp1000Safe = cJSON_IsTrue(psp1000Safe);
-#ifndef RS_INCLUDE_TEST_CORES
-            if (isTest) {
-                cJSON_Delete(root);
-                continue;
+            const bool native = cJSON_IsString(backend) &&
+                std::strcmp(backend->valuestring, "native") == 0;
+            const bool knownBackend = native || !backend ||
+                (cJSON_IsString(backend) &&
+                 std::strcmp(backend->valuestring, "prx") == 0);
+            std::string executablePath;
+            std::string biosSourcePath;
+            std::string biosDestinationPath;
+            u32 expectedBiosBytes = 0;
+            std::vector<std::string> workingDirectories;
+            u32 nativeProtocol = 0;
+            std::string nativePauseMode;
+            std::string nativePauseHotkey;
+            std::string nativeReturnMode;
+            bool artifactPresent = false;
+            if (native && cJSON_IsString(executable) &&
+                corepkg::safeNativeExecutable(name->valuestring,
+                                              executable->valuestring)) {
+                executablePath = executable->valuestring;
+                std::snprintf(path, sizeof path, "%s/%s", fs::ROOT,
+                              executablePath.c_str());
+                artifactPresent = fs::exists(path);
+                const bool hasAnyBiosField =
+                    biosSource || biosDestination || biosBytes;
+                if (hasAnyBiosField && cJSON_IsString(biosSource) &&
+                    cJSON_IsString(biosDestination) &&
+                    cJSON_IsNumber(biosBytes) && biosBytes->valuedouble > 0 &&
+                    biosBytes->valuedouble <= 1024.0 * 1024.0 &&
+                    corepkg::safeSystemFile(biosSource->valuestring) &&
+                    corepkg::safeNativeSupportFile(
+                        name->valuestring, biosDestination->valuestring)) {
+                    biosSourcePath = biosSource->valuestring;
+                    biosDestinationPath = biosDestination->valuestring;
+                    expectedBiosBytes = u32(biosBytes->valuedouble);
+                } else if (hasAnyBiosField) {
+                    artifactPresent = false;
+                }
+                if (cJSON_IsArray(requiredDirs)) {
+                    const int count = cJSON_GetArraySize(requiredDirs);
+                    /* A malformed or oversized list is a rejected manifest,
+                     * not a silently truncated one. */
+                    if (count > 16) {
+                        artifactPresent = false;
+                    } else {
+                        for (int i = 0; i < count; ++i) {
+                            const cJSON* item =
+                                cJSON_GetArrayItem(requiredDirs, i);
+                            if (!cJSON_IsString(item) ||
+                                !corepkg::safeNativeDirectory(
+                                    name->valuestring, item->valuestring)) {
+                                artifactPresent = false;
+                                break;
+                            }
+                            workingDirectories.emplace_back(item->valuestring);
+                        }
+                    }
+                }
+                if (adapterProtocol) {
+                    const bool validContract =
+                        cJSON_IsNumber(adapterProtocol) &&
+                        adapterProtocol->valueint == 1 &&
+                        cJSON_IsString(pauseMode) &&
+                        std::strcmp(pauseMode->valuestring, "embedded") == 0 &&
+                        cJSON_IsString(pauseHotkey) &&
+                        std::strcmp(pauseHotkey->valuestring,
+                                    "L+R+SELECT") == 0 &&
+                        cJSON_IsString(returnMode) &&
+                        std::strcmp(returnMode->valuestring, "loadexec") == 0;
+                    if (validContract) {
+                        nativeProtocol = 1;
+                        nativePauseMode = pauseMode->valuestring;
+                        nativePauseHotkey = pauseHotkey->valuestring;
+                        nativeReturnMode = returnMode->valuestring;
+                    } else {
+                        artifactPresent = false;
+                    }
+                }
+            } else if (!native && knownBackend) {
+                /* The module itself must be present, not just its manifest. */
+                std::snprintf(path, sizeof path, "%s/%s.prx", dir,
+                              name->valuestring);
+                artifactPresent = fs::exists(path);
             }
-#endif
-            if (cfg::get().psp1000SafeMode && !isPsp1000Safe) {
-                RS_LOGI("cores: hiding '%s' in PSP-1000 Safe Mode",
-                        name->valuestring);
-                cJSON_Delete(root);
-                continue;
-            }
-            /* The module itself must be present, not just its manifest. */
-            std::snprintf(path, sizeof path, "%s/%s.prx", dir,
-                          name->valuestring);
-            if (fs::exists(path)) {
+            if (knownBackend && artifactPresent) {
                 m_cores.push_back({name->valuestring,
                                    cJSON_IsString(ver) ? ver->valuestring : "",
                                    systems->valuestring,
@@ -216,10 +278,25 @@ void CoreRegistry::discover() {
                                    isPsp1000Safe,
                                    cJSON_IsTrue(requiresFullContent) != 0,
                                    cJSON_IsTrue(preferVfs) != 0,
-                                   false});
+                                   false,
+                                   native ? CoreBackend::NativeEboot
+                                          : CoreBackend::InProcessPrx,
+                                   executablePath,
+                                   cJSON_IsNumber(maxRomPath)
+                                       ? u32(rsClamp(maxRomPath->valueint,
+                                                     64, 767))
+                                       : 767u,
+                                   biosSourcePath,
+                                   biosDestinationPath,
+                                   expectedBiosBytes,
+                                   std::move(workingDirectories),
+                                   nativeProtocol,
+                                   std::move(nativePauseMode),
+                                   std::move(nativePauseHotkey),
+                                   std::move(nativeReturnMode)});
             } else {
-                RS_LOGW("cores: manifest %s has no %s.prx", e.name.c_str(),
-                        name->valuestring);
+                RS_LOGW("cores: manifest %s has no valid %s payload",
+                        e.name.c_str(), native ? "native" : "PRX");
             }
         } else {
             RS_LOGW("cores: %s lacks name/systems", e.name.c_str());
@@ -229,8 +306,9 @@ void CoreRegistry::discover() {
 
     sortCores(m_cores);
     for (const auto& c : m_cores)
-        RS_LOGI("cores: found '%s' %s (%s)", c.name.c_str(),
-                c.version.c_str(), c.systems.c_str());
+        RS_LOGI("cores: found '%s' %s (%s, %s)", c.name.c_str(),
+                c.version.c_str(), c.systems.c_str(),
+                c.isNative() ? "native EBOOT" : "PRX");
 }
 
 #endif  /* RS_STATIC_CORES */

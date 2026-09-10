@@ -1,7 +1,7 @@
 /** Home: console-first two-level navigation.
  *
- * Level 1 — horizontal console selector plus a recent-games shelf.
- * Level 2 — thumbnail grid with a persistent metadata/box-art preview.
+ * Level 1 — horizontal console selector plus a recent-games list.
+ * Level 2 — compact game list with a persistent metadata/box-art preview.
  * Triangle opens quick actions for the selected game without launching it.
  */
 #pragma once
@@ -39,7 +39,7 @@ private:
     void drawActions(App& app);
 
     /* Core picker — opens before launch when a remembered core disappeared,
-     * or any time via the Square shortcut when alternatives are installed. */
+     * or through Options -> Per-game Settings. */
     void openCorePicker(App& app, const db::GameEntry& game);
     void updatePicker(App& app);
     void drawPicker(App& app);
@@ -48,7 +48,7 @@ private:
     ui::Smooth m_catPos;
     ui::Tween  m_entrance;
 
-    /* Game-grid state. */
+    /* Game-list state. */
     ui::Smooth m_listFocus;                     /* 0 = cats, 1 = list */
     bool       m_inList = false;
     int        m_listIdx = 0;
@@ -56,6 +56,7 @@ private:
     std::vector<const db::GameEntry*> m_visible;
     bool       m_recentFocus = false;
     int        m_recentIdx = 0;
+    ui::Smooth m_recentReveal;                  /* collapsed banner → list */
     std::vector<const db::GameEntry*> m_recentVisible;
     u32        m_lastIndexGen = 0;    /* index generation, not count — a
                                        * count-preserving rescan still frees

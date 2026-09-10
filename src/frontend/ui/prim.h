@@ -36,7 +36,7 @@ void iconClock(gfx::Renderer& r, float cx, float cy, float radius, u32 color);
 void iconStar(gfx::Renderer& r, float cx, float cy, float radius, u32 color);
 void iconGear(gfx::Renderer& r, float cx, float cy, float radius, u32 color);
 /* Ten hard-pixel system silhouettes: System enum order 0..8, settings=9.
- * `size` should be 32 or 64 so the baked pixels remain integer-scaled. */
+ * `size` should be 32, 48 or 64 so the baked pixels remain crisp. */
 void iconSystem(gfx::Renderer& r, int systemIdx, float x, float y, float size,
                 u32 base, u32 detail);
 

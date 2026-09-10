@@ -13,6 +13,7 @@
 #pragma once
 
 #include "frontend/core_manager.h"
+#include "core_api/rs_pause_menu.h"
 #include "frontend/database/game_index.h"
 #include "frontend/scenes/scene.h"
 #include "frontend/ui/anim.h"
@@ -30,23 +31,13 @@ public:
 
     void enter(App& app) override;
     void shutdown(App& app) override;
+    void systemSuspend(App& app) override;
+    void systemResume(App& app) override;
     void update(App& app, float dt) override;
     void draw(App& app) override;
 
 private:
     enum class State { Starting, Running, Menu, Failed, Exiting };
-    enum MenuRow {
-        MENU_RESUME = 0,
-        MENU_SAVE,
-        MENU_LOAD,
-        MENU_RESET,
-        MENU_ASPECT,
-        MENU_FILTER,
-        MENU_SCREENSHOT,
-        MENU_EXIT,
-        MENU_COUNT
-    };
-
     bool startCore(App& app);
     void teardown(App& app, bool restoreFrontend);
     void exitToHome(App& app);
@@ -84,7 +75,7 @@ private:
     u16 m_frameW = 0, m_frameH = 0;
     u32 m_uploadedFrameSequence = UINT32_MAX;
 
-    int m_menuRow = 0;
+    int m_menuRow = RS_PAUSE_RESUME;
     int m_slot = 0;
     ui::Smooth m_menuPos;
     ui::Smooth m_menuScroll;
@@ -98,6 +89,7 @@ private:
     bool m_coreSessionStarted = false;
     bool m_romLoaded = false;   /* true once the ROM+SRAM are in the core */
     bool m_teardownComplete = false;
+    bool m_systemSuspended = false;
     float m_sramTimer = 0.f;
     int m_sramThread = -1;
     void* m_sramSnapshot = nullptr;

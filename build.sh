@@ -6,6 +6,7 @@
 #   ./build.sh qualify LOG — grade the latest real-PSP hardware run
 #   ./build.sh release    — build, audit, and create deterministic stable ZIP
 #   ./build.sh candidates — build a test-core EBOOT and drag-and-drop packages
+#   ./build.sh adapters FROG_DIR SNES_DIR — package all current native adapters
 set -e
 
 export PSPDEV="${PSPDEV:-$HOME/pspdev}"
@@ -55,6 +56,16 @@ case "$1" in
     BUILD_DIR=build-candidates
     EXTRA_ARGS="-DRS_INCLUDE_TEST_CORES=ON"
     ;;
+  adapters)
+    if [ -z "$2" ] || [ -z "$3" ]; then
+      echo "usage: ./build.sh adapters /path/to/FrogGBA /path/to/patched/snes9xTYL" >&2
+      exit 2
+    fi
+    python3 tools/package_native_emulator.py froggba "$2"
+    python3 tools/package_native_emulator.py snes9xtyl "$3"
+    BUILD_DIR=build-candidates
+    EXTRA_ARGS="-DRS_INCLUDE_TEST_CORES=ON"
+    ;;
 esac
 
 if [ ! -f "$BUILD_DIR/CMakeCache.txt" ]; then
@@ -73,7 +84,7 @@ echo "EBOOT: $BUILD_DIR/src/EBOOT.PBP"
 if [ "$1" = "release" ]; then
   python3 tools/audit_repository.py --build-dir "$BUILD_DIR"
   python3 tools/package_release.py --build-dir "$BUILD_DIR"
-elif [ "$1" = "candidates" ]; then
+elif [ "$1" = "candidates" ] || [ "$1" = "adapters" ]; then
   python3 tools/audit_repository.py --build-dir "$BUILD_DIR"
   python3 tools/package_release.py --build-dir "$BUILD_DIR" \
     --include-candidates --core-packages

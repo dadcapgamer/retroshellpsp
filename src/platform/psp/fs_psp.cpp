@@ -274,6 +274,70 @@ bool writeFileAtomic(const char* path, const void* data, u32 size) {
     return true;
 }
 
+bool replaceFileAtomic(const char* path, const char* temporary) {
+    if (!path || !*path || !temporary || !*temporary ||
+        fileSize(temporary) < 0)
+        return false;
+    char backup[352];
+    const int n = std::snprintf(backup, sizeof backup, "%s.pkg.bak", path);
+    if (n <= 0 || n >= int(sizeof backup)) return false;
+    removeFile(backup);
+    const bool hadOld = exists(path);
+    if (hadOld && !renameFile(path, backup)) return false;
+    if (!renameFile(temporary, path)) {
+        if (hadOld) renameFile(backup, path);
+        sceIoSync("ms0:", 0);
+        return false;
+    }
+    sceIoSync("ms0:", 0);
+    removeFile(backup);
+    return true;
+}
+
+bool removeFile(const char* path) {
+    return path && *path && (sceIoRemove(path) >= 0 || !exists(path));
+}
+
+bool renameFile(const char* from, const char* to) {
+    return from && *from && to && *to && sceIoRename(from, to) >= 0;
+}
+
+bool replaceFilePairAtomic(const char* first, const char* firstTemp,
+                           const char* second, const char* secondTemp) {
+    if (!first || !firstTemp || !second || !secondTemp ||
+        fileSize(firstTemp) < 0 || fileSize(secondTemp) < 0)
+        return false;
+    char firstBak[352], secondBak[352];
+    const int an = std::snprintf(firstBak, sizeof firstBak, "%s.pkg.bak", first);
+    const int bn = std::snprintf(secondBak, sizeof secondBak, "%s.pkg.bak", second);
+    if (an <= 0 || an >= int(sizeof firstBak) ||
+        bn <= 0 || bn >= int(sizeof secondBak))
+        return false;
+    removeFile(firstBak);
+    removeFile(secondBak);
+    const bool hadFirst = exists(first);
+    const bool hadSecond = exists(second);
+    if (hadFirst && !renameFile(first, firstBak)) return false;
+    if (hadSecond && !renameFile(second, secondBak)) {
+        if (hadFirst) renameFile(firstBak, first);
+        return false;
+    }
+    bool promotedFirst = renameFile(firstTemp, first);
+    bool promotedSecond = promotedFirst && renameFile(secondTemp, second);
+    if (!promotedFirst || !promotedSecond) {
+        if (promotedFirst) removeFile(first);
+        if (promotedSecond) removeFile(second);
+        if (hadFirst) renameFile(firstBak, first);
+        if (hadSecond) renameFile(secondBak, second);
+        sceIoSync("ms0:", 0);
+        return false;
+    }
+    sceIoSync("ms0:", 0);
+    removeFile(firstBak);
+    removeFile(secondBak);
+    return true;
+}
+
 s32 readRange(const char* path, void* buf, u32 offset, u32 size) {
     SceUID fd = openReadWithBackup(path);
     if (fd < 0) return -1;

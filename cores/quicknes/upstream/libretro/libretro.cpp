@@ -1368,6 +1368,14 @@ void retro_run(void)
 			   const Nes_Emu::rgb_t& rgb = current_nes_colors[frame.palette[i]];
 #if defined(ABGR1555)
 	         retro_palette[i] = ((rgb.blue & 0xf8) << 7) | ((rgb.green & 0xf8) << 2) | ((rgb.red & 0xf8) >> 3);
+#elif defined(RS_PSP_BGR565)
+	         /* PSP-native GU_PSM_5650 ordering, blue in the high bits. This
+	          * 256-entry table is rebuilt only when the palette changes, so
+	          * emitting it pre-swapped removes the shim's per-pixel channel
+	          * swap across all 61,440 pixels of every frame at no cost.
+	          * Matches the formula QuickNES already uses on its own PSP
+	          * direct-to-VRAM path. */
+	         retro_palette[i] = ((rgb.blue & 0xf8) << 8) | ((rgb.green & 0xfc) << 3) | ((rgb.red & 0xf8) >> 3);
 #else
 	         retro_palette[i] = ((rgb.red & 0xf8) << 8) | ((rgb.green & 0xfc) << 3) | ((rgb.blue & 0xf8) >> 3);
 #endif

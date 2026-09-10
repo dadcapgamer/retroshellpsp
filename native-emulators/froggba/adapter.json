@@ -1,0 +1,57 @@
+{
+  "formatVersion": 2,
+  "name": "froggba",
+  "displayName": "FrogGBA (native PSP)",
+  "repository": "https://github.com/tzubertowski/FrogGBA.git",
+  "commit": "9d75721fe8e3df23db4148f49e92df2bafe6dd1a",
+  "license": "GPL-2.0",
+  "licenseFile": "cores/froggba/upstream/LICENSE",
+  "modelSupport": "Any PSP",
+  "status": "Testing",
+  "notes": "Runs FrogGBA as its original PSP application with RetroShell's embedded pause surface, standard L+R+Select chord, and return-to-shell contract. Requires a user-supplied GBA BIOS.",
+  "adapterProtocol": 1,
+  "pauseMode": "embedded",
+  "pauseHotkey": "L+R+SELECT",
+  "returnMode": "loadexec",
+  "capabilities": ["pause", "resume", "saveState", "loadState", "reset", "aspectRatio", "filter", "screenshot", "emulatorSettings", "exitToShell"],
+  "patches": [
+    "native-emulators/froggba/patches/return-to-launcher.patch",
+    "native-emulators/froggba/shared-save-library.patch"
+  ],
+  "payload": [
+    {
+      "source": "EBOOT.PBP",
+      "destination": "EBOOT.PBP"
+    },
+    {
+      "source": "FrogGBA.prx",
+      "destination": "FrogGBA.prx"
+    },
+    {
+      "source": "exception.prx",
+      "destination": "exception.prx"
+    },
+    {
+      "source": "ku_bridge.prx",
+      "destination": "ku_bridge.prx"
+    },
+    {
+      "source": "dir.ini",
+      "destination": "dir.ini"
+    },
+    {
+      "source": "froggba.cfg",
+      "destination": "froggba.cfg"
+    }
+  ],
+  "localPatches": [
+    "Copy native-emulators/sdk/retroshell_adapter.[ch] and src/core_api/rs_pause_menu.h into source/src before building",
+    "source/src/gui.c: render the compact RetroShell pause surface and route Emulator Settings to FrogGBA's native settings",
+    "source/src/gui.c: dispatch wrapper actions by stable indices instead of executable stack trampolines",
+    "source/src/{main,gui,memory}.c: use RetroShell's per-game save library with read-only fallback to FrogGBA's legacy save and state folders",
+    "source/src/input.c: invoke the embedded RetroShell pause surface with L+R+Select and record pause/resume state",
+    "source/src/main.c: consume argv[2..3] and chain-load back to RetroShell on quit",
+    "source/Makefile: compile the adapter shim and link pspsystemctrl_user",
+    "dir.ini: snapshot_directory relocated from ms0:/PICTURE into the adapter's own folder so the emulator is self-contained"
+  ]
+}

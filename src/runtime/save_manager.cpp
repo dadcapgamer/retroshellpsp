@@ -25,6 +25,23 @@ struct __attribute__((packed)) StateHeader {
     u16  thumbW, thumbH;
 };
 
+class ScopedHostBuffer {
+public:
+    ScopedHostBuffer(const RSHostAPI* services, u32 size)
+        : m_services(services), m_data(services->mem_alloc(size, 16)) {}
+    ~ScopedHostBuffer() {
+        if (m_data) m_services->mem_free(m_data);
+    }
+    ScopedHostBuffer(const ScopedHostBuffer&) = delete;
+    ScopedHostBuffer& operator=(const ScopedHostBuffer&) = delete;
+    void* data() const { return m_data; }
+    u8* bytes() const { return static_cast<u8*>(m_data); }
+
+private:
+    const RSHostAPI* m_services;
+    void* m_data;
+};
+
 void gameDir(char* buf, size_t n, const db::GameEntry& g) {
     std::snprintf(buf, n, "%s/saves/%s/%08x", fs::ROOT,
                   db::systemInfo(g.system).dirName, unsigned(g.pathHash));
@@ -68,8 +85,14 @@ bool saveState(const db::GameEntry& game, EmulatorCore& core, int slot,
             unsigned(maxSize));
 
     const u32 thumbBytes = thumb ? THUMB_W * THUMB_H * 2u : 0u;
-    std::vector<u8> file(sizeof(StateHeader) + thumbBytes + maxSize);
-    u8* payload = file.data() + sizeof(StateHeader) + thumbBytes;
+    const u32 capacity = u32(sizeof(StateHeader)) + thumbBytes + maxSize;
+    ScopedHostBuffer file(host::table(), capacity);
+    if (!file.data()) {
+        RS_LOGE("save: no arena space for state file (%u bytes)",
+                unsigned(capacity));
+        return false;
+    }
+    u8* payload = file.bytes() + sizeof(StateHeader) + thumbBytes;
     RS_LOGI("save: state slot %d serializing", slot);
     const int used = core.stateSave(payload, maxSize);
     if (used <= 0 || u32(used) > maxSize) {
@@ -88,14 +111,14 @@ bool saveState(const db::GameEntry& game, EmulatorCore& core, int slot,
 
     std::memcpy(file.data(), &h, sizeof h);
     if (thumb)
-        std::memcpy(file.data() + sizeof h, thumb, thumbBytes);
-    file.resize(sizeof h + thumbBytes + u32(used));
+        std::memcpy(file.bytes() + sizeof h, thumb, thumbBytes);
+    const u32 fileBytes = u32(sizeof h) + thumbBytes + u32(used);
 
     char dir[128], path[160];
     gameDir(dir, sizeof dir, game);
     fs::mkdirs(dir);
     statePath(path, sizeof path, game, slot);
-    const bool ok = fs::writeFileAtomic(path, file.data(), u32(file.size()));
+    const bool ok = fs::writeFileAtomic(path, file.data(), fileBytes);
     RS_LOGI("save: state slot %d %s (%d bytes)", slot, ok ? "ok" : "FAILED",
             used);
     return ok;
@@ -106,10 +129,22 @@ bool loadState(const db::GameEntry& game, EmulatorCore& core, int slot) {
     RS_LOGI("save: state slot %d preparing load", slot);
     char path[160];
     statePath(path, sizeof path, game, slot);
-    std::vector<u8> file;
-    if (!fs::readFile(path, file, MAX_STATE_BYTES + 64u * 1024u) ||
-        file.size() < sizeof(StateHeader))
+    const s32 fileSize = fs::fileSize(path);
+    const u32 maxFileBytes = MAX_STATE_BYTES + 64u * 1024u;
+    if (fileSize < s32(sizeof(StateHeader)) ||
+        fileSize > s32(maxFileBytes))
         return false;
+
+    const RSHostAPI* services = host::table();
+    ScopedHostBuffer file(services, u32(fileSize));
+    if (!file.data()) {
+        RS_LOGE("save: no arena space to load state (%d bytes)", int(fileSize));
+        return false;
+    }
+    if (fs::readRange(path, file.data(), 0, u32(fileSize)) != fileSize) {
+        RS_LOGE("save: incomplete state read");
+        return false;
+    }
 
     StateHeader h{};
     std::memcpy(&h, file.data(), sizeof h);
@@ -126,7 +161,7 @@ bool loadState(const db::GameEntry& game, EmulatorCore& core, int slot) {
     /* Validate header fields with overflow-safe arithmetic: payloadSize and
      * thumb dimensions come straight from the file and a corrupt state must
      * not wrap the bounds check into an out-of-bounds read. */
-    const size_t total = file.size();
+    const size_t total = size_t(fileSize);
     const size_t thumbBytes = size_t(h.thumbW) * h.thumbH * 2;
     const size_t off = sizeof h + thumbBytes;
     if (off < sizeof h || off > total) return false;          /* thumb overflow */
@@ -136,7 +171,6 @@ bool loadState(const db::GameEntry& game, EmulatorCore& core, int slot) {
      * leave the running game half-modified. */
     const u32 rollbackCapacity = core.stateSize();
     if (!rollbackCapacity || rollbackCapacity > MAX_STATE_BYTES) return false;
-    const RSHostAPI* services = host::table();
     void* rollback = services->mem_alloc(rollbackCapacity, 16);
     if (!rollback) return false;
     RS_LOGI("save: state slot %d capturing rollback (%u bytes)", slot,
@@ -148,7 +182,7 @@ bool loadState(const db::GameEntry& game, EmulatorCore& core, int slot) {
     }
     RS_LOGI("save: state slot %d applying %u-byte payload", slot,
             unsigned(h.payloadSize));
-    const bool ok = core.stateLoad(file.data() + off, h.payloadSize);
+    const bool ok = core.stateLoad(file.bytes() + off, h.payloadSize);
     if (!ok && !core.stateLoad(rollback, u32(rollbackSize)))
         RS_LOGE("save: rollback failed after rejected state");
     services->mem_free(rollback);
@@ -168,18 +202,71 @@ bool loadThumb(const db::GameEntry& game, int slot, u16* out) {
            THUMB_W * THUMB_H * 2;
 }
 
-bool saveSram(const db::GameEntry& game, EmulatorCore& core) {
-    const u32 size = core.sramSize();
-    void* data = core.sramData();
-    if (!size || !data) return true;   /* game has no battery save */
-    if (size > MAX_SRAM_BYTES) {
-        RS_LOGE("save: refusing oversized SRAM (%u)", unsigned(size));
+namespace {
+constexpr u32 MAX_RTC_BYTES = 4096;
+
+bool saveRtc(const db::GameEntry& game, EmulatorCore& core) {
+    const u32 size = core.rtcSize();
+    const void* data = core.rtcData();
+    if (!size || !data) return true;
+    if (size > MAX_RTC_BYTES) {
+        RS_LOGE("save: refusing oversized RTC (%u)", unsigned(size));
         return false;
     }
-
-    const bool ok = writeSramSnapshot(game, data, size);
-    RS_LOGI("save: sram %s (%u bytes)", ok ? "ok" : "FAILED", unsigned(size));
+    char dir[128], path[160];
+    gameDir(dir, sizeof dir, game);
+    fs::mkdirs(dir);
+    std::snprintf(path, sizeof path, "%s/rtc.bin", dir);
+    const bool ok = fs::writeFileAtomic(path, data, size);
+    RS_LOGI("save: rtc %s (%u bytes)", ok ? "ok" : "FAILED",
+            unsigned(size));
     return ok;
+}
+
+bool loadRtc(const db::GameEntry& game, EmulatorCore& core) {
+    const u32 size = core.rtcSize();
+    void* data = core.rtcData();
+    if (!size || !data) return true;
+    if (size > MAX_RTC_BYTES) return false;
+    char dir[128], path[160];
+    gameDir(dir, sizeof dir, game);
+    std::snprintf(path, sizeof path, "%s/rtc.bin", dir);
+    const s32 onDisk = fs::fileSize(path);
+    if (onDisk < 0) return true;
+    if (onDisk != s32(size)) {
+        RS_LOGW("save: RTC size mismatch (%d != %u)", int(onDisk),
+                unsigned(size));
+        return false;
+    }
+    const bool ok = fs::readRange(path, data, 0, size) == s32(size);
+    RS_LOGI("save: rtc restore %s (%u bytes)", ok ? "ok" : "FAILED",
+            unsigned(size));
+    return ok;
+}
+}  // namespace
+
+bool savePersistent(const db::GameEntry& game, EmulatorCore& core) {
+    const u32 size = core.sramSize();
+    void* data = core.sramData();
+    bool sramOk = true;
+    if (size && data && size <= MAX_SRAM_BYTES) {
+        sramOk = writeSramSnapshot(game, data, size);
+        RS_LOGI("save: sram %s (%u bytes)", sramOk ? "ok" : "FAILED",
+                unsigned(size));
+    } else if (size > MAX_SRAM_BYTES) {
+        RS_LOGE("save: refusing oversized SRAM (%u)", unsigned(size));
+        sramOk = false;
+    } else if (size && !data) {
+        RS_LOGE("save: core reports %u SRAM bytes with no buffer",
+                unsigned(size));
+        sramOk = false;
+    }
+    /* size == 0 is the ordinary "cartridge has no battery backup" answer,
+     * and cores may still hand back a non-null pointer for it (PicoDrive
+     * does). Treating that as an error failed the no_error_log release gate
+     * on every game without a save chip. */
+    const bool rtcOk = saveRtc(game, core);
+    return sramOk && rtcOk;
 }
 
 bool writeSramSnapshot(const db::GameEntry& game, const void* data, u32 size) {
@@ -191,46 +278,57 @@ bool writeSramSnapshot(const db::GameEntry& game, const void* data, u32 size) {
     return fs::writeFileAtomic(path, data, size);
 }
 
-bool loadSram(const db::GameEntry& game, EmulatorCore& core) {
+bool loadPersistent(const db::GameEntry& game, EmulatorCore& core) {
     const u32 size = core.sramSize();
     void* data = core.sramData();
-    if (!size || !data) return true;
-    if (size > MAX_SRAM_BYTES) return false;
+    bool sramOk = true;
+    /* size == 0 means the cartridge has no battery backup, which is normal
+     * and not an error even when the core still returns a buffer pointer. */
+    if (size) {
+        if (!data || size > MAX_SRAM_BYTES) {
+            RS_LOGE("save: invalid SRAM buffer (%u bytes)", unsigned(size));
+            sramOk = false;
+        } else {
+            char dir[128], path[160];
+            gameDir(dir, sizeof dir, game);
+            std::snprintf(path, sizeof path, "%s/sram.bin", dir);
+            const s32 onDisk = fs::fileSize(path);
+            if (onDisk >= 0 && onDisk != s32(size)) {
+                RS_LOGW("save: SRAM size mismatch (%d != %u)", int(onDisk),
+                        unsigned(size));
+                sramOk = false;
+            } else if (onDisk >= 0) {
+                /* Use the bounded core arena so a fragmented PSP-1000 heap
+                 * cannot turn a save restore into an exception/termination.
+                 * Copy only after the complete file has been read. */
+                const RSHostAPI* services = host::table();
+                void* temp = services->mem_alloc(size, 16);
+                if (!temp) {
+                    RS_LOGW("save: no core-arena space to restore %u-byte SRAM",
+                            unsigned(size));
+                    sramOk = false;
+                } else {
+                    const bool readOk =
+                        fs::readRange(path, temp, 0, size) == s32(size);
+                    if (readOk) {
+                        std::memcpy(data, temp, size);
+                        RS_LOGI("save: sram restored (%u bytes)",
+                                unsigned(size));
+                    } else {
+                        RS_LOGW("save: SRAM read failed (%u bytes)",
+                                unsigned(size));
+                        sramOk = false;
+                    }
+                    services->mem_free(temp);
+                }
+            }
+        }
+    }
 
-    char dir[128], path[160];
-    gameDir(dir, sizeof dir, game);
-    std::snprintf(path, sizeof path, "%s/sram.bin", dir);
-    const s32 onDisk = fs::fileSize(path);
-    if (onDisk < 0) return true;  /* first run */
-    if (onDisk != s32(size)) {
-        RS_LOGW("save: SRAM size mismatch (%d != %u)", int(onDisk),
-                unsigned(size));
-        return false;
-    }
-    /* Do not use std::vector here. During a PSP-1000 core session the
-     * frontend's small general-purpose heap may be fragmented or nearly
-     * exhausted, especially after a large SNES core has initialized.
-     * A failing vector allocation terminates because the PSP build has
-     * exceptions disabled. The core arena has a bounded, non-throwing
-     * allocator and lets us keep the all-or-nothing SRAM-copy guarantee. */
-    const RSHostAPI* services = host::table();
-    void* temp = services->mem_alloc(size, 16);
-    if (!temp) {
-        RS_LOGW("save: no core-arena space to restore %u-byte SRAM",
-                unsigned(size));
-        return false;
-    }
-    const bool readOk =
-        fs::readRange(path, temp, 0, size) == s32(size);
-    if (readOk)
-        std::memcpy(data, temp, size);
-    services->mem_free(temp);
-    if (!readOk) {
-        RS_LOGW("save: SRAM read failed (%u bytes)", unsigned(size));
-        return false;
-    }
-    RS_LOGI("save: sram restored (%u bytes)", unsigned(size));
-    return true;
+    /* SRAM and RTC are independent persistence regions. A stale SRAM file
+     * must not prevent a valid clock record from being restored. */
+    const bool rtcOk = loadRtc(game, core);
+    return sramOk && rtcOk;
 }
 
 }  // namespace rs::save

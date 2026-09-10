@@ -56,6 +56,8 @@ public:
         text::Font large;   /* Inter SemiBold 19 */
         text::Font body;    /* Inter Regular 15  */
         text::Font small;   /* Inter Regular 12  */
+        text::Font pixel;   /* Geist Pixel Square 19 — display use only */
+        text::Font pixelLarge; /* Geist Pixel Square 23 — active system */
     };
     const Fonts& fonts() const { return m_fonts; }
 

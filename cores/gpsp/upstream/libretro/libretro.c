@@ -1242,6 +1242,11 @@ bool retro_load_game(const struct retro_game_info* info)
       return false;
    }
 
+   if (gamepak_compat_profile_name && log_cb)
+      log_cb(RETRO_LOG_INFO,
+             "[gpSP]: PSP ROM-hack profile active: %s\n",
+             gamepak_compat_profile_name);
+
    if (selected_bios != builtin_bios && gamepak_header_nonstandard)
    {
       show_warning_message("Non-standard ROM header detected, using built-in BIOS", 2500);
@@ -1286,6 +1291,21 @@ bool retro_load_game_special(unsigned game_type,
 
 void retro_unload_game(void)
 {
+   /* Report the two numbers that decide whether a demanding ROM (a large
+    * hack in particular) was limited by the ROM page cache or by the JIT
+    * cache. Logged once per session at teardown, never per frame. */
+   if (log_cb)
+   {
+      extern u32 gamepak_page_faults;
+      extern u32 rom_cache_flushes;
+      extern u32 gamepak_buffer_count;
+      log_cb(RETRO_LOG_INFO,
+             "[gpSP]: rom cache %u MB, page faults %u, jit rom flushes %u\n",
+             (unsigned)gamepak_buffer_count,
+             (unsigned)gamepak_page_faults,
+             (unsigned)rom_cache_flushes);
+   }
+
    if (libretro_ff_enabled)
       set_fastforward_override(false);
 

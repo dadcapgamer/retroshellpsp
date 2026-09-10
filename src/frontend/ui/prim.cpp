@@ -31,9 +31,11 @@ gfx::Texture s_disc;       /* 32x32 filled AA circle */
 gfx::Texture s_discRing;   /* 32x32 AA ring */
 constexpr int SYSTEM_COUNT = 10;
 constexpr int SYSTEM_CELL = 32;
+constexpr int SYSTEM_CELL_LARGE = 48;
 constexpr int CONSOLE_COUNT = SYSTEM_COUNT - 1;
 constexpr int PC_ENGINE_ICON = 8;
 gfx::Texture s_systemIcons[CONSOLE_COUNT];
+gfx::Texture s_systemIconsLarge[CONSOLE_COUNT];
 
 float roundedCoverage(float px, float py, float w, float h, float rad) {
     /* Signed distance to a rounded rectangle centered in [0,w]x[0,h]. */
@@ -135,7 +137,6 @@ bool bakeSystemIcons() {
     };
 
     for (int icon = 0; icon < CONSOLE_COUNT; ++icon) {
-        u8 pixels[SYSTEM_CELL * SYSTEM_CELL * 4] = {};
         int w = 0, h = 0, comp = 0;
         stbi_uc* source =
             stbi_load_from_memory(icons[icon].bytes, int(icons[icon].length),
@@ -147,41 +148,42 @@ bool bakeSystemIcons() {
             return false;
         }
 
-        /* Each authored Figma pixel is a 6x6 square. Sample its center and
-         * write it as 2x2 so the 32px atlas remains pixel-perfect at both
-         * the 32px card and 64px fallback sizes. The two near-black colors
-         * are the icon-frame background in the exported nodes. */
-        for (int y = 0; y < SYSTEM_CELL; ++y) {
-            const int sy = (y / 2) * 6 + 3;
-            for (int x = 0; x < SYSTEM_CELL; ++x) {
-                const int sx = (x / 2) * 6 + 3;
-                const u8* src = source + (sy * w + sx) * 4;
-                u8* dst = pixels + (y * SYSTEM_CELL + x) * 4;
-                const bool frameBackground =
-                    src[0] <= 24 && src[1] <= 24 && src[2] <= 29;
-                if (!frameBackground) {
-                    /* The PC Engine's authored chassis is nearly white, so it
-                     * disappears into the light-theme cards. Use a quiet cool
-                     * gray for only those pale chassis pixels; preserve its
-                     * red and black details and every other console asset. */
-                    const bool palePcEngineChassis =
-                        icon == PC_ENGINE_ICON &&
-                        src[0] >= 224 && src[1] >= 224 && src[2] >= 224;
-                    dst[0] = palePcEngineChassis ? 0xB8 : src[0];
-                    dst[1] = palePcEngineChassis ? 0xC0 : src[1];
-                    dst[2] = palePcEngineChassis ? 0xC4 : src[2];
-                    dst[3] = src[3];
+        /* Each authored Figma pixel is a 6x6 square. Bake native 2x and 3x
+         * variants so the active 48px icon never relies on fractional
+         * texture scaling on the PSP display. */
+        auto bakeIcon = [&](gfx::Texture& texture, int cell, int scale) {
+            u8 pixels[SYSTEM_CELL_LARGE * SYSTEM_CELL_LARGE * 4] = {};
+            for (int y = 0; y < cell; ++y) {
+                const int sy = (y / scale) * 6 + 3;
+                for (int x = 0; x < cell; ++x) {
+                    const int sx = (x / scale) * 6 + 3;
+                    const u8* src = source + (sy * w + sx) * 4;
+                    u8* dst = pixels + (y * cell + x) * 4;
+                    const bool frameBackground =
+                        src[0] <= 24 && src[1] <= 24 && src[2] <= 29;
+                    if (!frameBackground) {
+                        const bool palePcEngineChassis =
+                            icon == PC_ENGINE_ICON &&
+                            src[0] >= 224 && src[1] >= 224 && src[2] >= 224;
+                        dst[0] = palePcEngineChassis ? 0xB8 : src[0];
+                        dst[1] = palePcEngineChassis ? 0xC0 : src[1];
+                        dst[2] = palePcEngineChassis ? 0xC4 : src[2];
+                        dst[3] = src[3];
+                    }
                 }
             }
-        }
+            return gfx::Renderer::createTexture(
+                texture, cell, cell, GU_PSM_8888, pixels, /*dynamic=*/true);
+        };
+        const bool smallReady = bakeIcon(s_systemIcons[icon], SYSTEM_CELL, 2);
+        const bool largeReady = bakeIcon(s_systemIconsLarge[icon],
+                                         SYSTEM_CELL_LARGE, 3);
         stbi_image_free(source);
         /* Keep each system in its own small texture. On PSP hardware a
          * damaged/wrapped atlas lookup contaminated every console card with
          * the same neighbouring red/green pixels. Independent 32x32 images
          * also make texture bounds exact and preserve the same VRAM cost. */
-        if (!gfx::Renderer::createTexture(
-                s_systemIcons[icon], SYSTEM_CELL, SYSTEM_CELL,
-                GU_PSM_8888, pixels, /*dynamic=*/true))
+        if (!smallReady || !largeReady)
             return false;
     }
     return true;
@@ -300,7 +302,8 @@ void iconSystem(gfx::Renderer& r, int systemIdx, float x, float y, float size,
     systemIdx = rsClamp(systemIdx, 0, SYSTEM_COUNT - 1);
     x = float(int(x));
     y = float(int(y));
-    size = size >= 48.f ? 64.f : 32.f;
+    const bool selectedSize = size >= 40.f && size < 56.f;
+    size = size >= 56.f ? 64.f : (selectedSize ? 48.f : 32.f);
     if (systemIdx == CONSOLE_COUNT) {
         iconGear(r, x + size * .5f, y + size * .5f, size * .3f, base);
         return;
@@ -309,7 +312,11 @@ void iconSystem(gfx::Renderer& r, int systemIdx, float x, float y, float size,
     const gfx::TexFilter previous = r.texFilter();
     r.setTexFilter(gfx::TexFilter::Nearest);
     const u32 tint = rsWithAlpha(rsHex(0xFFFFFF), rsAlphaOf(base));
-    r.sprite(s_systemIcons[systemIdx], 0.f, 0.f, SYSTEM_CELL, SYSTEM_CELL,
+    const gfx::Texture& texture = selectedSize
+        ? s_systemIconsLarge[systemIdx] : s_systemIcons[systemIdx];
+    const float sourceSize = selectedSize
+        ? float(SYSTEM_CELL_LARGE) : float(SYSTEM_CELL);
+    r.sprite(texture, 0.f, 0.f, sourceSize, sourceSize,
              x, y, size, size, tint);
     r.setTexFilter(previous);
 }

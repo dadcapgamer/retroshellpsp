@@ -5,6 +5,8 @@
 #include <pspkernel.h>
 #include <pspsysmem.h>
 
+#include <malloc.h>
+
 namespace rs::mem {
 
 namespace {
@@ -22,6 +24,7 @@ u32    s_failures = 0;
 
 bool init() {
     const u32 maxFree = u32(sceKernelMaxFreeMemSize());
+    const u32 totalFreeBefore = u32(sceKernelTotalFreeMemSize());
     if (maxFree <= SLACK_BYTES) {
         RS_LOGE("arena: only %u bytes free, cannot reserve", unsigned(maxFree));
         return false;
@@ -38,8 +41,18 @@ bool init() {
     s_cursor = 0;
     s_high   = 0;
     s_failures = 0;
-    RS_LOGI("arena: reserved %u KB at %p", unsigned(s_size / 1024),
-            (void*)s_base);
+    /* In PRX launches this runs immediately after the core module loads, so
+     * `free before` is the total the core module's BSS and this arena had to
+     * share on this specific hardware model — the number that decides how
+     * large a core's internal caches (gpSP's dynarec cache in particular)
+     * can safely be. `left` is what remains once the arena has taken its
+     * block; contiguous is reported too because it is what bounds a single
+     * allocation and it differs from the total under fragmentation. */
+    RS_LOGI("arena: reserved %u KB at %p "
+            "(free before %u KB, contiguous %u KB, left %u KB)",
+            unsigned(s_size / 1024), (void*)s_base,
+            unsigned(totalFreeBefore / 1024), unsigned(maxFree / 1024),
+            unsigned(u32(sceKernelTotalFreeMemSize()) / 1024));
     return true;
 }
 
@@ -91,5 +104,19 @@ u32 used() { return s_cursor; }
 u32 totalSize() { return s_size; }
 u32 highWater() { return s_high; }
 u32 allocationFailures() { return s_failures; }
+
+void logHeapUsage(const char* when) {
+    /* `arena` here is newlib's own term for the total it has taken from the
+     * fixed heap via sbrk — unrelated to this file's arena. Peak tracks the
+     * high-water across the session so a single sample at core launch can't
+     * under-report what browsing needed earlier. */
+    static u32 s_peakInUse = 0;
+    const struct mallinfo mi = mallinfo();
+    const u32 inUse = u32(mi.uordblks);
+    if (inUse > s_peakInUse) s_peakInUse = inUse;
+    RS_LOGI("heap: %s — %u KB in use, %u KB free, %u KB claimed, peak %u KB",
+            when, unsigned(inUse / 1024), unsigned(u32(mi.fordblks) / 1024),
+            unsigned(u32(mi.arena) / 1024), unsigned(s_peakInUse / 1024));
+}
 
 }  // namespace rs::mem

@@ -2,6 +2,7 @@
  *
  * Layout: ms0:/RETROSHELL/saves/<SystemDir>/<pathHash>/
  *   sram.bin              battery save, flushed on pause/exit and dirty
+ *   rtc.bin               battery-backed cartridge clock/register data
  *   state<N>.rst          save state, N in 0..SLOTS-1
  *
  * .rst layout (little endian):
@@ -41,8 +42,8 @@ bool loadState(const db::GameEntry& game, EmulatorCore& core, int slot);
 /* Reads just the thumbnail; returns false if the slot is empty. */
 bool loadThumb(const db::GameEntry& game, int slot, u16* out);
 
-bool saveSram(const db::GameEntry& game, EmulatorCore& core);
-bool loadSram(const db::GameEntry& game, EmulatorCore& core);
+bool savePersistent(const db::GameEntry& game, EmulatorCore& core);
+bool loadPersistent(const db::GameEntry& game, EmulatorCore& core);
 /* Writes an already-copied SRAM image. The caller owns `data` until this
  * returns; GameSession uses this on its joined Memory Stick worker. */
 bool writeSramSnapshot(const db::GameEntry& game, const void* data, u32 size);

@@ -2,6 +2,7 @@ const root = document.documentElement;
 const repository = root.dataset.githubRepository.trim().replace(/\/$/, "");
 const releaseVersion = root.dataset.releaseVersion?.trim();
 const downloadLinks = document.querySelectorAll("[data-release-link]");
+const coreDownloadLinks = document.querySelectorAll("[data-core-download]");
 
 function setDownloadUrl(url, label) {
   downloadLinks.forEach((link) => {
@@ -30,6 +31,21 @@ async function resolveLatestRelease() {
     asset?.browser_download_url || release.html_url,
     asset ? `Download ${release.name || release.tag_name}` : `View ${release.name || release.tag_name}`
   );
+
+  coreDownloadLinks.forEach((link) => {
+    const name = link.dataset.coreDownload;
+    const asset = release.assets.find((candidate) =>
+      candidate.name.toLowerCase().startsWith(`${name.toLowerCase()}-`) &&
+      candidate.name.toLowerCase().endsWith(".rscore.zip")
+    );
+    link.href = asset?.browser_download_url || release.html_url;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    if (!asset) {
+      link.textContent = "View releases";
+      link.title = "This standalone package is not attached to the latest release";
+    }
+  });
 }
 
 if (repository) {
@@ -44,11 +60,19 @@ if (repository) {
       : `${repository}/releases`,
     "Download the latest RetroShell release"
   );
+  coreDownloadLinks.forEach((link) => {
+    link.href = `${repository}/releases`;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.title = "View RetroShell emulator packages";
+  });
   resolveLatestRelease().catch(() => {
     // The versioned URL above remains usable if GitHub's API is unavailable.
   });
   document.querySelectorAll("[data-github-doc]").forEach((link) => {
     link.href = `${repository}/blob/main/${link.dataset.githubDoc}`;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
   });
 } else {
   document.querySelectorAll("[data-github-link], [data-release-link]").forEach((link) => {

@@ -28,9 +28,9 @@ browse → pick game
   mem::init()                re-reserve the arena for the core
   core.initialize(host)      cores may allocate from the arena here
   ROM → arena                (ZIP entries are extracted straight in)
-  loadSram → run
+  load persistent SRAM + RTC → run
 … play …
-  saveSram → unloadROM
+  atomically save persistent SRAM + RTC → unloadROM
   mem::shutdown → unloadCore → mem::init
   App::restoreAfterCore()    reload theme assets
   HomeScene restored from FrontendSnapshot (category/list/cursor intact)
@@ -111,7 +111,13 @@ RETROSHELL/saves/<System>/<pathHash>/sram.bin      battery save
 RETROSHELL/saves/<System>/<pathHash>/state<N>.rst  states (header +
                                                    RGB565 thumbnail +
                                                    core payload)
+RETROSHELL/saves/<System>/<pathHash>/states/<core>/ native-adapter states
 ```
 
 SRAM is flushed on exit and every 10s while dirty (autosave setting).
-State files record the core name/version and refuse cross-core loads.
+State files record the core name/version and refuse cross-core loads. Native
+adapters use the same per-game directory, but keep their raw states beneath a
+core-named folder because emulator state formats are not interchangeable.
+Battery saves and native states created before this layout remain readable
+from their legacy emulator directories and are written to the canonical
+location after the next save.

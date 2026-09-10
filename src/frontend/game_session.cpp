@@ -51,12 +51,22 @@ constexpr u32 AUDIO_SNES_EMERGENCY =
  * underruns. Four frames give it one bounded catch-up frame while retaining
  * a shallower exit watermark than the deep SNES/PicoDrive profile. */
 constexpr int MAX_PCE_RECOVERY = 4;
+/* FrogGBA sustains full emulation speed on hardware, but the general
+ * six-frame recovery profile reduced presentation to 10-20 Hz in demanding
+ * ROM-hack scenes. Three frames still rebuild the 32.768 kHz audio queue
+ * while guaranteeing a visible update at least once per short burst. */
+constexpr int MAX_FROGGBA_RECOVERY = 3;
+/* Large paged ROMs can give gpSP isolated Memory Stick stalls. The generic
+ * six-frame recovery burst made those stalls turn into long low-refresh
+ * runs, so use the shorter GBA cadence and present the newest frame. */
+constexpr int MAX_GPSP_RECOVERY = 3;
 /* Enter recovery while there is still ~46 ms queued, not at the old
  * ~23 ms emergency boundary. Exit around 81 ms so normal workload spikes
  * have room without pushing latency toward the full 186 ms ring capacity. */
 constexpr u32 AUDIO_RECOVERY_ENTER = audio::OUTPUT_BLOCK_FRAMES * 8u;
 constexpr u32 AUDIO_RECOVERY_EXIT  = audio::OUTPUT_BLOCK_FRAMES * 14u;
 constexpr u32 AUDIO_BALANCED_EXIT  = audio::OUTPUT_BLOCK_FRAMES * 10u;
+constexpr u32 AUDIO_FROGGBA_EXIT   = audio::OUTPUT_BLOCK_FRAMES * 12u;
 constexpr u32 AUDIO_PRIME_TARGET   = AUDIO_RECOVERY_EXIT;
 constexpr u32 MIN_CORE_HEADROOM = 2u * 1024u * 1024u;
 constexpr u32 MIN_BUFFERED_CORE_HEADROOM = 1u * 1024u * 1024u;
@@ -64,15 +74,13 @@ constexpr u32 MAX_ROM_BYTES = 16u * 1024u * 1024u;
 constexpr u32 MAX_STREAMED_ROM_BYTES = 64u * 1024u * 1024u;
 constexpr u32 MAX_ZIP_ENTRIES = 4096;
 constexpr u64 MAX_COMPRESSION_RATIO = 200;
+constexpr const char* FROGGBA_BIOS_PATH = "ms0:/RETROSHELL/system/gba_bios.bin";
+constexpr s32 GBA_BIOS_BYTES = 16 * 1024;
 /* Screenshots are the only frontend-generated files whose count could grow
  * forever. Never delete a user's captures automatically; refuse new ones at
  * a small, predictable ceiling and let the user archive/remove them. */
 constexpr int MAX_SCREENSHOTS = 50;
 
-const char* MENU_LABELS[] = {
-    "Resume", "Save state", "Load state", "Reset", "Aspect", "Filter",
-    "Screenshot", "Exit game",
-};
 }  // namespace
 
 const char* GameSession::scaleOptionName(ScaleMode mode) {
@@ -112,6 +120,17 @@ bool GameSession::startCore(App& app) {
         std::snprintf(m_error, sizeof m_error, "core '%s' not installed",
                       m_coreName.c_str());
         return false;
+    }
+    if (m_coreName == "froggba") {
+        const s32 biosBytes = fs::fileSize(FROGGBA_BIOS_PATH);
+        if (biosBytes != GBA_BIOS_BYTES) {
+            std::snprintf(m_error, sizeof m_error,
+                          biosBytes < 0 ? "FrogGBA needs system/gba_bios.bin"
+                                        : "FrogGBA BIOS must be 16 KB");
+            RS_LOGE("session: FrogGBA BIOS invalid path=%s bytes=%d",
+                    FROGGBA_BIOS_PATH, int(biosBytes));
+            return false;
+        }
     }
 
     /* Resolve frontend settings while the menu heap is still intact.
@@ -266,8 +285,8 @@ bool GameSession::startCore(App& app) {
     }
     RS_LOGI("session: ROM loaded; %u KB arena free before SRAM",
             unsigned(mem::available() / 1024));
-    if (!save::loadSram(m_game, m_cores.core()))
-        RS_LOGW("session: SRAM restore skipped; continuing with core defaults");
+    if (!save::loadPersistent(m_game, m_cores.core()))
+        RS_LOGW("session: persistent restore incomplete; continuing with core defaults");
     RS_LOGI("session: post-load restore complete");
     m_romLoaded = true;   /* only now is it safe to persist SRAM on exit */
     power::setCpuMhz(cfg::get().cpuGameMhz);
@@ -281,6 +300,12 @@ bool GameSession::startCore(App& app) {
     if (m_coreName == "pcefast")
         RS_LOGI("session: PCE recovery cap %d, exit %u frames",
                 MAX_PCE_RECOVERY, unsigned(AUDIO_BALANCED_EXIT));
+    else if (m_coreName == "froggba")
+        RS_LOGI("session: FrogGBA recovery cap %d, exit %u frames",
+                MAX_FROGGBA_RECOVERY, unsigned(AUDIO_FROGGBA_EXIT));
+    else if (m_coreName == "gpsp")
+        RS_LOGI("session: gpSP-PSP recovery cap %d, exit %u frames",
+                MAX_GPSP_RECOVERY, unsigned(AUDIO_FROGGBA_EXIT));
     else if (m_coreName == "snes9x2005")
         RS_LOGI("session: SNES adaptive recovery %d-%d, emergency %u, "
                 "exit %u frames",
@@ -305,6 +330,49 @@ void GameSession::enter(App& app) {
     }
 }
 
+void GameSession::systemSuspend(App&) {
+    m_systemSuspended = true;
+    audio::setPaused(true);
+
+    /* Never continue emulation immediately after wake. If sleep began during
+     * gameplay, move to the already-safe pause state without doing Memory
+     * Stick I/O in the power transition. A session already in the menu stays
+     * exactly where it was. */
+    if (m_state == State::Running) {
+        m_state = State::Menu;
+        m_menuRow = RS_PAUSE_RESUME;
+        m_menuPos.snap(0.f);
+        m_menuScroll.snap(0.f);
+        m_menuFade.t = 1.f;
+        m_thumbSlot = -1;
+    }
+    resetPerfWindow();
+}
+
+void GameSession::systemResume(App& app) {
+    m_systemSuspended = false;
+    audio::setPaused(true);
+    /* Some firmware revisions may deliver RESUMING without the earlier
+     * SUSPENDING notification reaching the app thread. Apply the same safety
+     * transition here as a fallback. */
+    if (m_state == State::Running) {
+        m_state = State::Menu;
+        m_menuRow = RS_PAUSE_RESUME;
+        m_menuPos.snap(0.f);
+        m_menuScroll.snap(0.f);
+        m_menuFade.t = 1.f;
+    }
+    m_emuAccum = 0.f;
+    m_audioRecovery = false;
+    resetPerfWindow();
+    if (m_romLoaded)
+        power::setCpuMhz(cfg::get().cpuGameMhz);
+    save::querySlots(m_game, m_slots);
+    m_thumbSlot = -1;
+    app.toast("Resumed paused - select Resume");
+    RS_LOGI("session: resumed from system sleep in pause menu");
+}
+
 void GameSession::teardown(App& app, bool restoreFrontend) {
     if (m_teardownComplete) return;
     m_teardownComplete = true;
@@ -316,8 +384,9 @@ void GameSession::teardown(App& app, bool restoreFrontend) {
      * leaves the core "loaded" (module up) but with default/empty SRAM —
      * saving that would clobber the user's real .srm. */
     if (m_romLoaded) {
-        if (m_cores.core().sramDirty())
-            save::saveSram(m_game, m_cores.core());
+        /* RTC changes independently of SRAM, so persist both regions on
+         * every clean teardown even when the SRAM hash stayed unchanged. */
+        save::savePersistent(m_game, m_cores.core());
         m_cores.core().unloadROM();
         m_romLoaded = false;
     }
@@ -485,11 +554,18 @@ void GameSession::updateRunning(App& app, float dt) {
     const float period = 1.f / float(m_cores.core().fps());
     const bool pceRecovery = m_coreName == "pcefast";
     const bool snesRecovery = m_coreName == "snes9x2005";
+    const bool froggbaRecovery = m_coreName == "froggba";
+    const bool gpspRecovery = m_coreName == "gpsp";
     int recoveryFrameCap = pceRecovery
         ? MAX_PCE_RECOVERY
-        : snesRecovery ? MAX_SNES_RECOVERY : MAX_DEEP_RECOVERY;
-    const u32 recoveryExit =
-        pceRecovery ? AUDIO_BALANCED_EXIT : AUDIO_RECOVERY_EXIT;
+        : snesRecovery ? MAX_SNES_RECOVERY
+        : froggbaRecovery ? MAX_FROGGBA_RECOVERY
+        : gpspRecovery ? MAX_GPSP_RECOVERY
+                       : MAX_DEEP_RECOVERY;
+    const u32 recoveryExit = pceRecovery
+        ? AUDIO_BALANCED_EXIT
+        : (froggbaRecovery || gpspRecovery)
+              ? AUDIO_FROGGBA_EXIT : AUDIO_RECOVERY_EXIT;
     m_emuAccum += dt;
     int framesDue = int(m_emuAccum / period);
     framesDue = rsClamp(framesDue, 0, MAX_WALL_CATCHUP);
@@ -645,7 +721,12 @@ void GameSession::updateRunning(App& app, float dt) {
     m_sramTimer += dt;
     if (m_sramTimer >= SRAM_FLUSH_SECONDS) {
         m_sramTimer = 0.f;
-        if (cfg::get().autosave && m_cores.core().sramDirty())
+        /* FrogGBA's fixed 128 KiB SRAM requires two Memory Stick syncs for
+         * an atomic write. Real hardware showed that storage transaction
+         * stalling gameplay for 2.24 seconds even on the worker thread.
+         * Defer this core until its pause menu or clean teardown. */
+        if (m_coreName != "froggba" && cfg::get().autosave &&
+            m_cores.core().sramDirty())
             queuePeriodicSram();
     }
 }
@@ -656,9 +737,17 @@ void GameSession::openMenu(App& app) {
     /* Keep save-state and screenshot I/O serialized with the background SRAM
      * writer. This wait occurs only after gameplay audio has been paused. */
     finishPeriodicSram();
+    if (m_coreName == "froggba" && cfg::get().autosave &&
+        m_cores.core().sramDirty()) {
+        const u32 start = sceKernelGetSystemTimeLow();
+        const bool ok = save::savePersistent(m_game, m_cores.core());
+        RS_LOGI("save: paused FrogGBA flush %s (%u ms)",
+                ok ? "ok" : "FAILED",
+                unsigned((sceKernelGetSystemTimeLow() - start) / 1000u));
+    }
     resetPerfWindow();
     m_state = State::Menu;
-    m_menuRow = 0;
+    m_menuRow = RS_PAUSE_RESUME;
     m_menuPos.snap(0.f);
     m_menuScroll.snap(0.f);
     m_menuFade.start(0.18f);
@@ -732,10 +821,12 @@ void GameSession::updateMenu(App& app) {
     auto& core = m_cores.core();
 
     if (pad.navPressed(PSP_CTRL_UP) && m_menuRow > 0) m_menuRow--;
-    if (pad.navPressed(PSP_CTRL_DOWN) && m_menuRow < MENU_COUNT - 1)
+    if (pad.navPressed(PSP_CTRL_DOWN) &&
+        m_menuRow < RS_PAUSE_ITEM_COUNT - 1)
         m_menuRow++;
 
-    if (m_menuRow == MENU_SAVE || m_menuRow == MENU_LOAD) {
+    if (m_menuRow == RS_PAUSE_SAVE_STATE ||
+        m_menuRow == RS_PAUSE_LOAD_STATE) {
         if (pad.navPressed(PSP_CTRL_LEFT) && m_slot > 0) m_slot--;
         if (pad.navPressed(PSP_CTRL_RIGHT) && m_slot < save::SLOTS - 1)
             m_slot++;
@@ -747,10 +838,10 @@ void GameSession::updateMenu(App& app) {
         m_scaleMode = static_cast<ScaleMode>(mode);
         m_videoOptionsDirty = true;
     };
-    if (m_menuRow == MENU_ASPECT) {
+    if (m_menuRow == RS_PAUSE_ASPECT_RATIO) {
         if (pad.navPressed(PSP_CTRL_LEFT)) cycleAspect(-1);
         if (pad.navPressed(PSP_CTRL_RIGHT)) cycleAspect(1);
-    } else if (m_menuRow == MENU_FILTER &&
+    } else if (m_menuRow == RS_PAUSE_FILTER &&
                (pad.navPressed(PSP_CTRL_LEFT) ||
                 pad.navPressed(PSP_CTRL_RIGHT))) {
         m_nearestFilter = !m_nearestFilter;
@@ -764,10 +855,10 @@ void GameSession::updateMenu(App& app) {
 
     if (!pad.isPressed(PSP_CTRL_CROSS)) return;
     switch (m_menuRow) {
-        case MENU_RESUME:
+        case RS_PAUSE_RESUME:
             resumeGame();
             break;
-        case MENU_SAVE: {
+        case RS_PAUSE_SAVE_STATE: {
             u16 thumb[save::THUMB_W * save::THUMB_H];
             makeThumb(thumb);
             app.toast(save::saveState(m_game, core, m_slot, thumb)
@@ -777,7 +868,7 @@ void GameSession::updateMenu(App& app) {
             m_thumbSlot = -1;
             break;
         }
-        case MENU_LOAD:
+        case RS_PAUSE_LOAD_STATE:
             if (m_slots[m_slot].exists) {
                 app.toast(save::loadState(m_game, core, m_slot)
                               ? "State loaded"
@@ -787,19 +878,19 @@ void GameSession::updateMenu(App& app) {
                 app.toast("Empty slot");
             }
             break;
-        case MENU_RESET:
+        case RS_PAUSE_RESET:
             core.reset();
             resumeGame(/*discardAudio=*/true);
             app.toast("Reset");
             break;
-        case MENU_ASPECT:
+        case RS_PAUSE_ASPECT_RATIO:
             cycleAspect(1);
             break;
-        case MENU_FILTER:
+        case RS_PAUSE_FILTER:
             m_nearestFilter = !m_nearestFilter;
             m_videoOptionsDirty = true;
             break;
-        case MENU_SCREENSHOT: {
+        case RS_PAUSE_SCREENSHOT: {
             char path[128];
             char dir[64];
             std::snprintf(dir, sizeof dir, "%s/screenshots", fs::ROOT);
@@ -823,7 +914,14 @@ void GameSession::updateMenu(App& app) {
             resumeGame();
             break;
         }
-        case MENU_EXIT:
+        case RS_PAUSE_EMULATOR_SETTINGS:
+            /* Libretro PRX cores expose runtime options, but they do not own
+             * a second UI. Keep the shared row present so navigation remains
+             * identical; adapter-based emulators route this row to their
+             * original settings screen. */
+            app.toast("No additional emulator settings");
+            break;
+        case RS_PAUSE_EXIT:
             exitToHome(app);
             break;
     }
@@ -838,7 +936,7 @@ void GameSession::update(App& app, float dt) {
             m_menuPos.to(float(m_menuRow));
             m_menuPos.update(dt, 14.f);
             m_menuScroll.to(float(rsClamp(m_menuRow - 2, 0,
-                                          MENU_COUNT - 5)));
+                                          RS_PAUSE_ITEM_COUNT - 5)));
             m_menuScroll.update(dt, 14.f);
             m_menuFade.update(dt);
             updateMenu(app);
@@ -992,23 +1090,27 @@ void GameSession::drawMenu(App& app) {
                        rsWithAlpha(pal.shadow,
                                    rsAlphaOf(pal.shadow) * a / (255u * 2u)));
 
-    for (int i = 0; i < MENU_COUNT; i++) {
+    for (int i = 0; i < RS_PAUSE_ITEM_COUNT; i++) {
         const float rowY =
             listY + (float(i) - m_menuScroll.v) * rowH;
         if (rowY + rowH <= listY || rowY >= listY + listH) continue;
         const bool sel = i == m_menuRow;
         char label[48];
-        if (i == MENU_SAVE || i == MENU_LOAD) {
-            std::snprintf(label, sizeof label, "%s  < %d%s >", MENU_LABELS[i],
+        if (i == RS_PAUSE_SAVE_STATE || i == RS_PAUSE_LOAD_STATE) {
+            std::snprintf(label, sizeof label, "%s  < %d%s >",
+                          rs_pause_menu_label(RSPauseMenuItem(i)),
                           m_slot + 1, m_slots[m_slot].exists ? "" : " ·");
-        } else if (i == MENU_ASPECT) {
-            std::snprintf(label, sizeof label, "%s  < %s >", MENU_LABELS[i],
+        } else if (i == RS_PAUSE_ASPECT_RATIO) {
+            std::snprintf(label, sizeof label, "%s  < %s >",
+                          rs_pause_menu_label(RSPauseMenuItem(i)),
                           scaleDisplayName(m_scaleMode));
-        } else if (i == MENU_FILTER) {
-            std::snprintf(label, sizeof label, "%s  < %s >", MENU_LABELS[i],
+        } else if (i == RS_PAUSE_FILTER) {
+            std::snprintf(label, sizeof label, "%s  < %s >",
+                          rs_pause_menu_label(RSPauseMenuItem(i)),
                           m_nearestFilter ? "Sharp" : "Smooth");
         } else {
-            std::snprintf(label, sizeof label, "%s", MENU_LABELS[i]);
+            std::snprintf(label, sizeof label, "%s",
+                          rs_pause_menu_label(RSPauseMenuItem(i)));
         }
         fonts.body.draw(r, px + 32.f, rowY + 8.f, label,
                         rsWithAlpha(sel ? pal.textPrimary
@@ -1018,7 +1120,8 @@ void GameSession::drawMenu(App& app) {
     r.resetScissor();
 
     /* Slot thumbnail preview beside the panel. */
-    if ((m_menuRow == MENU_SAVE || m_menuRow == MENU_LOAD) &&
+    if ((m_menuRow == RS_PAUSE_SAVE_STATE ||
+         m_menuRow == RS_PAUSE_LOAD_STATE) &&
         m_slots[m_slot].exists) {
         if (m_thumbSlot != m_slot) {
             static u16 thumb[save::THUMB_W * save::THUMB_H];

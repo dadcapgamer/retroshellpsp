@@ -1,0 +1,10 @@
+{
+  "name": "mgba",
+  "version": "0.11-compat",
+  "systems": "gb|gbc|gba",
+  "priority": 80,
+  "testOnly": true,
+  "psp1000Safe": false,
+  "requiresFullContent": false,
+  "preferVfs": true
+}

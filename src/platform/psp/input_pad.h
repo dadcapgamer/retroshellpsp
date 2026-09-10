@@ -16,6 +16,9 @@ namespace rs::input {
 class Pad {
 public:
     void init();
+    /* Discard held/pressed/repeat history after a system resume. Without this
+     * a wake-up button can be interpreted as a pause-menu action. */
+    void resetAfterResume();
     void poll();
     /* Refresh held/analog state without consuming pressed/released edges.
      * Used between multiple emulated frames in one presentation pass. */

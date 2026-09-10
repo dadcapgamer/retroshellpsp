@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from pathlib import Path
 import zipfile
@@ -11,6 +12,29 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[1]
 EPOCH = (1980, 1, 1, 0, 0, 0)
 VERSION = (ROOT / "RELEASE_VERSION").read_text().strip()
+CATALOG = json.loads((ROOT / "core-catalog.json").read_text())["cores"]
+CORE_API_VERSION = 4
+
+
+def native_adapters() -> dict[str, tuple[dict, Path]]:
+    adapters: dict[str, tuple[dict, Path]] = {}
+    for manifest_path in sorted((ROOT / "native-emulators").glob("*/manifest.json")):
+        manifest = json.loads(manifest_path.read_text())
+        name = manifest["name"]
+        package = (ROOT / "dist/core-directory" /
+                   f"{name}-{manifest['version']}.rscore.zip")
+        adapters[name] = (manifest, package)
+    return adapters
+
+
+def native_package_descriptor(package: Path, name: str) -> dict:
+    with zipfile.ZipFile(package) as archive:
+        descriptor = json.loads(archive.read(
+            f"RETROSHELL/core-packages/{name}/package.json"))
+    descriptor["file"] = package.name
+    descriptor["packageSha256"] = sha256(package)
+    descriptor["bytes"] = package.stat().st_size
+    return descriptor
 
 
 def add_file(archive: zipfile.ZipFile, source: Path, destination: str) -> None:
@@ -24,26 +48,55 @@ def add_bytes(archive: zipfile.ZipFile, data: bytes, destination: str) -> None:
     archive.writestr(info, data, compresslevel=9)
 
 
-def package_core(build: Path, output_dir: Path, core: dict) -> Path:
+def sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def package_core(build: Path, output_dir: Path, core: dict) -> tuple[Path, dict]:
     name = core["name"]
     manifest_path = ROOT / f"cores/{name}/manifest.json"
     manifest = json.loads(manifest_path.read_text())
+    artifact_path = build / f"cores/{name}.prx"
     output = output_dir / f"{name}-{manifest['version']}.rscore.zip"
     output.parent.mkdir(parents=True, exist_ok=True)
+    catalog_entry = CATALOG[name]
+    status = catalog_entry["status"]
+    model_support = catalog_entry["modelSupport"]
     provenance = {
         "formatVersion": 1,
         "target": "mipsel-sony-psp",
         "core": core,
     }
+    descriptor = {
+        "formatVersion": 3,
+        "kind": "retroshell-core",
+        "coreApiVersion": CORE_API_VERSION,
+        "name": name,
+        "displayName": catalog_entry["displayName"],
+        "version": manifest["version"],
+        "systems": manifest["systems"].split("|"),
+        "status": status,
+        "notes": catalog_entry["notes"],
+        "modelSupport": model_support,
+        "psp1000Safe": manifest["psp1000Safe"],
+        "testOnly": manifest["testOnly"],
+        "artifactSha256": sha256(artifact_path),
+    }
     readme = (
-        f"RetroShell experimental core: {name}\n\n"
-        "Extract this archive at the root of the PSP Memory Stick.\n"
-        "Experimental/testOnly cores require a RetroShell candidate EBOOT.\n"
+        f"RetroShell core: {name} {manifest['version']}\n\n"
+        "Copy this unopened .rscore.zip into RETROSHELL/cores/ on the PSP "
+        "Memory Stick, then restart RetroShell.\n"
+        "Testing cores require a RetroShell beta/testing EBOOT.\n"
         "Native PRX files execute with the application's permissions; only "
         "install packages from a source you trust.\n"
     ).encode()
+    if name == "froggba":
+        readme += (
+            "\nFrogGBA requires a legally obtained GBA BIOS copied to "
+            "RETROSHELL/system/gba_bios.bin. The BIOS is not included.\n"
+        ).encode()
     with zipfile.ZipFile(output, "w") as archive:
-        add_file(archive, build / f"cores/{name}.prx",
+        add_file(archive, artifact_path,
                  f"RETROSHELL/cores/{name}.prx")
         add_file(archive, manifest_path, f"RETROSHELL/cores/{name}.json")
         add_file(archive, ROOT / core["licenseFile"],
@@ -53,7 +106,96 @@ def package_core(build: Path, output_dir: Path, core: dict) -> Path:
                   f"RETROSHELL/core-packages/{name}/provenance.json")
         add_bytes(archive, readme,
                   f"RETROSHELL/core-packages/{name}/README.txt")
-    return output
+        add_bytes(archive,
+                  json.dumps(descriptor, indent=2, sort_keys=True).encode() + b"\n",
+                  f"RETROSHELL/core-packages/{name}/package.json")
+    descriptor["file"] = output.name
+    descriptor["packageSha256"] = sha256(output)
+    descriptor["bytes"] = output.stat().st_size
+    return output, descriptor
+
+
+def write_core_directory(build: Path, cores: list[dict], all_cores: list[dict]) -> list[Path]:
+    output_dir = ROOT / "dist/core-directory"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    adapters = native_adapters()
+    available_native = {
+        name for name, (_, package) in adapters.items() if package.is_file()
+    }
+    preserved_native = {package.name for _, package in adapters.values()
+                        if package.is_file()}
+    # Do not leave obsolete packages behind when a core is removed or its
+    # version changes. Native packages created by the adapter pipeline are
+    # preserved only when their filename matches the current manifest.
+    for stale in output_dir.glob("*.rscore.zip"):
+        if stale.name not in preserved_native:
+            stale.unlink()
+    packages: list[Path] = []
+    catalog: list[dict] = []
+    for core in sorted(cores, key=lambda value: value["name"]):
+        package, descriptor = package_core(build, output_dir, core)
+        packages.append(package)
+        catalog.append(descriptor)
+    for name, (_, package) in adapters.items():
+        if package.is_file():
+            packages.append(package)
+            catalog = [item for item in catalog if item["name"] != name]
+            catalog.append(native_package_descriptor(package, name))
+    catalog.sort(key=lambda value: value["name"])
+    index = {
+        "formatVersion": 1,
+        "retroShellVersion": VERSION,
+        "cores": catalog,
+        "unavailable": [
+            {
+                "name": core["name"],
+                **CATALOG[core["name"]],
+            }
+            for core in sorted(all_cores, key=lambda value: value["name"])
+            if (core.get("delivery") == "archived" and
+                core["name"] not in available_native)
+        ],
+    }
+    (output_dir / "index.json").write_text(
+        json.dumps(index, indent=2, sort_keys=True) + "\n")
+    lines = [
+        "# RetroShell core directory",
+        "",
+        "Download a `.rscore.zip`, copy the unopened ZIP into `RETROSHELL/cores/`",
+        "on the PSP Memory Stick, and restart RetroShell.",
+        "",
+        "| Core | Systems | Status | PSP models | Package |",
+        "| --- | --- | --- | --- | --- |",
+    ]
+    for item in catalog:
+        lines.append(
+            f"| {item['displayName']} | {', '.join(item['systems'])} | "
+            f"{item['status']} | {item['modelSupport']} | "
+            f"[{item['file']}]({item['file']}) |"
+        )
+    lines.extend([
+        "",
+        "## Not offered",
+        "",
+        "These integrations remain in source history for audit purposes but",
+        "are not downloadable because they failed a PSP safety or performance gate.",
+        "",
+        "| Core | Reason |",
+        "| --- | --- |",
+    ])
+    for core in sorted(all_cores, key=lambda value: value["name"]):
+        if (core.get("delivery") == "archived" and
+                core["name"] not in available_native):
+            item = CATALOG[core["name"]]
+            lines.append(f"| {item['displayName']} | {item['notes']} |")
+    lines.extend([
+        "",
+        "Core packages execute native code. Install packages only from a",
+        "source you trust. Games and BIOS files are not included.",
+        "",
+    ])
+    (output_dir / "README.md").write_text("\n".join(lines))
+    return packages
 
 
 def main() -> None:
@@ -100,17 +242,24 @@ def main() -> None:
         add_file(archive, ROOT / "RELEASE_VERSION", "RETROSHELL/VERSION")
         add_file(archive, ROOT / "LICENSE", "RETROSHELL/LICENSE")
         add_file(archive, ROOT / "docs/INSTALL.md", "INSTALL.md")
+        add_bytes(archive,
+                  b"Optional emulator BIOS files belong in this directory.\n"
+                  b"FrogGBA expects gba_bios.bin. BIOS files are not included.\n",
+                  "RETROSHELL/system/README.txt")
         add_file(archive, ROOT / "THIRD_PARTY_NOTICES.md",
                  "RETROSHELL/THIRD_PARTY_NOTICES.md")
+        add_file(archive, ROOT / "assets/fonts/OFL-Geist.txt",
+                 "RETROSHELL/licenses/Geist-Pixel-OFL-1.1.txt")
     print(output)
 
     if args.core_packages:
-        candidates = [
+        available = [
             core for core in lock["cores"]
-            if core.get("delivery") == "candidate"
+            if core.get("delivery") in {"production", "candidate"}
         ]
-        for core in sorted(candidates, key=lambda value: value["name"]):
-            print(package_core(build, ROOT / "dist/cores", core))
+        for package in write_core_directory(build, available, lock["cores"]):
+            print(package)
+        print(ROOT / "dist/core-directory/index.json")
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 # PSP core research and candidate roadmap
 
-Research snapshot: 2026-07-28
+Research snapshot: 2026-08-14
 
 ## What the RetroArch PSP catalog tells us
 
@@ -13,12 +13,12 @@ Current official PSP artifacts relevant to RetroShell include:
 
 | System | Current PSP buildbot cores | RetroShell evaluation order |
 | --- | --- | --- |
-| GB/GBC | Gambatte, Gearboy, TGB Dual | Gambatte, Gearboy, TGB Dual |
+| GB/GBC | Gambatte, Gearboy, TGB Dual, mGBA | Gambatte default; other integrations archived after hardware failures |
 | NES | FCEUmm, QuickNES, Nestopia | FCEUmm, QuickNES, Nestopia |
 | SNES | Snes9x 2005, Snes9x 2005 Plus | 2005 Plus, 2005, PSP-specific TYL research |
 | Mega Drive / Sega CD / 32X | PicoDrive | PicoDrive |
 | Master System / Game Gear | SMS Plus, Gearsystem | SMS Plus, Gearsystem |
-| GBA | gpSP, mGBA | gpSP, then mGBA as a compatibility comparison |
+| GBA | gpSP, mGBA, FrogGBA | gpSP performance default; FrogGBA PSP-native compatibility candidate |
 | PC Engine | Beetle PCE, Beetle PCE Fast | Beetle PCE Fast |
 | Atari Lynx | Handy, Beetle Lynx | Handy, then Beetle Lynx |
 | Neo Geo Pocket | RACE, Beetle NeoPop | RACE, then Beetle NeoPop |
@@ -35,9 +35,8 @@ production defaults merely because they work on desktop or PPSSPP.
 Do not install every buildbot core into production. Build the following as
 test-only PRX packages and let the same ROM corpus select winners:
 
-1. **GB/GBC:** Gambatte is the accuracy-oriented default. Gearboy is the
-   compatibility alternate. TGB Dual is retained only if its dual-system
-   behavior provides a measured benefit that justifies its memory cost.
+1. **GB/GBC:** Gambatte is the PSP-1000 default. Gearboy, TGB Dual, and mGBA
+   remain blocked after hardware failures; no unsafe alternate is offered.
 2. **NES:** FCEUmm is the compatibility baseline. QuickNES is the speed
    candidate. Nestopia is the accuracy comparison and is expected to cost
    more CPU and memory.
@@ -52,11 +51,11 @@ test-only PRX packages and let the same ROM corpus select winners:
 4. **Sega:** PicoDrive remains the Mega Drive/Sega CD/32X baseline. SMS Plus
    is the dedicated Master System/Game Gear candidate; Gearsystem is the
    alternate.
-5. **GBA:** gpSP is integrated as the first performance candidate because of
-   its PSP MIPS dynarec. Its ROM page cache is bounded to 8 MiB and large
-   uncompressed games use the host VFS. mGBA remains a later compatibility
-   comparison, not an expected PSP-1000 default.
-   Both remain blocked until host VFS/streaming is proven.
+5. **GBA:** gpSP remains the speed-oriented default because of its PSP MIPS
+   dynarec and bounded ROM page cache. mGBA was removed after crashing real
+   hardware. FrogGBA replaces TempGBA as the pinned PSP-native compatibility candidate for
+   games and ROM hacks gpSP rejects. It requires a real GBA BIOS and remains
+   experimental until PPSSPP plus PSP-1000/64 MB hardware gates pass.
 6. **PC Engine:** Beetle PCE Fast is the first candidate. Its PSP build uses
    32 kHz audio, native BGR565 output, and frontend-controlled recovery frames
    so the core can skip obsolete rendering work without skipping emulation.
@@ -89,38 +88,59 @@ telemetry must also record changing-pixel and all-black detection.
 The community idea fits RetroShell well if it begins as a curated,
 open catalog rather than an in-PSP commercial store.
 
-Each installable package should contain:
+Package format 3 is now implemented. Each installable package declares its
+required Core API version and contains:
 
 ```text
-<core-id>/
-  core.prx
-  manifest.json
-  LICENSE.txt
-  provenance.json
-  README.txt
+RETROSHELL/cores/<core-id>.prx
+RETROSHELL/cores/<core-id>.json
+RETROSHELL/licenses/<core-id>-<license>
+RETROSHELL/core-packages/<core-id>/package.json
+RETROSHELL/core-packages/<core-id>/provenance.json
+RETROSHELL/core-packages/<core-id>/README.txt
 ```
 
-Manifest version 2 should add:
+The current descriptor records:
 
-- package format and RetroShell Core API versions;
-- core id, version, systems, extensions, priority, and test-only status;
-- PSP-1000 support declaration and measured memory high-water;
-- SHA-256 hashes for every packaged file;
-- publisher name and signing key id;
-- source repository, exact commit, license, and corresponding-source URL;
-- required BIOS names and hashes, without distributing copyrighted BIOSes;
-- known compatibility exceptions and safe core options.
+- package format, core id, version, systems, test-only status, and PSP-1000
+  safety declaration;
+- an exact PRX SHA-256;
+- source repository, exact commit, retained license, patches, and compiler
+  flags through the pinned provenance record;
+- current Included, Testing, or Experimental status and model-support notes.
+
+Publisher signatures, BIOS requirements, measured high-water marks, and
+per-game exceptions remain future descriptor fields. They must not be implied
+by the first unsigned package format.
 
 Because a PRX is native executable code with no meaningful PSP sandbox,
-RetroShell must never silently trust a downloaded core. The official catalog
-should accept reproducible packages through review, verify hashes/signatures,
-show publisher and PSP-1000 status, and refuse incompatible API versions.
-Manual unsigned drag-and-drop packages can remain possible behind a clear
-warning for developers.
+RetroShell rejects malformed layouts, unsafe paths, encrypted or oversized
+payloads, descriptor mismatches, the dummy core, and integrations already
+disqualified by hardware testing. It installs the PRX and manifest as one
+recoverable pair and consumes the ZIP to avoid duplicated Memory Stick use.
+This validates package structure; it does not make unsigned native code safe.
 
-The first release should be a Git-hosted catalog plus a desktop packaging and
-verification tool. Network downloading on the PSP can come later; it adds TLS,
-parser, interrupted-download, and memory risks without helping core emulation.
+The first directory is Git-hosted and uses downloadable `.rscore.zip` release
+assets. Network downloading on the PSP can come later; it adds TLS, parser,
+interrupted-download, and memory risks without helping core emulation.
+
+## Next system candidates
+
+These are research candidates, not downloadable RetroShell cores. Each needs a
+new frontend system definition, extension rules, artwork, a pinned source
+import, and PSP-1000 qualification before appearing in the directory.
+
+| Priority | System | Upstream candidate | Why it is worth evaluating |
+| --- | --- | --- | --- |
+| 1 | Neo Geo Pocket / Color | RACE | The upstream project is itself derived from a PSP port and includes PSP-oriented MIPS assembly. |
+| 2 | Atari 2600 | Stella 2014 | A deliberately older Stella libretro branch with a relatively small system target. |
+| 3 | Atari Lynx | Handy | Mature single-system libretro core with a compact source tree. |
+| 4 | WonderSwan / Color | Beetle WonderSwan | Existing single-system libretro integration; memory and rotation controls need measurement. |
+| 5 | SNES alternate | Snes9x 2002 | Lower-era SNES engine worth measuring, but its advertised optimizations are ARM-specific and cannot be assumed to help Allegrex. |
+
+Game & Watch, MSX, Atari 7800/8-bit, ColecoVision, and curated arcade remain a
+later wave. PS1 should continue to use the PSP's native POPS route; N64 stays
+out of scope without a convincing PSP-1000 result.
 
 ## Sources
 
@@ -140,3 +160,13 @@ parser, interrupted-download, and memory risks without helping core emulation.
   https://github.com/libretro/snes9x2005
 - Snes9xTYL PSP source:
   https://github.com/esmjanus/snes9xTYL
+- Stella 2014 source:
+  https://github.com/libretro/stella2014-libretro
+- Snes9x 2002 source:
+  https://github.com/libretro/snes9x2002
+- Handy source:
+  https://github.com/libretro/libretro-handy
+- Beetle WonderSwan source:
+  https://github.com/libretro/beetle-wswan-libretro
+- RACE source:
+  https://github.com/libretro/RACE

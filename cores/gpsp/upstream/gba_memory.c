@@ -374,6 +374,7 @@ bool gamepak_mirror_1m;     /* 1MiB Classic NES/Famicom Mini mirror mode */
 static u8 *gamepak_mini_rom;
 bool gamepak_mini_materialized;
 bool gamepak_header_nonstandard;
+const char *gamepak_compat_profile_name;
 // We allocate in 1MB chunks.
 const unsigned gamepak_buffer_blocksize = 1024*1024;
 
@@ -2249,9 +2250,15 @@ static u32 evict_gamepak_page(void)
   return ret;
 }
 
+/* Diagnostic: how often a 32 KB ROM page had to be re-read from the Memory
+ * Stick because the in-RAM cache could not hold the working set. On real
+ * hardware each of these is a synchronous seek+read inside the frame. */
+u32 gamepak_page_faults = 0;
+
 u8 *load_gamepak_page(u32 physical_index)
 {
   u32 rom_blocks = gamepak_size >> 15;
+  gamepak_page_faults++;
   if (rom_blocks == 0)
     return &gamepak_buffers[0][0];
 
@@ -2289,12 +2296,39 @@ u8 *load_gamepak_page(u32 physical_index)
   return swap_location;
 }
 
+/* Provided by RetroShell's libretro shim: arena bytes still unclaimed.
+ * Weakly referenced so non-RetroShell builds of this core still link. */
+extern u32 rs_psp_core_available(void) __attribute__((weak));
+
+/* Left free for save states, the frontend's own core-heap traffic and the
+ * core's remaining runtime allocations after the ROM cache is sized.
+ * gpSP's measured non-ROM high-water is well under 1 MB and its largest
+ * state is ~425 KB, so 2 MB is comfortable rather than tight. */
+#define GAMEPAK_ARENA_RESERVE (2 * 1024 * 1024)
+
 void init_gamepak_buffer(void)
 {
   unsigned i;
-  // Try to allocate up to 32 blocks of 1MB each
+  /* ROM_BUFFER_SIZE is the ceiling, not the target. Baking a fixed count in
+   * at compile time meant this core claimed the same 8 MB whether it was
+   * running on a 32 MB PSP-1000 with ~12 MB of arena or a 64 MB model with
+   * far more, leaving the rest idle and forcing large ROMs (most GBA ROM
+   * hacks) to page 32 KB at a time off the Memory Stick mid-frame. Ask the
+   * host what is actually available so one build fits every model. */
+  u32 budget = rs_psp_core_available ? rs_psp_core_available() : 0;
+  u32 affordable = budget > GAMEPAK_ARENA_RESERVE
+                 ? (budget - GAMEPAK_ARENA_RESERVE) / gamepak_buffer_blocksize
+                 : 0;
+  u32 target = ROM_BUFFER_SIZE;
+  if (rs_psp_core_available)
+  {
+    target = affordable;
+    if (target > 32) target = 32;      /* gamepak_buffers[] is 32 entries */
+    if (target < 2)  target = 2;       /* always try for a usable minimum */
+  }
+
   gamepak_buffer_count = 0;
-  while (gamepak_buffer_count < ROM_BUFFER_SIZE)
+  while (gamepak_buffer_count < target)
   {
     void *ptr = malloc(gamepak_buffer_blocksize);
     if (!ptr)
@@ -2797,6 +2831,77 @@ static bool rom_is_pokemon_family(const u8 *rom)
   return false;
 }
 
+/* Exact profiles are intentionally keyed by payload data, not filename or
+ * the four-byte commercial game code. ROM hacks commonly retain BPEE/BPRE,
+ * and applying an optimisation intended for the retail parent to every hack
+ * is a common source of repeatable event/battle crashes. Hashing the first
+ * already-resident MiB is effectively free on PSP and distinguishes the
+ * supported build without reading the complete 32 MiB ROM from the stick a
+ * second time at launch. */
+typedef struct
+{
+  u32 size;
+  u32 first_mib_crc32;
+  const char *name;
+  u32 idle_loop_pc;
+  u16 flags;
+} rom_hack_profile_t;
+
+static u32 crc32_bytes(const u8 *data, u32 size)
+{
+  u32 crc = 0xFFFFFFFFu;
+  u32 i;
+  while (size--)
+  {
+    crc ^= *data++;
+    for (i = 0; i < 8; i++)
+      crc = (crc >> 1) ^ (0xEDB88320u & (0u - (crc & 1u)));
+  }
+  return ~crc;
+}
+
+static const rom_hack_profile_t rom_hack_profiles[] = {
+  /* HnS v1.2.1, user-supplied validation build. Full-file SHA-256:
+   * 7c4f90c8b68b64d4639a37306d5302a11cd4d7c44005114ec2faa2b28b210c3d
+   * No ROM data is stored or distributed here. Its Emerald idle loop is
+   * retained because this exact patch leaves that routine at 0x080008CE. */
+  { 32u * 1024u * 1024u, 0x6BB25C99u, "HnS v1.2.1",
+    0x080008CEu, FLAGS_FLASH_128KB | FLAGS_RTC | FLAGS_SERIAL | FLAGS_RFU },
+};
+
+static bool apply_rom_hack_profile(void)
+{
+  const u32 fingerprint_bytes = gamepak_size < gamepak_buffer_blocksize
+                                  ? gamepak_size
+                                  : gamepak_buffer_blocksize;
+  const u32 crc = crc32_bytes(gamepak_buffers[0], fingerprint_bytes);
+  unsigned i;
+
+  gamepak_compat_profile_name = NULL;
+  for (i = 0; i < sizeof(rom_hack_profiles) / sizeof(rom_hack_profiles[0]); i++)
+  {
+    const rom_hack_profile_t *profile = &rom_hack_profiles[i];
+    if (profile->size != gamepak_size || profile->first_mib_crc32 != crc)
+      continue;
+
+    gamepak_compat_profile_name = profile->name;
+    is_known_game = true;
+    idle_loop_target_pc = profile->idle_loop_pc;
+    if (profile->flags & FLAGS_FLASH_128KB)
+    {
+      backup_type_reset = BACKUP_FLASH;
+      flash_bank_cnt = FLASH_SIZE_128KB;
+      flash_device_id = FLASH_DEVICE_SANYO_128KB;
+    }
+    if (profile->flags & FLAGS_RTC)
+      rtc_enabled = true;
+    if ((profile->flags & FLAGS_SERIAL) && serial_mode == SERIAL_MODE_AUTO)
+      serial_mode = profile->flags & FLAGS_SERIAL_MASK;
+    return true;
+  }
+  return false;
+}
+
 static void normalize_blank_backup_for_detected_type(void)
 {
   u32 i;
@@ -2936,6 +3041,7 @@ u32 load_gamepak(const struct retro_game_info* info, const char *name,
    bool is_pokemon_engine = rom_is_pokemon_family(gamepak_buffers[0]) || is_128k_flash;
 
    require_m1_hle_bios = false;
+   gamepak_compat_profile_name = NULL;
    
    bool title_altered = false;
    bool is_expanded = (gamepak_size > 16777216);
@@ -2986,6 +3092,11 @@ u32 load_gamepak(const struct retro_game_info* info, const char *name,
          }
       }
    }
+
+   /* Exact profiles win over broad header heuristics. This makes supported
+    * hacks deterministic while unknown hacks continue on conservative
+    * auto-detection rather than inheriting unsafe title-specific guesses. */
+   apply_rom_hack_profile();
 	
    normalize_blank_backup_for_detected_type();
 

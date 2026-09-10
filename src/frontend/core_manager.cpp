@@ -25,6 +25,7 @@ bool validApi(const RSCoreAPI* api) {
            api->reset && api->run_frame && api->get_frame &&
            api->state_size && api->state_save && api->state_load &&
            api->sram_size && api->sram_data && api->sram_dirty &&
+           api->rtc_size && api->rtc_data &&
            api->set_option;
 }
 }  // namespace

@@ -10,7 +10,7 @@
 namespace rs::theme {
 
 struct Palette {
-    u32 bgTop, bgBottom;          /* background gradient */
+    u32 bgTop, bgBottom;          /* built-ins use one solid background */
     u32 waveA, waveB;             /* animated ribbon tints (premultiplied-ish alphas) */
     u32 textPrimary, textSecondary, textDim;
     u32 accent;
@@ -34,7 +34,7 @@ Palette personalize(const Palette& base, int accentIndex);
 inline const Palette& light() {
     static const Palette p = {
         /* IPS-friendly warm grey instead of a near-white backlight field. */
-        /* bg        */ rsHex(0xD5D4CF), rsHex(0xC9C8C3),
+        /* bg        */ rsHex(0xD5D4CF), rsHex(0xD5D4CF),
         /* waves     */ rsHex(0xD6A646, 8), rsHex(0x8F8777, 5),
         /* text      */ rsHex(0x24231F), rsHex(0x45433E), rsHex(0x605D56),
         /* accent    */ rsHex(0xD6A646),

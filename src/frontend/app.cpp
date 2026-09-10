@@ -1,11 +1,14 @@
 #include "frontend/app.h"
+#include "frontend/core_package_installer.h"
 #include "frontend/autopilot.h"
 #include "frontend/game_session.h"
+#include "frontend/native_emulator_launcher.h"
 #include "frontend/scenes/boot_scene.h"
 #include "platform/psp/audio_out.h"
 #include "platform/psp/fs_psp.h"
 #include "platform/psp/power.h"
 #include "platform/psp/vram.h"
+#include "core_api/rs_core_api.h"
 #include "runtime/arena.h"
 #include "runtime/config.h"
 #include "runtime/log.h"
@@ -15,6 +18,7 @@
 
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 
 #include "stb_image.h"
 
@@ -23,6 +27,8 @@
 #include "rs_asset_font_large_rsf.h"
 #include "rs_asset_font_body_rsf.h"
 #include "rs_asset_font_small_rsf.h"
+#include "rs_asset_font_pixel_rsf.h"
+#include "rs_asset_font_pixel_large_rsf.h"
 #include "rs_asset_splash_png.h"
 
 /* Set by the HOME-menu exit callback in main.cpp. */
@@ -31,6 +37,23 @@ extern volatile bool g_exitRequested;
 namespace rs {
 
 namespace {
+
+void drawStartupSubtitle(gfx::Renderer& renderer, const text::Font& font) {
+    constexpr const char* value = "PSP Retro Emulation";
+    constexpr float tracking = .2f;
+    const int count = int(std::strlen(value));
+    float width = count > 1 ? tracking * float(count - 1) : 0.f;
+    for (int i = 0; i < count; ++i) {
+        const char glyph[2] = {value[i], '\0'};
+        width += font.measure(glyph);
+    }
+    float x = RS_SCREEN_W * .5f - width * .5f;
+    for (int i = 0; i < count; ++i) {
+        const char glyph[2] = {value[i], '\0'};
+        font.draw(renderer, x, 181.f, glyph, rsHex(0xD79A2B));
+        x += font.measure(glyph) + tracking;
+    }
+}
 
 bool drawStartupPlate(gfx::Renderer& renderer) {
     int w = 0, h = 0, channels = 0;
@@ -44,10 +67,25 @@ bool drawStartupPlate(gfx::Renderer& renderer) {
     if (pixels) stbi_image_free(pixels);
 
     renderer.beginFrame(rsHex(0xFAF5EE));
-    if (ready)
+    if (ready) {
         renderer.sprite(splash, 0, 0, w, h, 0, 0,
                         RS_SCREEN_W, RS_SCREEN_H, rsHex(0xFFFFFF));
-    renderer.endFrame();
+        /* Replace the authored left-to-right subtitle gradient with the same
+         * solid orange base used by BootScene. Once initialization completes,
+         * BootScene adds the animated shimmer without a visible color jump. */
+        text::Font startupFont;
+        if (startupFont.load(rs_asset_font_small_rsf,
+                             rs_asset_font_small_rsf_len)) {
+            renderer.rect(0.f, 176.f, RS_SCREEN_W, 22.f, rsHex(0xFAF5EE));
+            drawStartupSubtitle(renderer, startupFont);
+            renderer.endFrame();
+            startupFont.unload();
+        } else {
+            renderer.endFrame();
+        }
+    } else {
+        renderer.endFrame();
+    }
 
     /* This is the first and only texture allocated before the persistent UI
      * atlases. The GE has finished reading it, so reclaim its temporary VRAM
@@ -72,6 +110,7 @@ bool App::init() {
     const fs::RootMigration migration = fs::migrateLegacyRoot();
     log::init(/*toFile=*/true);
     RS_LOGI("RetroShell starting");
+    nativeemu::consumeReturnReceipt();
     if (migration != fs::RootMigration::None) {
         const char* result = migration == fs::RootMigration::Renamed
             ? "renamed"
@@ -94,6 +133,9 @@ bool App::init() {
         {&m_fonts.large, rs_asset_font_large_rsf, rs_asset_font_large_rsf_len},
         {&m_fonts.body,  rs_asset_font_body_rsf,  rs_asset_font_body_rsf_len},
         {&m_fonts.small, rs_asset_font_small_rsf, rs_asset_font_small_rsf_len},
+        {&m_fonts.pixel, rs_asset_font_pixel_rsf, rs_asset_font_pixel_rsf_len},
+        {&m_fonts.pixelLarge, rs_asset_font_pixel_large_rsf,
+                             rs_asset_font_pixel_large_rsf_len},
     };
     for (auto& f : fonts) {
         if (!f.font->load(f.data, f.len)) {
@@ -106,16 +148,14 @@ bool App::init() {
     if (!audio::init()) RS_LOGW("app: audio unavailable");
 
     cfg::load();
-    /* User-mode PSP applications cannot portably query the chassis model,
-     * but the constraint we care about is directly measurable: a PSP-1000
-     * yields roughly a 17 MB arena, while later 64 MB models yield far more.
-     * Leave generous separation from both values. */
-    const bool lowMemoryHardware = mem::totalSize() < 24u * 1024u * 1024u;
-    cfg::applyHardwareDefaults(lowMemoryHardware);
-    RS_LOGI("hardware: %u KB core arena, PSP-1000 Safe Mode %s",
-            unsigned(mem::totalSize() / 1024),
-            cfg::get().psp1000SafeMode ? "on" : "off");
+    RS_LOGI("build: RetroShell %s (%s UTC), core API v%u",
+            RS_RELEASE_VERSION, RS_BUILD_STAMP, unsigned(RS_CORE_API_VERSION));
+    RS_LOGI("hardware: %u KB core arena",
+            unsigned(mem::totalSize() / 1024));
     power::setCpuMhz(cfg::get().cpuMenuMhz);
+
+    const corepkg::InstallReport packageReport =
+        corepkg::installDroppedPackages();
 
     /* Fonts and primitive masks stay resident across core launches;
      * everything allocated after this mark is evictable. */
@@ -137,8 +177,20 @@ bool App::init() {
 
     m_lastUs = sceKernelGetSystemTimeLow();
     switchScene(std::make_unique<BootScene>(), /*instant=*/true);
+    if (packageReport.installed || packageReport.failed) {
+        char msg[96];
+        if (packageReport.failed)
+            std::snprintf(msg, sizeof msg, "Cores installed: %d  Failed: %d",
+                          packageReport.installed, packageReport.failed);
+        else
+            std::snprintf(msg, sizeof msg, "%d core%s installed",
+                          packageReport.installed,
+                          packageReport.installed == 1 ? "" : "s");
+        toast(msg);
+    }
     RS_LOGI("app: init complete in %u ms",
             unsigned((sceKernelGetSystemTimeLow() - initStart) / 1000));
+    mem::logHeapUsage("after boot");
     return true;
 }
 
@@ -154,6 +206,37 @@ void App::launchGame(const db::GameEntry& game, const CoreInfo* core) {
     }
     RS_LOGI("app: launching '%s' via %s", game.name.c_str(),
             core->name.c_str());
+    if (core->isNative()) {
+        /* Commit launcher-owned state before replacing the process. Native
+         * emulators own their saves, renderer, audio, timing and suspend
+         * lifecycle; RetroShell intentionally does not stay resident. */
+        m_scanner.stop();
+        m_library.notePlayed(game.pathHash, power::localTimestamp());
+        m_library.save();
+        cfg::setGameOption(game.pathHash, "core", core->name.c_str());
+        audio::setPaused(true);
+        const int result = nativeemu::launch(*core, game);
+        /* Only reached when the process replacement did NOT happen, so this
+         * is always a failure. A raw status code is useless to someone who
+         * simply has not supplied a BIOS yet — name the actual cause. */
+        audio::setPaused(false);
+        const char* reason;
+        switch (result) {
+            case -2: reason = "emulator is not installed"; break;
+            case -5: reason = "ROM path is too long"; break;
+            case -8: reason = "could not create its working folders"; break;
+            case -7: reason = core->biosSource.empty()
+                                  ? "required BIOS is missing"
+                                  : "needs a valid BIOS in RETROSHELL/system";
+                     break;
+            default: reason = "emulator could not be started"; break;
+        }
+        char msg[96];
+        std::snprintf(msg, sizeof msg, "%s: %s", core->name.c_str(), reason);
+        toast(msg);
+        RS_LOGE("app: native launch failed (%d): %s", result, msg);
+        return;
+    }
     switchScene(std::make_unique<GameSession>(game, core->name));
 }
 
@@ -167,6 +250,10 @@ void App::evictForCore() {
     RS_LOGI("app: evicted frontend caches (%u KB arena, %u KB vram free)",
             unsigned(mem::available() / 1024),
             unsigned(gfx::vram::available() / 1024));
+    /* The decisive sample: whatever the newlib heap still holds here is held
+     * for the whole core session. The gap between this and the fixed
+     * PSP_HEAP_SIZE_KB reservation is what could be returned to the arena. */
+    mem::logHeapUsage("core launch");
 }
 
 void App::restoreAfterCore() {
@@ -192,6 +279,8 @@ void App::shutdown() {
     m_fonts.large.unload();
     m_fonts.body.unload();
     m_fonts.small.unload();
+    m_fonts.pixel.unload();
+    m_fonts.pixelLarge.unload();
     m_renderer.shutdown();
 }
 
@@ -235,6 +324,25 @@ void App::toast(const char* msg) {
 
 void App::run() {
     while (!g_exitRequested) {
+        const u32 powerEvents = power::consumeEvents();
+        if (powerEvents & power::EVENT_SUSPENDING) {
+            audio::setPaused(true);
+            if (m_scene) m_scene->systemSuspend(*this);
+            RS_LOGI("power: suspend acknowledged");
+        }
+        if (powerEvents & power::EVENT_RESUMED) {
+            /* The PSP may restore its default clocks and controller history
+             * after sleep. Re-establish frontend-owned state before the next
+             * update or emulated frame. */
+            audio::setPaused(true);
+            audio::clear();
+            m_pad.init();
+            m_pad.resetAfterResume();
+            m_lastUs = sceKernelGetSystemTimeLow();
+            power::setCpuMhz(cfg::get().cpuMenuMhz);
+            if (m_scene) m_scene->systemResume(*this);
+            RS_LOGI("power: resume complete");
+        }
         const u32 now = sceKernelGetSystemTimeLow();
         float dt = float(now - m_lastUs) * 1e-6f;
         m_lastUs = now;
@@ -366,35 +474,17 @@ void App::drawBackground() {
         m_renderer.sprite(m_theme.background, 0, 0,
                           m_theme.background.width, m_theme.background.height,
                           0, 0, RS_SCREEN_W, RS_SCREEN_H, rsHex(0xFFFFFF));
-    } else if (m_theme.id == "dark") {
-        /* The built-in dark theme is intentionally one uninterrupted field.
-         * Do not apply the ambient wash or watermark used by other themes. */
-        m_renderer.rect(0, 0, RS_SCREEN_W, RS_SCREEN_H, m_pal.bgTop);
-        return;
     } else {
-        m_renderer.rectV(0, 0, RS_SCREEN_W, RS_SCREEN_H, m_pal.bgTop,
-                         m_pal.bgBottom);
+        /* Built-in themes are one uninterrupted field. Gradients, ambient
+         * washes and watermarks created visible blocks on original LCD and
+         * replacement IPS panels. */
+        m_renderer.rect(0, 0, RS_SCREEN_W, RS_SCREEN_H, m_pal.bgTop);
     }
     if (m_theme.waves) {
         /* Explicit custom-theme compatibility. Built-in themes use the
          * quieter static treatment below. */
         drawWave(158.f, 16.f, 1.0f, 0.45f, 0.0f, 130.f, m_pal.waveA);
         drawWave(186.f, 12.f, 1.4f, 0.32f, 2.1f, 100.f, m_pal.waveB);
-    } else if (!m_theme.background.valid()) {
-        /* A restrained ambient wash replaces the animated wave pattern.
-         * It is static, cheap, and keeps the center of the screen quiet. */
-        const u32 wash = rsWithAlpha(m_pal.accent, m_pal.dark ? 8u : 5u);
-        m_renderer.rectH(0.f, 26.f, RS_SCREEN_W, 88.f, wash,
-                         rsWithAlpha(wash, 0));
-
-        /* Barely-visible RetroShell cross watermark, aligned to the 8px grid. */
-        const u32 mark =
-            rsWithAlpha(m_pal.accent, m_pal.dark ? 8u : 5u);
-        m_renderer.rect(428.f, 204.f, 8.f, 8.f, mark);
-        m_renderer.rect(412.f, 204.f, 8.f, 8.f, mark);
-        m_renderer.rect(444.f, 204.f, 8.f, 8.f, mark);
-        m_renderer.rect(428.f, 188.f, 8.f, 8.f, mark);
-        m_renderer.rect(428.f, 220.f, 8.f, 8.f, mark);
     }
 }
 

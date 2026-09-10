@@ -28,7 +28,6 @@ private:
         ROW_UI_SOUNDS,
         ROW_SHOW_FPS,
         ROW_AUTOSAVE,
-        ROW_PSP1000_SAFE,
         ROW_RESCAN,
         ROW_COUNT
     };

@@ -58,8 +58,9 @@ constexpr Step SCRIPT[] = {
     {1226, PSP_CTRL_DOWN,     nullptr},
     {1230, PSP_CTRL_DOWN,     nullptr},
     {1232, 0,                 "pause_fast_scroll"},
-    {1234, PSP_CTRL_DOWN,     nullptr},         /* Exit game */
-    {1243, PSP_CTRL_CROSS,    nullptr},
+    {1234, PSP_CTRL_DOWN,     nullptr},         /* Emulator Settings */
+    {1238, PSP_CTRL_DOWN,     nullptr},         /* Exit */
+    {1247, PSP_CTRL_CROSS,    nullptr},
     {1290, 0,                 "returned_home"},
     {1298, PSP_CTRL_CIRCLE,   nullptr},         /* browser → console home */
     {1320, 0,                 "home_recent"},

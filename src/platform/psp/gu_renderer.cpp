@@ -243,8 +243,8 @@ void Renderer::bind(const Texture* t) {
     sceGuTexMode(t->psm, 0, 0, t->swizzled ? 1 : 0);
     sceGuTexImage(0, t->texW, t->texH, t->texW, t->pixels);
     /* Emulator BGR555 frames use the top bit as spare colour data, not
-     * alpha. Ignore texture alpha for 5551 so the upstream PSP-native
-     * Snes9x layout remains opaque; vertex alpha still controls overlays. */
+     * alpha. Ignore texture alpha for 5551 so PSP-native core surfaces stay
+     * opaque; vertex alpha still controls overlays. */
     sceGuTexFunc(GU_TFX_MODULATE,
                  t->psm == GU_PSM_5551 ? GU_TCC_RGB : GU_TCC_RGBA);
     const int f = (m_filter == TexFilter::Linear) ? GU_LINEAR : GU_NEAREST;

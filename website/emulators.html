@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en" data-github-repository="https://github.com/dadcapgamer/retroshellpsp" data-release-version="v1.0.0-beta.3">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#faf5ee">
+  <meta name="description" content="Download PSP emulator packages made for RetroShell.">
+  <title>Emulator directory — RetroShell</title>
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" sizes="any">
+  <link rel="stylesheet" href="styles.css">
+  <script defer src="site.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <a class="brand" href="index.html" aria-label="RetroShell home">
+      <img src="assets/retroshell-logo-light.svg" alt="" width="40" height="40">
+      <span>RetroShell</span>
+    </a>
+    <nav aria-label="Primary navigation">
+      <a href="index.html#why">Why RetroShell</a>
+      <a href="index.html#get-started">Get started</a>
+      <a href="emulators.html" aria-current="page">Emulators</a>
+      <a href="#" data-github-link>GitHub</a>
+    </nav>
+    <a class="header-download" href="#" data-release-link>Download</a>
+  </header>
+
+  <main class="directory" id="main">
+    <header class="directory-intro">
+      <div>
+        <h1>Emulator directory</h1>
+        <p>Choose a package made specifically for RetroShell. Copy the unopened <code>.rscore.zip</code> into <code>RETROSHELL/cores/</code>, then restart the app.</p>
+      </div>
+      <img src="assets/retroshell-brand-mark.svg" alt="" width="168" height="168">
+    </header>
+
+    <section class="trust-note" aria-label="Core package safety">
+      <strong>Install from sources you trust.</strong>
+      <span>Emulator packages contain native PSP code. RetroArch and desktop core files are not compatible.</span>
+    </section>
+
+    <section class="core-directory" aria-labelledby="available-title">
+      <div class="directory-heading">
+        <div>
+          <h2 id="available-title">Available emulators</h2>
+          <p>Status reflects RetroShell’s current real-hardware testing, not a promise that every game works perfectly.</p>
+        </div>
+        <div class="status-key" aria-label="Status key">
+          <span class="status status-included">Included</span>
+          <span class="status status-testing">Testing</span>
+          <span class="status status-experimental">Experimental</span>
+        </div>
+      </div>
+
+      <div class="core-list">
+        <article class="core-row">
+          <div><h3>Gambatte</h3><p>Game Boy · Game Boy Color</p></div>
+          <span class="status status-included">Included</span>
+          <span class="model-support">Any PSP</span>
+          <a class="core-download" href="#" data-core-download="gambatte">Download ZIP</a>
+        </article>
+        <article class="core-row">
+          <div><h3>QuickNES</h3><p>Nintendo Entertainment System</p></div>
+          <span class="status status-included">Included</span>
+          <span class="model-support">Any PSP</span>
+          <a class="core-download" href="#" data-core-download="quicknes">Download ZIP</a>
+        </article>
+        <article class="core-row">
+          <div><h3>PicoDrive</h3><p>Genesis · Mega Drive</p></div>
+          <span class="status status-testing">Testing</span>
+          <span class="model-support">Any PSP</span>
+          <a class="core-download" href="#" data-core-download="picodrive">Download ZIP</a>
+        </article>
+        <article class="core-row">
+          <div><h3>Snes9x 2005</h3><p>Super Nintendo</p></div>
+          <span class="status status-testing">Testing</span>
+          <span class="model-support">PSP-1000 testing continues</span>
+          <a class="core-download" href="#" data-core-download="snes9x2005">Download ZIP</a>
+        </article>
+        <article class="core-row">
+          <div><h3>gpSP</h3><p>Game Boy Advance</p></div>
+          <span class="status status-testing">Testing</span>
+          <span class="model-support">PSP-1000 experimental</span>
+          <a class="core-download" href="#" data-core-download="gpsp">Download ZIP</a>
+        </article>
+        <article class="core-row">
+          <div><h3>Beetle PCE Fast</h3><p>PC Engine · TurboGrafx-16</p></div>
+          <span class="status status-testing">Testing</span>
+          <span class="model-support">PSP-1000 experimental</span>
+          <a class="core-download" href="#" data-core-download="pcefast">Download ZIP</a>
+        </article>
+        <article class="core-row">
+          <div><h3>SMS Plus GX</h3><p>Master System · Game Gear</p></div>
+          <span class="status status-experimental">Experimental</span>
+          <span class="model-support">PSP-1000 unverified</span>
+          <a class="core-download" href="#" data-core-download="smsplus">Download ZIP</a>
+        </article>
+      </div>
+    </section>
+
+    <section class="directory-help">
+      <div><h2>One file. No manual setup.</h2><p>Leave the package zipped. RetroShell checks it, installs the matching core and manifest together, then removes the ZIP so it does not waste Memory Stick space.</p></div>
+      <a class="button button-secondary" href="#" data-github-doc="docs/INSTALLING_CORES.md">Read install help</a>
+    </section>
+  </main>
+
+  <footer>
+    <a class="brand footer-brand" href="index.html"><img src="assets/retroshell-logo-light.svg" alt="" width="40" height="40"><span>RetroShell</span></a>
+    <p>Open-source homebrew for the Sony PSP. Not affiliated with Sony.</p>
+    <p>© RetroShell</p>
+  </footer>
+</body>
+</html>

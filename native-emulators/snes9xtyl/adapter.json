@@ -1,0 +1,19 @@
+{
+  "formatVersion": 1,
+  "name": "snes9xtyl",
+  "displayName": "Snes9xTYL ME (native PSP)",
+  "repository": "https://github.com/OniMock/snes9xTYL.git",
+  "commit": "f9436e467b2dce438789f0a0ca52422017e3cdde",
+  "license": "Snes9x non-commercial",
+  "sourceLicenseFile": "copyright.h",
+  "modelSupport": "Any PSP",
+  "status": "Testing",
+  "notes": "ME build with a minimal RetroShell direct-ROM launch patch. Exit returns to the XMB.",
+  "patches": ["native-emulators/snes9xtyl/direct-rom-launch.patch"],
+  "payload": [
+    {"source": "EBOOT.PBP", "destination": "EBOOT.PBP"},
+    {"source": "homehook.prx", "destination": "homehook.prx"},
+    {"source": "psp/mediaengineprx/mediaengine.prx", "destination": "mediaengine.prx"},
+    {"source": "data/snesadvance.dat", "destination": "DATA/snesadvance.dat"}
+  ]
+}

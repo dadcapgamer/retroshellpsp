@@ -242,6 +242,9 @@ extern u8 ws_cyc_nseq[16][2];
 extern u32 gamepak_size;
 extern bool gamepak_mini_materialized;
 extern bool gamepak_header_nonstandard;
+/* Non-NULL when an exact ROM-hack compatibility profile was applied. The
+ * libretro adapter reports this once at launch for real-hardware testing. */
+extern const char *gamepak_compat_profile_name;
 extern char gamepak_code[5];
 extern char gamepak_filename[512];
 

@@ -3377,8 +3377,15 @@ void flush_translation_cache_ram(void)
   ram_block_tag = INITIAL_TOP_TAG;
 }
 
+/* Diagnostic: each of these throws away every translated ROM block above the
+ * watermark and clears the branch hash, forcing a full re-JIT. Vanilla games
+ * rarely trigger it; a large ROM hack whose hot code exceeds the cache can
+ * hit it repeatedly, which reads as recurring multi-frame stalls. */
+u32 rom_cache_flushes = 0;
+
 void flush_translation_cache_rom(void)
 {
+  rom_cache_flushes++;
   /* We flush the generated code except for everything below the watermark. */
   last_rom_translation_ptr = &rom_translation_cache[rom_cache_watermark];
   rom_translation_ptr      = &rom_translation_cache[rom_cache_watermark];

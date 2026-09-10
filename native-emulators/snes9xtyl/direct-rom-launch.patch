@@ -1,0 +1,35 @@
+diff --git a/psp/psp.cpp b/psp/psp.cpp
+index 5a68c10..25a8683 100644
+--- a/psp/psp.cpp
++++ b/psp/psp.cpp
+@@ -264,6 +264,8 @@ int os9x_usballowed;
+ 
+ char str_tmp[256];
+ char LaunchDir[256];
++/* Optional ROM supplied by a library frontend through loadexec argv[1]. */
++static char launch_rom[256];
+ char SaveDir[256];
+ char romPath[256];
+ char lastRom[256];
+@@ -2661,6 +2663,9 @@ int main(int argc,char **argv) {
+ 	char *str_ptr=strrchr(LaunchDir,'/');
+ 	if (str_ptr)
+ 		*str_ptr=0;
++	launch_rom[0]=0;
++	if (argc > 1 && argv[1] && strlen(argv[1]) < sizeof(launch_rom))
++		strcpy(launch_rom, argv[1]);
+   /* Clear the existing profile regs */
+ 	//pspDebugProfilerClear();
+ 	/* Enable profiling */
+@@ -4033,7 +4038,10 @@ static int user_main(SceSize args, void* argp) {
+ 		//snd_beep2_handle[i]=sceAudioChReserve( -1, ((size_snd_beep2-44)/4)&(~63), 0 );
+ 	}
+ 
+-	if (os9x_autostart) {
++	if (launch_rom[0]) {
++		strcpy(rom_filename, launch_rom);
++		open_snes_rom();
++	} else if (os9x_autostart) {
+ 		strcpy(rom_filename, romPath);
+ 		strncat(rom_filename, lastRom, 255 - strlen(romPath));
+ 		open_snes_rom();

@@ -23,14 +23,11 @@ struct Config {
     bool clock24Hour   = false;
     bool showFps       = false;
     bool autosave      = true;
-    bool psp1000SafeMode = true;
-    bool psp1000SafeModeConfigured = false; /* runtime metadata, not a setting */
 };
 
 Config& get();
 void load();
 void save();
-void applyHardwareDefaults(bool isPsp1000);
 
 /* Per-game overlays. Values persist immediately on set. */
 std::string gameOption(u32 pathHash, const char* key);

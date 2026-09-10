@@ -15,7 +15,8 @@
 #include <cstdlib>
 #include <cstring>
 
-#if defined(RS_PSP_NATIVE_PIXELS) || defined(RS_PSP_NATIVE_RGB565)
+#if defined(RS_PSP_NATIVE_PIXELS) || defined(RS_PSP_NATIVE_RGB565) || \
+    defined(RS_PSP_NATIVE_BGR555)
 #define RS_PSP_NATIVE_VIDEO
 #include <pspkernel.h>
 #endif
@@ -41,8 +42,36 @@ bool g_videoEnabled = true;
  * already render in the GE's channel ordering, so their ordinary frames are
  * borrowed directly and this allocation is omitted. */
 uint16_t* g_frame;             /* also holds 8888 data (cast) */
-uint32_t  g_frameCap;          /* capacity in bytes */
+uint32_t  g_frameCap;          /* capacity in bytes; 0 when the core owns it */
+/* Geometry g_frame was last sized for. Cores may enlarge their output at
+ * runtime (SMS 192/224/240-line modes, Mega Drive H32/H40, PC Engine
+ * 256/336/512 widths) and announce it through SET_SYSTEM_AV_INFO /
+ * SET_GEOMETRY, so the load-time allocation is not a permanent ceiling. */
+uint16_t g_maxWidth;
+uint16_t g_maxHeight;
 RSVideoFrame g_frameInfo;
+
+/* Warnings that can recur every frame must never reach the log unthrottled:
+ * RS_LOGW is an unbuffered write to the Memory Stick, and one per frame
+ * collapses the frame budget on real hardware while staying invisible under
+ * PPSSPP, where the same write costs almost nothing. */
+uint32_t g_warnBudget;
+constexpr uint32_t WARN_BUDGET = 8;
+
+void warnThrottled(const char* fmt, unsigned a, unsigned b) {
+    if (g_warnBudget >= WARN_BUDGET) return;
+    if (++g_warnBudget == WARN_BUDGET) {
+        g_host->log(RS_LOG_WARN, fmt, a, b);
+        g_host->log(RS_LOG_WARN,
+                    "libretro shim: further video warnings suppressed");
+        return;
+    }
+    g_host->log(RS_LOG_WARN, fmt, a, b);
+}
+
+/* Publish a runtime timing change to the core table and the audio ring.
+ * Defined below g_api; declared here so environment() can reach it. */
+void applyCoreTiming(double fps, uint32_t sampleRate);
 
 retro_pixel_format g_srcFormat = RETRO_PIXEL_FORMAT_0RGB1555;
 retro_audio_buffer_status_callback_t g_audioBufferStatus;
@@ -216,6 +245,46 @@ void convertXRGB8888(const uint8_t* src, unsigned w, unsigned h, size_t pitch) {
 }
 #endif
 
+/* Size the shim-owned frame storage for `maxW` x `maxH`, growing it if the
+ * core has announced a larger mode than it declared at load. Growth is
+ * monotonic and the old block is returned to the core heap, which reuses
+ * whole freed blocks, so a bounded sequence of mode changes cannot walk the
+ * arena. Returns false only when the geometry is unusable or memory is
+ * exhausted; the previous buffer is left intact in that case.
+ *
+ * Cores whose frames are borrowed in the GE's native ordering own their own
+ * storage, so this only validates their geometry — except Snes9x, whose
+ * 512-wide pseudo-hires frames are resolved into a shim surface. */
+bool ensureFrameCapacity(unsigned maxW, unsigned maxH) {
+    if (!maxW || !maxH || maxW > MAX_GEOMETRY || maxH > MAX_GEOMETRY)
+        return false;
+
+#if !defined(RS_PSP_NATIVE_VIDEO)
+    const uint32_t bpp = (g_srcFormat == RETRO_PIXEL_FORMAT_XRGB8888) ? 4 : 2;
+    const uint64_t need = uint64_t(maxW) * uint64_t(maxH) * bpp;
+    if (need == 0 || need > UINT32_MAX) return false;
+    if (uint64_t(maxW) * bpp > UINT16_MAX) return false;
+#elif defined(RS_PSP_NATIVE_PIXELS)
+    const uint64_t need = uint64_t(256u) * uint64_t(maxH) * sizeof(uint16_t);
+    if (need > UINT32_MAX) return false;
+#else
+    /* Nothing shim-owned to size; the core presents its own surface. */
+    const uint64_t need = 0;
+#endif
+
+    if (need > g_frameCap) {
+        void* next = g_host->mem_alloc(uint32_t(need), 64);
+        if (!next) return false;
+        std::memset(next, 0, size_t(need));
+        if (g_frame) g_host->mem_free(g_frame);
+        g_frame = static_cast<uint16_t*>(next);
+        g_frameCap = uint32_t(need);
+    }
+    if (maxW > g_maxWidth) g_maxWidth = uint16_t(maxW);
+    if (maxH > g_maxHeight) g_maxHeight = uint16_t(maxH);
+    return true;
+}
+
 /* ------------------------------------------------------------------ */
 /* libretro callbacks                                                  */
 /* ------------------------------------------------------------------ */
@@ -244,6 +313,38 @@ bool environment(unsigned cmd, void* data) {
         case RETRO_ENVIRONMENT_GET_CAN_DUPE:
             *static_cast<bool*>(data) = true;
             return true;
+#ifdef RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO
+        case RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO: {
+            /* Cores enlarge their output at runtime — SMS 192/224/240-line
+             * modes, Mega Drive H32/H40, PC Engine 256/336/512 widths — and
+             * report max_* as the *current* mode at load. Refusing this left
+             * the shim's frame budget frozen at whatever mode was active
+             * when the ROM loaded, after which every larger frame was
+             * dropped for the rest of the session. */
+            const auto* av = static_cast<const retro_system_av_info*>(data);
+            if (!av) return false;
+            if (!ensureFrameCapacity(av->geometry.max_width,
+                                     av->geometry.max_height))
+                return false;
+            if (av->timing.fps >= 10.0 && av->timing.fps <= 1000.0 &&
+                av->timing.sample_rate >= 8000.0 &&
+                av->timing.sample_rate <= 192000.0)
+                applyCoreTiming(av->timing.fps,
+                                uint32_t(av->timing.sample_rate));
+            return true;
+        }
+#endif
+#ifdef RETRO_ENVIRONMENT_SET_GEOMETRY
+        case RETRO_ENVIRONMENT_SET_GEOMETRY: {
+            /* Geometry only; timing is unchanged. retro_game_geometry is the
+             * first member of retro_system_av_info and cores commonly pass
+             * the larger struct here, so reading the prefix is correct for
+             * both spellings. */
+            const auto* geo = static_cast<const retro_game_geometry*>(data);
+            return geo &&
+                   ensureFrameCapacity(geo->max_width, geo->max_height);
+        }
+#endif
         case RETRO_ENVIRONMENT_GET_AUDIO_VIDEO_ENABLE:
             /* Audio always runs. The frontend may suppress video on a
              * recovery frame so a 30 Hz PSP presentation can carry 60 Hz
@@ -287,6 +388,21 @@ bool environment(unsigned cmd, void* data) {
         case RETRO_ENVIRONMENT_GET_VARIABLE: {
             auto* var = static_cast<retro_variable*>(data);
             var->value = g_host->get_option(var->key);
+#ifdef RS_GAMBATTE_PSP_DEFAULTS
+            /* RetroShell does not yet retain the default values supplied by
+             * SET_CORE_OPTIONS_V2. Without an explicit platform default,
+             * Gambatte therefore selects its sinc/blipper resampler even
+             * though upstream marks the much cheaper cosine resampler as
+             * the PSP default. The sinc path can consume most of a
+             * PSP-1000 frame budget in GBC workloads. Per-game settings
+             * continue to win whenever the host supplies one. */
+            if (!var->value &&
+                std::strcmp(var->key, "gambatte_audio_resampler") == 0) {
+                var->value = "cc";
+                g_host->log(RS_LOG_INFO,
+                            "PSP default: gambatte_audio_resampler=cc");
+            }
+#endif
 #ifdef RS_GPSP_PSP_DEFAULTS
             /* gpSP's desktop-oriented defaults mix at 65.5 kHz and never
              * skip video when audio is close to starvation. On a 333 MHz
@@ -305,6 +421,22 @@ bool environment(unsigned cmd, void* data) {
                 var->value = "auto";
                 g_host->log(RS_LOG_INFO,
                             "PSP default: gpsp_frameskip=auto");
+            }
+#endif
+#ifdef RS_MGBA_PSP_DEFAULTS
+            /* mGBA is the compatibility alternate, not the speed default.
+             * Preserve its conservative known-idle-loop removal and let the
+             * host request frames only when audio is near starvation. */
+            if (!var->value &&
+                std::strcmp(var->key, "mgba_idle_optimization") == 0) {
+                var->value = "Remove Known";
+                g_host->log(RS_LOG_INFO,
+                            "PSP default: mgba_idle_optimization=Remove Known");
+            } else if (!var->value &&
+                       std::strcmp(var->key, "mgba_frameskip") == 0) {
+                var->value = "auto";
+                g_host->log(RS_LOG_INFO,
+                            "PSP default: mgba_frameskip=auto");
             }
 #endif
 #ifdef RS_PICODRIVE_PSP_DEFAULTS
@@ -410,17 +542,29 @@ void videoRefresh(const void* data, unsigned w, unsigned h, size_t pitch) {
     if (!data) return;   /* NULL = duped frame, keep the last */
 
     const unsigned bpp = (g_srcFormat == RETRO_PIXEL_FORMAT_XRGB8888) ? 4 : 2;
-    const uint64_t bytes = uint64_t(w) * uint64_t(h) * bpp;
     if (!w || !h || w > MAX_GEOMETRY || h > MAX_GEOMETRY ||
-        pitch < size_t(w) * bpp || bytes > g_frameCap ||
+        pitch < size_t(w) * bpp ||
         uint64_t(w) * bpp > UINT16_MAX || pitch > UINT16_MAX) {
-        /* Larger than the load-time allocation — a core that grew its
-         * geometry at runtime (which the shim doesn't support). Skip the
-         * frame loudly rather than overrun the buffer. */
-        g_host->log(RS_LOG_WARN, "libretro shim: %ux%u frame exceeds capacity",
-                    w, h);
+        warnThrottled("libretro shim: rejected %ux%u frame geometry", w, h);
         return;
     }
+    /* Only a buffer the shim actually owns imposes a capacity limit. Cores
+     * that render in the GE's native ordering have their frames borrowed in
+     * place, so there is nothing here to overrun — gating those against a
+     * load-time size silently dropped every frame after a mode change. */
+#if !defined(RS_PSP_NATIVE_VIDEO)
+    if (uint64_t(w) * uint64_t(h) * bpp > g_frameCap) {
+        warnThrottled("libretro shim: %ux%u exceeds frame buffer", w, h);
+        return;
+    }
+#elif defined(RS_PSP_NATIVE_PIXELS)
+    /* Only the 512-wide pseudo-hires path writes into the resolve surface,
+     * which is 256 columns by the tallest geometry seen so far. */
+    if (w == 512 && h > g_maxHeight) {
+        warnThrottled("libretro shim: %ux%u exceeds hires resolve", w, h);
+        return;
+    }
+#endif
 
 #ifdef RS_PSP_NATIVE_PIXELS
     /* Snes9x's PSP renderer writes BGR555, the native channel ordering for
@@ -495,6 +639,20 @@ void videoRefresh(const void* data, unsigned w, unsigned h, size_t pitch) {
     g_frameInfo.pitch = uint16_t(pitch);
     g_frameInfo.storage_height = uint16_t(h);
     g_frameInfo.format = RS_PIXFMT_RGB565;
+    g_frameInfo.sequence++;
+    return;
+#elif defined(RS_PSP_NATIVE_BGR555)
+    /* FrogGBA renders BGR555 into a 256x256-aligned backing surface. Bind it
+     * directly as GU_PSM_5551 instead of converting and uploading 76.8 KiB
+     * on every visible frame. The GE does not snoop the Allegrex cache. */
+    sceKernelDcacheWritebackRange(
+        const_cast<void*>(data), size_t(pitch) * size_t(h));
+    g_frameInfo.pixels = data;
+    g_frameInfo.width = uint16_t(w);
+    g_frameInfo.height = uint16_t(h);
+    g_frameInfo.pitch = uint16_t(pitch);
+    g_frameInfo.storage_height = RS_PSP_NATIVE_STORAGE_HEIGHT;
+    g_frameInfo.format = RS_PIXFMT_RGBA5551;
     g_frameInfo.sequence++;
     return;
 #else
@@ -624,6 +782,7 @@ static void coreShutdown(void) {
     g_faultArmed = false;
     g_frame = nullptr;
     g_frameCap = 0;
+    g_maxWidth = g_maxHeight = 0;
     g_gameLoaded = false;
     g_audioBufferStatus = nullptr;
     g_host = nullptr;
@@ -705,6 +864,15 @@ static int coreSramDirty(void) {
     return 1;
 }
 
+static uint32_t coreRtcSize(void) {
+    const size_t n = retro_get_memory_size(RETRO_MEMORY_RTC);
+    return n <= UINT32_MAX ? uint32_t(n) : 0;
+}
+
+static void* coreRtcData(void) {
+    return retro_get_memory_data(RETRO_MEMORY_RTC);
+}
+
 static int coreSetOption(const char*, const char*) {
     /* Options are pulled by the core via GET_VARIABLE. */
     return 0;
@@ -734,13 +902,30 @@ static RSCoreAPI g_api = {
     coreSramSize,
     coreSramData,
     coreSramDirty,
+    coreRtcSize,
+    coreRtcData,
     coreSetOption,
 };
+
+namespace {
+void applyCoreTiming(double fps, uint32_t sampleRate) {
+    g_api.fps = fps;
+    /* Only re-key the resampler on a genuine change: setSourceRate resets
+     * the fractional phase, and doing that every frame would drift pitch. */
+    if (sampleRate != g_api.audio_rate) {
+        g_api.audio_rate = sampleRate;
+        g_host->audio_set_rate(sampleRate);
+        g_host->log(RS_LOG_INFO, "libretro shim: audio rate now %u Hz",
+                    unsigned(sampleRate));
+    }
+}
+}  // namespace
 
 static int coreLoadRom(const char* path, const void* data, uint32_t size) {
     if ((!data || size == 0) && (!path || g_host->file_size(path) <= 0))
         return -1;
 
+    g_warnBudget = 0;   /* a fresh budget per loaded game */
     g_romData = data;
     g_romSize = data ? size : uint32_t(g_host->file_size(path));
     std::snprintf(g_romPath, sizeof g_romPath, "%s", path ? path : "");
@@ -768,19 +953,14 @@ static int coreLoadRom(const char* path, const void* data, uint32_t size) {
     retro_system_av_info av = {};
     retro_get_system_av_info(&av);
 
-    /* Frame buffer sized for the worst case the core declares. */
     const uint32_t bpp =
         (g_srcFormat == RETRO_PIXEL_FORMAT_XRGB8888) ? 4 : 2;
-    const uint64_t frameBytes = uint64_t(av.geometry.max_width) *
-                                uint64_t(av.geometry.max_height) * bpp;
     if (!av.geometry.base_width || !av.geometry.base_height ||
         av.geometry.base_width > av.geometry.max_width ||
         av.geometry.base_height > av.geometry.max_height ||
         av.geometry.max_width > MAX_GEOMETRY ||
         av.geometry.max_height > MAX_GEOMETRY ||
-        uint64_t(av.geometry.base_width) * bpp > UINT16_MAX ||
-        frameBytes == 0 || frameBytes > UINT32_MAX ||
-        frameBytes > g_host->mem_available()) {
+        uint64_t(av.geometry.base_width) * bpp > UINT16_MAX) {
         g_host->log(RS_LOG_ERROR, "libretro shim: invalid geometry %ux%u/%ux%u",
                     av.geometry.base_width, av.geometry.base_height,
                     av.geometry.max_width, av.geometry.max_height);
@@ -794,34 +974,16 @@ static int coreLoadRom(const char* path, const void* data, uint32_t size) {
         retro_unload_game();
         return -1;
     }
-    g_frameCap = uint32_t(frameBytes);
-#if !defined(RS_PSP_NATIVE_VIDEO)
-    g_frame = static_cast<uint16_t*>(g_host->mem_alloc(g_frameCap, 64));
-    if (!g_frame) {
+    /* Sized from the declared maximum, then grown on demand if the core
+     * later announces a larger mode (see SET_SYSTEM_AV_INFO/SET_GEOMETRY). */
+    g_frame = nullptr;
+    g_frameCap = 0;
+    g_maxWidth = g_maxHeight = 0;
+    if (!ensureFrameCapacity(av.geometry.max_width, av.geometry.max_height)) {
         g_host->log(RS_LOG_ERROR, "libretro shim: no memory for frame buffer");
         retro_unload_game();
         return -1;
     }
-    std::memset(g_frame, 0, g_frameCap);
-#elif defined(RS_PSP_NATIVE_PIXELS)
-    /* Small PSP-native resolve surface for 512-wide pseudo-hires/hires
-     * frames. Ordinary 256-wide output remains zero-copy. */
-    const uint64_t resolveBytes =
-        uint64_t(256u) * av.geometry.max_height * sizeof(uint16_t);
-    g_frame = resolveBytes <= UINT32_MAX
-        ? static_cast<uint16_t*>(
-              g_host->mem_alloc(uint32_t(resolveBytes), 64))
-        : nullptr;
-    if (!g_frame) {
-        g_host->log(RS_LOG_ERROR,
-                    "libretro shim: no memory for PSP hires resolve");
-        retro_unload_game();
-        return -1;
-    }
-    std::memset(g_frame, 0, size_t(resolveBytes));
-#else
-    g_frame = nullptr;
-#endif
     g_frameInfo = {};
 #ifndef RS_PSP_NATIVE_VIDEO
     g_frameInfo.pixels = g_frame;
@@ -834,6 +996,8 @@ static int coreLoadRom(const char* path, const void* data, uint32_t size) {
     g_frameInfo.format = RS_PIXFMT_RGBA5551;
 #elif defined(RS_PSP_NATIVE_RGB565)
     g_frameInfo.format = RS_PIXFMT_RGB565;
+#elif defined(RS_PSP_NATIVE_BGR555)
+    g_frameInfo.format = RS_PIXFMT_RGBA5551;
 #else
     g_frameInfo.format = rsPixFmt(g_srcFormat);
 #endif
@@ -863,10 +1027,21 @@ static void coreUnloadRom(void) {
     if (g_frame) g_host->mem_free(g_frame);
     g_frame = nullptr;
     g_frameCap = 0;
+    g_maxWidth = g_maxHeight = 0;
     g_frameInfo = {};
 }
 
 extern "C" const RSCoreAPI* rs_get_core_api(void) { return &g_api; }
+
+/* Arena bytes still unclaimed, for cores that size their own caches instead
+ * of baking a fixed limit in at compile time. The frontend already scales
+ * the arena to the machine (roughly 12 MB on a PSP-1000, far more on a 64 MB
+ * model), so a core that asks gets the right answer on every model from one
+ * build. Returns 0 before init, which callers must treat as "allocate
+ * nothing extra". */
+extern "C" uint32_t rs_psp_core_available(void) {
+    return g_host ? g_host->mem_available() : 0;
+}
 
 /* ------------------------------------------------------------------ */
 /* PRX runtime support                                                  */

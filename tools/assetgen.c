@@ -233,6 +233,15 @@ int main(int argc, char** argv) {
     snprintf(rsf, sizeof rsf, "%s/fonts/font_small.rsf", out);
     bake_font(ttf, 12, rsf);
 
+    /* Geist Pixel is deliberately a display face. Keeping it in a separate
+     * atlas lets the PSP UI use it for high-emphasis navigation without
+     * sacrificing Inter's legibility in dense metadata and hint bars. */
+    snprintf(ttf, sizeof ttf, "%s/GeistPixel-Square.ttf", fdir);
+    snprintf(rsf, sizeof rsf, "%s/fonts/font_pixel.rsf", out);
+    bake_font(ttf, 19, rsf);
+    snprintf(rsf, sizeof rsf, "%s/fonts/font_pixel_large.rsf", out);
+    bake_font(ttf, 23, rsf);
+
     make_pbp_art(out);
     return 0;
 }

@@ -1,7 +1,6 @@
 #include "frontend/scenes/home_scene.h"
 #include "frontend/app.h"
 #include "frontend/scenes/settings_scene.h"
-#include "frontend/ui/grid_window.h"
 #include "runtime/config.h"
 #include "runtime/save_manager.h"
 
@@ -34,21 +33,28 @@ const Category& cat(int i) {
     return CATS[i];
 }
 
-constexpr float GRID_TOP      = 72.f;
-constexpr float GRID_TILE     = 72.f;
-constexpr float GRID_STEP     = 80.f;
-constexpr int   GRID_COLS     = 3;
-constexpr int   GRID_ROWS     = 2;
-constexpr int   GRID_VISIBLE  = GRID_COLS * GRID_ROWS;
-constexpr int   RECENT_VISIBLE = 5;
+constexpr float LIST_TOP = 72.f;
+constexpr float LIST_ROW = 28.f;
+constexpr int   LIST_VISIBLE = 6;
+constexpr int   RECENT_VISIBLE = 4;
 constexpr float SELECTION_SETTLE_SECONDS = 0.18f;
 
-int gridStartRow(int index, int count) {
+const char* categoryRailLabel(int categoryIdx) {
+    const int systemIdx = cat(categoryIdx).systemIdx;
+    if (systemIdx == CATEGORY_FAVORITES) return "FAVORITES";
+    if (systemIdx == CATEGORY_SETTINGS) return "SETTINGS";
+    static const char* LABELS[] = {
+        "GAME BOY", "GAME BOY COLOR", "GAME BOY ADVANCE", "NES",
+        "SUPER NINTENDO", "GENESIS", "MASTER SYSTEM", "GAME GEAR",
+        "PC ENGINE",
+    };
+    return LABELS[rsClamp(systemIdx, 0, db::SYSTEM_COUNT - 1)];
+}
+
+int listStart(int index, int count) {
     if (count <= 0) return 0;
-    const int selectedRow = rsClamp(index, 0, count - 1) / GRID_COLS;
-    const int totalRows = (count + GRID_COLS - 1) / GRID_COLS;
-    return rsClamp(selectedRow - 1, 0, rsClamp(totalRows - GRID_ROWS, 0,
-                                               totalRows));
+    return rsClamp(rsClamp(index, 0, count - 1) - 1, 0,
+                   rsClamp(count - LIST_VISIBLE, 0, count));
 }
 
 u32 opaqueOver(u32 foreground, u32 background) {
@@ -68,10 +74,6 @@ u32 backgroundAt(const theme::Palette& pal, float y) {
         rsLerpColor(pal.bgTop, pal.bgBottom,
                     rsClamp(y / float(RS_SCREEN_H), 0.f, 1.f)),
         255u);
-}
-
-u32 surfaceAt(const theme::Palette& pal, u32 surface, float y) {
-    return opaqueOver(surface, backgroundAt(pal, y));
 }
 
 void maskArtCorners(gfx::Renderer& r, float x, float y, float w, float h,
@@ -226,21 +228,6 @@ void formatLastPlayed(u64 stamp, bool clock24Hour, char* out, size_t n) {
     }
 }
 
-void formatLastPlayedDate(u64 stamp, char* out, size_t n) {
-    if (!stamp) {
-        std::snprintf(out, n, "Last Played: Never");
-        return;
-    }
-    const int day = int((stamp / 10000u) % 100u);
-    const int month = int((stamp / 1000000u) % 100u);
-    const int year = int((stamp / 100000000u) % 100u);
-    if (month < 1 || month > 12 || day < 1 || day > 31) {
-        std::snprintf(out, n, "Last Played: Unknown");
-        return;
-    }
-    std::snprintf(out, n, "Last Played %02d/%02d/%02d", month, day, year);
-}
-
 }  // namespace
 
 void HomeScene::enter(App& app) {
@@ -259,9 +246,10 @@ void HomeScene::enter(App& app) {
     rebuildRecents(app);
     if (m_visible.empty()) m_inList = false;
     if (m_recentVisible.empty()) m_recentFocus = false;
+    m_recentReveal.snap(m_recentFocus ? 1.f : 0.f);
     m_listIdx = rsClamp(m_listIdx, 0, int(m_visible.size()) - 1);
     if (m_listIdx < 0) m_listIdx = 0;
-    m_scroll.snap(float(gridStartRow(m_listIdx, int(m_visible.size()))));
+    m_scroll.snap(float(listStart(m_listIdx, int(m_visible.size()))));
 }
 
 void HomeScene::rebuildList(App& app) {
@@ -318,12 +306,16 @@ void HomeScene::updateCats(App& app) {
     const auto& pad = app.pad();
     if (m_recentFocus) {
         const int count = int(m_recentVisible.size());
-        if (pad.navPressed(PSP_CTRL_LEFT) && m_recentIdx > 0)
-            m_recentIdx--;
-        if (pad.navPressed(PSP_CTRL_RIGHT) && m_recentIdx + 1 < count)
+        if (pad.navPressed(PSP_CTRL_UP)) {
+            if (m_recentIdx > 0) m_recentIdx--;
+            else {
+                m_recentFocus = false;
+                return;
+            }
+        }
+        if (pad.navPressed(PSP_CTRL_DOWN) && m_recentIdx + 1 < count)
             m_recentIdx++;
-        if (pad.navPressed(PSP_CTRL_UP) ||
-            pad.isPressed(PSP_CTRL_CIRCLE)) {
+        if (pad.isPressed(PSP_CTRL_CIRCLE)) {
             m_recentFocus = false;
             return;
         }
@@ -380,22 +372,11 @@ void HomeScene::updateList(App& app) {
     const auto& pad = app.pad();
     const int prevIdx = m_listIdx;
     const int count = int(m_visible.size());
-    const int col = m_listIdx % GRID_COLS;
     if (pad.navPressed(PSP_CTRL_UP)) {
-        if (m_listIdx >= GRID_COLS) m_listIdx -= GRID_COLS;
+        if (m_listIdx > 0) m_listIdx--;
         else m_inList = false;
     }
-    if (pad.navPressed(PSP_CTRL_DOWN)) {
-        const int target = m_listIdx + GRID_COLS;
-        if (target < count) {
-            m_listIdx = target;
-        } else if (m_listIdx / GRID_COLS < (count - 1) / GRID_COLS) {
-            m_listIdx = count - 1;
-        }
-    }
-    if (pad.navPressed(PSP_CTRL_LEFT) && col > 0) m_listIdx--;
-    if (pad.navPressed(PSP_CTRL_RIGHT) &&
-        col < GRID_COLS - 1 && m_listIdx + 1 < count)
+    if (pad.navPressed(PSP_CTRL_DOWN) && m_listIdx + 1 < count)
         m_listIdx++;
     if (m_listIdx != prevIdx) refreshSelection(app);
     if (pad.isPressed(PSP_CTRL_CIRCLE)) m_inList = false;
@@ -558,6 +539,7 @@ void HomeScene::drawPicker(App& app) {
     for (int i = first; i < first + visible; i++, ry += rowH) {
         const CoreInfo& c = *m_pickerCores[size_t(i)];
         const bool focused = i == m_pickerIdx;
+        const bool current = &c == m_pickerCurrent;
         if (focused)
             ui::prim::focusRow(
                 r, px + 16.f, ry, pw - 32.f, 32.f,
@@ -566,13 +548,21 @@ void HomeScene::drawPicker(App& app) {
                 rsWithAlpha(pal.accent, a),
                 rsWithAlpha(pal.shadow,
                             rsAlphaOf(pal.shadow) * a / (255u * 2u)));
-        fonts.body.draw(r, px + 32.f, ry + 8.f, c.name.c_str(),
+        if (current)
+            r.rect(px + 20.f, ry + 10.f, 2.f, 12.f,
+                   rsWithAlpha(pal.accent, a));
+        const u32 statusColor = c.psp1000Safe
+                                    ? rsHex(0x5C9E47)
+                                    : rsHex(0xD68A2E);
+        ui::prim::circle(r, px + 30.f, ry + 16.f, 3.f,
+                         rsWithAlpha(statusColor, a));
+        fonts.body.draw(r, px + 40.f, ry + 8.f, c.name.c_str(),
                         rsWithAlpha(focused ? pal.textPrimary : pal.textDim, a),
                         text::Align::Left);
-        /* Right column: version, plus a marker on the game's current core. */
-        char right[32];
-        std::snprintf(right, sizeof right, "%s%s", c.version.c_str(),
-                      (&c == m_pickerCurrent) ? "  \xE2\x80\xA2" : "");
+        /* Native means the proven standalone PSP application takes over the
+         * process. The status dot still carries PSP-1000 qualification. */
+        const char* right = c.isNative()
+            ? "NATIVE" : (c.psp1000Safe ? "ANY PSP" : "TESTING");
         fonts.small.draw(r, px + pw - 32.f, ry + 10.f, right,
                          rsWithAlpha(pal.textDim, a * 3u / 4u),
                          text::Align::Right);
@@ -605,7 +595,9 @@ void HomeScene::update(App& app, float dt) {
     m_catPos.update(dt, 13.f);
     m_listFocus.to(m_inList ? 1.f : 0.f);
     m_listFocus.update(dt, 11.f);
-    m_scroll.to(float(gridStartRow(m_listIdx, int(m_visible.size()))));
+    m_recentReveal.to(m_recentFocus ? 1.f : 0.f);
+    m_recentReveal.update(dt, 15.f);
+    m_scroll.to(float(listStart(m_listIdx, int(m_visible.size()))));
     const float scrollTarget = m_scroll.target;
     if (std::fabs(scrollTarget - m_scroll.v) > 1.25f)
         m_scroll.snap(scrollTarget);
@@ -629,59 +621,82 @@ void HomeScene::drawHome(App& app, float alpha, float slide) {
     const auto& fonts = app.fonts();
     const u32 a = u32(rsClamp(alpha, 0.f, 255.f));
 
-    fonts.body.draw(r, 12.f, 28.f + slide, "BROWSE LIBRARY",
-                    rsWithAlpha(pal.textPrimary, a));
+    /* Each icon/label group sits in a content-sized slot. The active group's
+     * leading edge resolves to the same 12px content line as the console name
+     * and game count below it; equal slot padding keeps neighbours even. */
+    constexpr float RAIL_ACTIVE_LEFT = 12.f;
+    constexpr float RAIL_Y = 60.f;
+    constexpr float ICON_SIZE = 32.f;
+    constexpr float ICON_LABEL_GAP = 8.f;
+    constexpr float SELECTION_TRAILING_PAD = 8.f;
+    constexpr float SLOT_PAD = 16.f;
+    float groupWidths[NUM_CATS];
+    float slotCenters[NUM_CATS];
+    float cursor = 0.f;
+    for (int i = 0; i < NUM_CATS; ++i) {
+        const bool selected = i == m_catIdx;
+        const bool favorite = cat(i).systemIdx == CATEGORY_FAVORITES;
+        const float iconFootprint = favorite ? 20.f : 24.f;
+        const auto& railFont = selected ? fonts.pixelLarge : fonts.pixel;
+        groupWidths[i] = iconFootprint + ICON_LABEL_GAP +
+                         railFont.measure(categoryRailLabel(i));
+        const float slotWidth = groupWidths[i] + SLOT_PAD * 2.f;
+        slotCenters[i] = cursor + slotWidth * .5f;
+        cursor += slotWidth;
+    }
+    const int leftIndex = rsClamp(int(std::floor(m_catPos.v)), 0,
+                                  NUM_CATS - 1);
+    const int rightIndex = rsClamp(leftIndex + 1, 0, NUM_CATS - 1);
+    const float fraction = m_catPos.v - float(leftIndex);
+    const float leftStart = slotCenters[leftIndex] -
+                            groupWidths[leftIndex] * .5f;
+    const float rightStart = slotCenters[rightIndex] -
+                             groupWidths[rightIndex] * .5f;
+    const float focusStart = leftStart + (rightStart - leftStart) * fraction;
 
-    constexpr float CARD_W = 50.f;
-    constexpr float CARD_H = 50.f;
-    constexpr float STEP = 56.f;
-    constexpr int VISIBLE_CATS = 8;
-    const float first =
-        rsClamp(m_catPos.v - 3.f, 0.f, float(NUM_CATS - VISIBLE_CATS));
-    r.setScissor(12, int(52.f + slide), 456, int(CARD_H + 4.f));
+    /* The active system's texture begins left of its visible artwork because
+     * the source icon includes transparent padding. Clip to the viewport, not
+     * the content line, so its outermost pixels remain intact. */
+    r.setScissor(0, int(RAIL_Y + slide), RS_SCREEN_W, 52);
     for (int i = 0; i < NUM_CATS; i++) {
-        const float x = 12.f + (float(i) - first) * STEP;
-        if (x + CARD_W < 0.f || x > RS_SCREEN_W) continue;
-        const bool current = i == m_catIdx;
-        const bool focused = current && !m_recentFocus;
-        const float y = 52.f + slide;
-        const u32 panelAlpha = u32((current ? rsAlphaOf(pal.tileFocusBg)
-                                             : rsAlphaOf(pal.tileBg)) *
-                                   a / 255u);
-        if (focused)
-            ui::prim::dropShadow(
-                r, x, y, CARD_W, CARD_H, 8.f,
-                rsWithAlpha(pal.shadow,
-                            rsAlphaOf(pal.shadow) * a / (255u * 2u)));
-        ui::prim::roundedRect(r, x, y, CARD_W, CARD_H, 8.f,
-                              rsWithAlpha(current ? pal.tileFocusBg
-                                                   : pal.tileBg,
-                                          panelAlpha));
-        ui::prim::roundedOutline(
-            r, x, y, CARD_W, CARD_H, 8.f,
-            focused
-                ? rsWithAlpha(pal.accent, a)
-                : rsWithAlpha(pal.panelOutline,
-                              rsAlphaOf(pal.panelOutline) * a / 255u));
+        const bool selected = i == m_catIdx;
+        const bool favorite = cat(i).systemIdx == CATEGORY_FAVORITES;
+        const float iconFootprint = favorite ? 20.f : 24.f;
+        const float iconInset = ICON_SIZE - iconFootprint;
+        const auto& railFont = selected ? fonts.pixelLarge : fonts.pixel;
+        const float distance = std::fabs(float(i) - m_catPos.v);
+        const float proximity = 1.f - rsClamp(distance, 0.f, 1.f);
+        const float restingAlpha = pal.dark ? .72f : .42f;
+        const u32 itemAlpha = u32(float(a) *
+            (restingAlpha + (1.f - restingAlpha) * proximity));
+        const float groupStart = slotCenters[i] - groupWidths[i] * .5f;
+        const float x = RAIL_ACTIVE_LEFT + groupStart - focusStart;
+        if (!selected && i < m_catIdx && x < RAIL_ACTIVE_LEFT) continue;
+        if (x + groupWidths[i] < 0.f || x > RS_SCREEN_W) continue;
+        const float iconY = RAIL_Y + slide;
+        const float textY = RAIL_Y +
+            (ICON_SIZE - railFont.lineHeight()) * .5f + slide;
         const int systemIdx = cat(i).systemIdx;
-        const char* badge = systemIdx >= 0
-            ? db::systemInfo(db::System(systemIdx)).badge
-            : (systemIdx == CATEGORY_FAVORITES ? "FAV" : "SET");
         if (systemIdx == CATEGORY_FAVORITES) {
             ui::prim::iconStar(
-                r, x + CARD_W * .5f, y + 15.f, 10.f,
-                rsWithAlpha(current ? pal.accent : pal.textSecondary, a));
+                r, x + iconFootprint * .5f, iconY + ICON_SIZE * .5f, 10.f,
+                rsWithAlpha(pal.textSecondary, itemAlpha));
         } else {
             ui::prim::iconSystem(
                 r, systemIdx >= 0 ? systemIdx : SETTINGS_ICON,
-                x + 9.f, y + 1.f, 32.f,
-                rsWithAlpha(current ? pal.accent : pal.textSecondary, a),
-                rsWithAlpha(current ? pal.textPrimary : pal.textDim, a));
+                x - iconInset, iconY, ICON_SIZE,
+                rsWithAlpha(pal.textSecondary, itemAlpha),
+                rsWithAlpha(pal.accent, itemAlpha));
         }
-        fonts.small.draw(r, x + CARD_W * .5f, y + 35.f, badge,
-                         rsWithAlpha(current ? pal.accent
-                                             : pal.textPrimary, a),
-                         text::Align::Center);
+        railFont.draw(r, x + iconFootprint + ICON_LABEL_GAP, textY,
+                      categoryRailLabel(i),
+                      rsWithAlpha(selected ? pal.accent : pal.textPrimary,
+                                  itemAlpha));
+        if (selected) {
+            r.rect(x, RAIL_Y + ICON_SIZE + 2.f + slide,
+                   groupWidths[i] + SELECTION_TRAILING_PAD, 2.f,
+                   rsWithAlpha(pal.accent, a));
+        }
     }
     r.resetScissor();
 
@@ -690,108 +705,83 @@ void HomeScene::drawHome(App& app, float alpha, float slide) {
         selectedCategory.systemIdx == CATEGORY_SETTINGS;
     const bool isFavorites =
         selectedCategory.systemIdx == CATEGORY_FAVORITES;
-    const db::GameEntry* focusedRecent =
-        (m_recentFocus && !m_recentVisible.empty())
-            ? m_recentVisible[size_t(m_recentIdx)] : nullptr;
-    if (focusedRecent) {
-        r.setScissor(12, int(108.f + slide), 456, 16);
-        drawEllipsized(fonts.body, r, 12.f, 108.f + slide, 456.f,
-                       focusedRecent->name,
-                       rsWithAlpha(pal.textPrimary, a), text::Align::Left);
-        r.resetScissor();
-        char played[48];
-        formatLastPlayedDate(
-            app.library().lastPlayed(focusedRecent->pathHash), played,
-            sizeof played);
-        char recentMeta[96];
-        std::snprintf(
-            recentMeta, sizeof recentMeta, "%s  ·  %s",
-            db::systemInfo(focusedRecent->system).displayName, played);
-        r.setScissor(12, int(128.f + slide), 456, 12);
-        fonts.small.draw(r, 12.f, 128.f + slide, recentMeta,
-                         rsWithAlpha(pal.textDim, a));
-        r.resetScissor();
-    } else if (isSettings) {
-        fonts.body.draw(r, 12.f, 108.f + slide, "Settings",
+    if (isSettings) {
+        fonts.body.draw(r, 12.f, 130.f + slide, "Settings",
                         rsWithAlpha(pal.textPrimary, a));
-        fonts.small.draw(r, 12.f, 128.f + slide,
+        fonts.small.draw(r, 12.f, 150.f + slide,
                          "Theme, display and performance",
                          rsWithAlpha(pal.textDim, a));
     } else if (isFavorites) {
-        fonts.body.draw(r, 12.f, 108.f + slide, "Favorites",
+        fonts.body.draw(r, 12.f, 130.f + slide, "Favorites",
                         rsWithAlpha(pal.textPrimary, a));
         char favoriteCount[32];
         std::snprintf(favoriteCount, sizeof favoriteCount, "%d GAME%s",
                       int(m_visible.size()),
                       m_visible.size() == 1 ? "" : "S");
-        fonts.small.draw(r, 12.f, 128.f + slide, favoriteCount,
+        fonts.small.draw(r, 12.f, 150.f + slide, favoriteCount,
                          rsWithAlpha(pal.textDim, a));
     } else {
         const auto& system =
             db::systemInfo(db::System(selectedCategory.systemIdx));
-        fonts.body.draw(r, 12.f, 108.f + slide, system.displayName,
+        fonts.body.draw(r, 12.f, 130.f + slide, system.displayName,
                         rsWithAlpha(pal.textPrimary, a));
         char gameCount[32];
         std::snprintf(gameCount, sizeof gameCount, "%d GAME%s",
                       int(m_visible.size()), m_visible.size() == 1 ? "" : "S");
-        fonts.small.draw(r, 12.f, 128.f + slide, gameCount,
+        fonts.small.draw(r, 12.f, 150.f + slide, gameCount,
                          rsWithAlpha(pal.textDim, a));
     }
-    r.rect(0.f, 140.f + slide, RS_SCREEN_W, 1.f,
-           rsWithAlpha(pal.panelOutline,
-                       rsClamp<u32>(u32(rsAlphaOf(pal.panelOutline) * 2u),
-                                    28u, 76u)));
 
-    fonts.body.draw(r, 12.f, 148.f + slide, "RECENTLY PLAYED",
-                    rsWithAlpha(pal.textPrimary, a));
+    /* Recent games stay collapsed into a single bottom banner until Down is
+     * pressed. The drawer then rises without moving the console carousel. */
+    const float reveal = rsClamp(m_recentReveal.v, 0.f, 1.f);
+    const float drawerTop = 216.f - reveal * 112.f + slide;
+    r.rect(0.f, drawerTop, RS_SCREEN_W, 246.f - drawerTop,
+           rsWithAlpha(pal.bgTop, a));
+    const u32 drawerAccent = rsLerpColor(pal.panelOutline, pal.accent, reveal);
+    r.rect(0.f, drawerTop, RS_SCREEN_W, 1.f,
+           rsWithAlpha(drawerAccent,
+                       rsClamp<u32>(u32(rsAlphaOf(drawerAccent) * 2u),
+                                    36u, 170u) * a / 255u));
+    fonts.body.draw(r, 12.f, drawerTop + 8.f, "Recently Played",
+                    rsWithAlpha(
+                        rsLerpColor(pal.textPrimary, pal.accent, reveal), a));
+
     const int recentCount = int(m_recentVisible.size());
-    if (recentCount == 0) {
-        fonts.small.draw(r, 12.f, 180.f + slide,
-                         "Games you launch will appear here.",
-                         rsWithAlpha(pal.textDim, a));
-        return;
-    }
+    if (recentCount == 0 || reveal < .15f) return;
 
-    const int warm = int(app.time() * 18.f) % recentCount;
-    app.boxart().get(*m_recentVisible[size_t(warm)]);
-
+    const u32 listAlpha = u32(float(a) *
+        rsClamp((reveal - .15f) / .85f, 0.f, 1.f));
+    constexpr float RECENT_ROW = LIST_ROW;
+    const float recentTop = drawerTop + 30.f;
     for (int i = 0; i < recentCount; i++) {
         const db::GameEntry* g = m_recentVisible[size_t(i)];
-        const float x = 12.f + float(i) * 56.f;
-        const float y = 170.f + slide;
+        const float y = recentTop + float(i) * RECENT_ROW;
         const bool focused = m_recentFocus && i == m_recentIdx;
-        if (focused)
+        if (focused) {
             ui::prim::focusRow(
-                r, x, y, 50.f, 50.f,
+                r, 12.f, y, 456.f, RECENT_ROW,
                 rsWithAlpha(pal.tileFocusBg,
-                            rsAlphaOf(pal.tileFocusBg) * a / 255u),
-                rsWithAlpha(pal.accent, a),
+                            rsAlphaOf(pal.tileFocusBg) * listAlpha / 255u),
+                rsWithAlpha(pal.accent, listAlpha),
                 rsWithAlpha(pal.shadow,
-                            rsAlphaOf(pal.shadow) * a / (255u * 2u)));
-        else
-            ui::prim::roundedRect(
-                r, x, y, 50.f, 50.f, 8.f,
-                rsWithAlpha(pal.tileBg,
-                            rsAlphaOf(pal.tileBg) * a / 255u));
-        if (const gfx::Texture* art = app.boxart().peek(*g))
-            drawArtCover(r, *art, x + 8.f, y + 4.f, 34.f, 34.f,
-                         rsWithAlpha(rsHex(0xFFFFFF), a),
-                         rsWithAlpha(
-                             surfaceAt(pal, focused ? pal.tileFocusBg
-                                                    : pal.tileBg,
-                                       y + 24.f),
-                             a));
-        else
-            ui::prim::iconSystem(
-                r, int(g->system), x + 9.f, y + 5.f, 32.f,
-                rsWithAlpha(pal.textSecondary, a),
-                rsWithAlpha(pal.accent, a));
-        r.setScissor(int(x + 3.f), int(y + 39.f), 44, 11);
+                            rsAlphaOf(pal.shadow) * listAlpha / (255u * 2u)));
+        } else if (i + 1 < recentCount) {
+            r.rect(20.f, y + RECENT_ROW - 1.f, 440.f, 1.f,
+                   rsWithAlpha(pal.panelOutline,
+                               rsAlphaOf(pal.panelOutline) * listAlpha /
+                                   (255u * 2u)));
+        }
+        r.setScissor(20, int(y), 360, int(RECENT_ROW));
         drawEllipsized(
-            fonts.small, r, x + 25.f, y + 39.f, 44.f, g->name,
-            rsWithAlpha(focused ? pal.accent : pal.textPrimary, a),
-            text::Align::Center);
+            fonts.body, r, 20.f, y + 6.f, 360.f, g->name,
+            rsWithAlpha(focused ? pal.accent : pal.textPrimary, listAlpha),
+            text::Align::Left);
         r.resetScissor();
+        fonts.small.draw(
+            r, 456.f, y + 8.f, db::systemInfo(g->system).badge,
+            rsWithAlpha(focused ? pal.accent : pal.textDim, listAlpha),
+            text::Align::Right);
     }
 }
 
@@ -815,51 +805,43 @@ void HomeScene::drawBrowser(App& app, float alpha) {
     fonts.small.draw(r, 16.f, 56.f, count,
                      rsWithAlpha(pal.textDim, a));
 
-    const int totalRows =
-        (int(m_visible.size()) + GRID_COLS - 1) / GRID_COLS;
-    const float maxStartRow =
-        float(rsClamp(totalRows - GRID_ROWS, 0, totalRows));
-    const float scrollRow = rsClamp(m_scroll.v, 0.f, maxStartRow);
-    const ui::GridWindow window = ui::visibleGridWindow(
-        int(m_visible.size()), GRID_COLS, GRID_ROWS, scrollRow);
-    r.setScissor(16, int(GRID_TOP), 232, 164);
-    for (int i = window.first; i < window.pastLast; i++) {
-        const int row = i / GRID_COLS;
-        const int col = i % GRID_COLS;
-        const float x = 16.f + float(col) * GRID_STEP;
-        const float y =
-            float(int(GRID_TOP + (float(row) - scrollRow) * GRID_STEP));
-        if (y < GRID_TOP - GRID_STEP ||
-            y >= GRID_TOP + GRID_ROWS * GRID_STEP) continue;
+    const int countVisible = int(m_visible.size());
+    const float maxStart =
+        float(rsClamp(countVisible - LIST_VISIBLE, 0, countVisible));
+    const float scrollIndex = rsClamp(m_scroll.v, 0.f, maxStart);
+    const int first = rsClamp(int(std::floor(scrollIndex)), 0, countVisible);
+    const int pastLast = rsClamp(first + LIST_VISIBLE + 1, 0, countVisible);
+    constexpr float LIST_X = 16.f;
+    constexpr float LIST_W = 232.f;
+    constexpr float LIST_H = LIST_ROW * LIST_VISIBLE;
+    r.setScissor(int(LIST_X), int(LIST_TOP), int(LIST_W), int(LIST_H));
+    for (int i = first; i < pastLast; i++) {
+        const float y = float(int(LIST_TOP +
+            (float(i) - scrollIndex) * LIST_ROW));
+        if (y < LIST_TOP - LIST_ROW || y >= LIST_TOP + LIST_H) continue;
         const bool selected = i == m_listIdx;
         const db::GameEntry& g = *m_visible[size_t(i)];
         if (selected) {
             ui::prim::focusRow(
-                r, x, y, GRID_TILE, GRID_TILE,
+                r, LIST_X, y, LIST_W, LIST_ROW,
                 rsWithAlpha(pal.tileFocusBg,
                             rsAlphaOf(pal.tileFocusBg) * a / 255u),
                 rsWithAlpha(pal.accent, a),
                 rsWithAlpha(pal.shadow,
                             rsAlphaOf(pal.shadow) * a / (255u * 2u)));
-        } else {
-            ui::prim::roundedRect(
-                r, x, y, GRID_TILE, GRID_TILE, 8.f,
-                rsWithAlpha(pal.tileBg,
-                            rsAlphaOf(pal.tileBg) * a / 255u));
+        } else if (i + 1 < countVisible) {
+            r.rect(LIST_X + 8.f, y + LIST_ROW - 1.f,
+                   LIST_W - 16.f, 1.f,
+                   rsWithAlpha(pal.panelOutline,
+                               rsAlphaOf(pal.panelOutline) * a / (255u * 2u)));
         }
-
-        const float tx = x + 8.f, ty = y + 8.f;
-        if (const gfx::Texture* art = app.boxart().peek(g))
-            drawArtCover(r, *art, tx, ty, 56.f, 56.f,
-                         rsWithAlpha(rsHex(0xFFFFFF), a),
-                         rsWithAlpha(
-                             surfaceAt(pal, selected ? pal.tileFocusBg
-                                                     : pal.tileBg,
-                                       ty + 28.f),
-                             a));
-        else
-            drawCoverPlaceholder(r, fonts, pal, g, tx, ty, 56.f, 56.f, a);
-        r.setScissor(16, int(GRID_TOP), 232, 164);
+        r.setScissor(int(LIST_X + 8.f), int(y), int(LIST_W - 16.f),
+                     int(LIST_ROW));
+        drawEllipsized(
+            fonts.body, r, LIST_X + 8.f, y + 6.f, LIST_W - 16.f,
+            g.name, rsWithAlpha(selected ? pal.accent : pal.textPrimary, a),
+            text::Align::Left);
+        r.setScissor(int(LIST_X), int(LIST_TOP), int(LIST_W), int(LIST_H));
     }
     r.resetScissor();
 

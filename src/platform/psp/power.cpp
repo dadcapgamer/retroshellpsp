@@ -3,7 +3,27 @@
 #include <psppower.h>
 #include <psprtc.h>
 
+#include <atomic>
+
 namespace rs::power {
+
+namespace {
+std::atomic<u32> s_events{EVENT_NONE};
+}
+
+void notifyCallback(int flags) {
+    u32 events = EVENT_NONE;
+    if (flags & (PSP_POWER_CB_POWER_SWITCH | PSP_POWER_CB_SUSPENDING |
+                 PSP_POWER_CB_STANDBY))
+        events |= EVENT_SUSPENDING;
+    if (flags & (PSP_POWER_CB_RESUMING | PSP_POWER_CB_RESUME_COMPLETE))
+        events |= EVENT_RESUMED;
+    if (events) s_events.fetch_or(events, std::memory_order_release);
+}
+
+u32 consumeEvents() {
+    return s_events.exchange(EVENT_NONE, std::memory_order_acq_rel);
+}
 
 int batteryPercent() {
     if (!scePowerIsBatteryExist()) return -1;

@@ -13,8 +13,10 @@ add_executable(retrosuite
   runtime/host_services.cpp
   runtime/save_manager.cpp
   frontend/app.cpp
+  frontend/core_package_installer.cpp
   frontend/core_manager.cpp
   frontend/core_registry.cpp
+  frontend/native_emulator_launcher.cpp
   runtime/jsonfile.cpp
   frontend/game_session.cpp
   frontend/autopilot.cpp
@@ -31,13 +33,6 @@ add_executable(retrosuite
   frontend/scenes/settings_scene.cpp)
 
 target_include_directories(retrosuite PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-
-if(RS_INCLUDE_TEST_CORES)
-  # Candidate visibility is a frontend policy. Do not leak this definition
-  # into every PRX or identical core sources produce different artifacts in
-  # stable and candidate bundles.
-  target_compile_definitions(retrosuite PRIVATE RS_INCLUDE_TEST_CORES=1)
-endif()
 
 # First-party code is held to strict diagnostics. Vendored emulator sources
 # keep their narrowly scoped compatibility suppressions in each core target.
@@ -57,6 +52,10 @@ target_link_libraries(retrosuite PRIVATE
   psprtc
   pspaudio
   pspdebug
+  # Custom firmware's kernel-side loader, reachable from a user module.
+  # sceKernelLoadExec alone is privileged and fails with ILLEGAL_PERM_CALL,
+  # so native emulator adapters cannot launch without this.
+  pspsystemctrl_user
   m)
 
 rs_embed_assets(retrosuite
@@ -64,6 +63,8 @@ rs_embed_assets(retrosuite
   ${CMAKE_SOURCE_DIR}/assets/fonts/font_large.rsf
   ${CMAKE_SOURCE_DIR}/assets/fonts/font_body.rsf
   ${CMAKE_SOURCE_DIR}/assets/fonts/font_small.rsf
+  ${CMAKE_SOURCE_DIR}/assets/fonts/font_pixel.rsf
+  ${CMAKE_SOURCE_DIR}/assets/fonts/font_pixel_large.rsf
   ${CMAKE_SOURCE_DIR}/assets/SPLASH.PNG
   ${CMAKE_SOURCE_DIR}/assets/branding/retroshell-logo-light-2x.png
   ${CMAKE_SOURCE_DIR}/assets/icons/consoles/game-boy.png

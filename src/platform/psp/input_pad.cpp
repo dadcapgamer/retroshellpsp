@@ -16,6 +16,20 @@ void Pad::init() {
     m_lastPollUs = sceKernelGetSystemTimeLow();
 }
 
+void Pad::resetAfterResume() {
+    m_held = m_prev = m_pressed = m_released = m_repeat = 0;
+    m_simHeld = 0;
+    m_analogX = m_analogY = 0.f;
+    for (float& timer : m_repeatTimer) timer = 0.f;
+    m_lastPollUs = sceKernelGetSystemTimeLow();
+    /* Drain one current sample into the previous-state latch. Any buttons
+     * physically held while waking must be released before they create a
+     * fresh edge in the UI. */
+    SceCtrlData data{};
+    sceCtrlPeekBufferPositive(&data, 1);
+    m_held = m_prev = data.Buttons;
+}
+
 void Pad::poll() {
     SceCtrlData data{};
     sceCtrlPeekBufferPositive(&data, 1);

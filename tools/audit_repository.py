@@ -46,6 +46,18 @@ def main() -> int:
 
     lock = json.loads(LOCK.read_text())
     locked = {entry["name"]: entry for entry in lock["cores"]}
+    catalog_document = json.loads((ROOT / "core-catalog.json").read_text())
+    catalog = catalog_document.get("cores", {})
+    if catalog_document.get("formatVersion") != 1:
+        fail(errors, "core catalog formatVersion must be 1")
+    if set(catalog) != set(locked):
+        fail(errors, "core catalog and provenance lock must contain the same cores")
+    for name, item in catalog.items():
+        if item.get("status") not in {"Included", "Testing", "Experimental", "Removed"}:
+            fail(errors, f"{name}: invalid catalog status")
+        for field in ("displayName", "modelSupport", "notes"):
+            if not isinstance(item.get(field), str) or not item[field].strip():
+                fail(errors, f"{name}: catalog {field} must be a non-empty string")
     manifests: dict[str, dict] = {}
 
     for path in sorted((ROOT / "cores").glob("*/manifest.json")):
@@ -75,6 +87,101 @@ def main() -> int:
         if name in manifests:
             fail(errors, f"{path}: duplicate core name {name}")
         manifests[name] = data
+
+    native_manifests: dict[str, dict] = {}
+    for manifest_path in sorted((ROOT / "native-emulators").glob("*/manifest.json")):
+        adapter_path = manifest_path.with_name("adapter.json")
+        try:
+            data = json.loads(manifest_path.read_text())
+            adapter = json.loads(adapter_path.read_text())
+        except (OSError, json.JSONDecodeError) as exc:
+            fail(errors, f"{manifest_path.parent}: invalid native adapter: {exc}")
+            continue
+        name = data.get("name")
+        if (name != manifest_path.parent.name or
+                not re.fullmatch(r"[a-z0-9_-]{1,31}", name or "")):
+            fail(errors, f"{manifest_path}: unsafe or mismatched name")
+            continue
+        if adapter.get("formatVersion") not in (1, 2) or adapter.get("name") != name:
+            fail(errors, f"{adapter_path}: invalid format or mismatched name")
+        if data.get("backend") != "native":
+            fail(errors, f"{manifest_path}: backend must be native")
+        if adapter.get("formatVersion") == 2:
+            contract = {
+                "adapterProtocol": 1,
+                "pauseMode": "embedded",
+                "pauseHotkey": "L+R+SELECT",
+                "returnMode": "loadexec",
+            }
+            for field, expected in contract.items():
+                if adapter.get(field) != expected or data.get(field) != expected:
+                    fail(errors, f"{manifest_path.parent}: invalid adapter contract field {field}")
+            capabilities = data.get("capabilities")
+            if (not isinstance(capabilities, list) or
+                    not {"pause", "resume", "exitToShell"}.issubset(capabilities)):
+                fail(errors, f"{manifest_path}: incomplete adapter capabilities")
+        if data.get("executable") != f"emulators/{name}/EBOOT.PBP":
+            fail(errors, f"{manifest_path}: executable must use the canonical path")
+        systems = set(str(data.get("systems", "")).split("|"))
+        if not systems or not systems <= VALID_SYSTEMS:
+            fail(errors, f"{manifest_path}: unsupported system set {sorted(systems)}")
+        for field, expected_type in (("priority", int), ("testOnly", bool),
+                                     ("psp1000Safe", bool)):
+            if type(data.get(field)) is not expected_type:
+                fail(errors, f"{manifest_path}: {field} has the wrong type")
+        if not COMMIT.fullmatch(adapter.get("commit", "")):
+            fail(errors, f"{adapter_path}: commit is not a full Git object ID")
+        payload = adapter.get("payload")
+        if not isinstance(payload, list) or not payload:
+            fail(errors, f"{adapter_path}: payload must not be empty")
+            payload = []
+        destinations: set[str] = set()
+        for item in payload:
+            source = item.get("source", "") if isinstance(item, dict) else ""
+            destination = item.get("destination", "") if isinstance(item, dict) else ""
+            if (not source or not destination or Path(source).is_absolute() or
+                    Path(destination).is_absolute() or ".." in Path(source).parts or
+                    ".." in Path(destination).parts):
+                fail(errors, f"{adapter_path}: unsafe payload entry")
+                continue
+            if destination in destinations:
+                fail(errors, f"{adapter_path}: duplicate destination {destination}")
+            destinations.add(destination)
+        if "EBOOT.PBP" not in destinations:
+            fail(errors, f"{adapter_path}: payload must include EBOOT.PBP")
+        for patch in adapter.get("patches", []):
+            if not isinstance(patch, str) or not (ROOT / patch).is_file():
+                fail(errors, f"{adapter_path}: missing adapter patch {patch}")
+        license_file = adapter.get("licenseFile")
+        source_license = adapter.get("sourceLicenseFile")
+        if not ((isinstance(license_file, str) and (ROOT / license_file).is_file()) or
+                (isinstance(source_license, str) and source_license.strip())):
+            fail(errors, f"{adapter_path}: no verifiable license source")
+        native_manifests[name] = data
+
+    # A native adapter replaces the RetroShell process: launching one exits to
+    # the XMB instead of returning to the frontend, and it needs its own BIOS
+    # and saves. CoreRegistry::defaultFor picks the highest priority, so an
+    # adapter that outranks an in-process core would silently become the
+    # default for its systems. Adapters are alternates and must rank below.
+    for native_name, native in native_manifests.items():
+        native_systems = set(native.get("systems", "").split("|"))
+        for prx_name, prx in manifests.items():
+            # Archived cores are never offered, so outranking them is fine and
+            # intended — the adapter replaces them. A same-name PRX is the
+            # retired conversion of the adapter itself, not a rival.
+            if prx_name == "dummy" or prx_name == native_name:
+                continue
+            if locked.get(prx_name, {}).get("delivery") == "archived":
+                continue
+            if not native_systems & set(prx.get("systems", "").split("|")):
+                continue
+            if native.get("priority", 0) >= prx.get("priority", 0):
+                fail(errors,
+                     f"native adapter {native_name} priority "
+                     f"{native.get('priority')} must rank below in-process "
+                     f"core {prx_name} ({prx.get('priority')}) for shared "
+                     f"systems; adapters are alternates, not defaults")
 
     integrated = set(manifests) - {"dummy"}
     production = {name for name, data in manifests.items() if not data["testOnly"]}
@@ -131,6 +238,10 @@ def main() -> int:
     if ("RetroShell-PSP" not in package_script or
             "PSP/GAME/RetroShell/EBOOT.PBP" not in package_script):
         fail(errors, "release packaging does not use RetroShell identity")
+    api_header = (ROOT / "src" / "core_api" / "rs_core_api.h").read_text()
+    api_match = re.search(r"#define\s+RS_CORE_API_VERSION\s+(\d+)u", api_header)
+    if not api_match or f"CORE_API_VERSION = {api_match.group(1)}" not in package_script:
+        fail(errors, "core package descriptor is not synchronized with the Core API")
     if "add_subdirectory(dummy)" in (ROOT / "cores" / "CMakeLists.txt").read_text().replace(
         "if(RS_INCLUDE_TEST_CORES)\n  add_subdirectory(dummy)\nendif()", ""
     ):
@@ -162,8 +273,9 @@ def main() -> int:
         if entry.get("delivery") == "archived"
     }
     print(f"OK: {len(production)} production, {len(active_candidates)} "
-          f"candidate, and {len(archived)} archived cores; manifests, "
-          "provenance, and PRX policy valid")
+          f"candidate, {len(archived)} archived cores, and "
+          f"{len(native_manifests)} native adapters; manifests, provenance, "
+          "and execution policy valid")
     return 0
 
 

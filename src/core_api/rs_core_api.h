@@ -22,7 +22,7 @@
 extern "C" {
 #endif
 
-#define RS_CORE_API_VERSION 3u
+#define RS_CORE_API_VERSION 4u
 
 /* Pixel formats a core may emit. Values match what the PSP GE consumes so
  * frames upload without conversion. */
@@ -95,6 +95,14 @@ typedef struct RSCoreAPI {
     /* Core must call this notification-free; the frontend polls a dirty
      * flag instead: returns nonzero if SRAM changed since the last call. */
     int      (*sram_dirty)(void);
+
+    /* --- Cartridge real-time clock -------------------------------------- */
+    /* Optional battery-backed RTC/register block exposed by libretro cores
+     * as RETRO_MEMORY_RTC. RetroShell persists it separately from SRAM so
+     * day/night games survive a full frontend restart. Return 0/NULL when
+     * the core or loaded cartridge has no RTC region. */
+    uint32_t (*rtc_size)(void);
+    void*    (*rtc_data)(void);
 
     /* --- Options ---------------------------------------------------------- */
     /* Returns 0 if the option was recognized. */

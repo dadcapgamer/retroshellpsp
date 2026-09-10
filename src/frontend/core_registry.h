@@ -18,8 +18,8 @@
  *      states are core-specific, so a game sticks with the core that made
  *      them;
  *   2. otherwise, the highest-priority core claiming the game's system;
- *   3. the UI exposes the installed alternatives through the Square
- *      shortcut. needsChoice() is reserved for a remembered core that has
+ *   3. the UI exposes installed alternatives through Options -> Per-game
+ *      Settings. needsChoice() is reserved for a remembered core that has
  *      disappeared, avoiding a silent cross-core save-state substitution.
  */
 #pragma once
@@ -32,18 +32,42 @@
 
 namespace rs {
 
+enum class CoreBackend : uint8_t {
+    InProcessPrx,
+    NativeEboot,
+};
+
 struct CoreInfo {
     std::string name;      /* module / manifest name, e.g. "gambatte" */
     std::string version;
     std::string systems;   /* pipe-separated coreIds, e.g. "gb|gbc"   */
     int priority = 0;      /* higher sorts first and becomes the default */
-    bool testOnly = false; /* never exposed in a production build */
+    bool testOnly = false; /* visible, but labelled as testing in the picker */
     bool psp1000Safe = false; /* explicitly qualified for the 32 MB model */
     bool requiresFullContent = false; /* core cannot use host VFS/fullpath */
     bool preferVfs = false; /* avoid a duplicate in-arena ROM when possible */
     bool isStatic = false;
+    CoreBackend backend = CoreBackend::InProcessPrx;
+    /* Native backends are process replacements. This path is relative to
+     * RETROSHELL and constrained to emulators/<core-name>/EBOOT.PBP. */
+    std::string executable;
+    uint32_t maxRomPath = 767;
+    std::string biosSource;
+    std::string biosDestination;
+    uint32_t biosBytes = 0;
+    /* Working directories the native emulator expects to already exist.
+     * A zip cannot carry empty directories, so the frontend creates them
+     * before handing the machine over. */
+    std::vector<std::string> requiredDirectories;
+    /* Native adapter contract. Version zero is a legacy process replacement
+     * that may ignore RetroShell's optional return/session arguments. */
+    uint32_t adapterProtocol = 0;
+    std::string pauseMode;
+    std::string pauseHotkey;
+    std::string returnMode;
 
     bool serves(db::System s) const;
+    bool isNative() const { return backend == CoreBackend::NativeEboot; }
 };
 
 class CoreRegistry {

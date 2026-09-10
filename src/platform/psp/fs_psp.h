@@ -46,6 +46,16 @@ bool readFile(const char* path, std::vector<u8>& out,
               u32 maxBytes = DEFAULT_MAX_FILE);
 bool writeFile(const char* path, const void* data, u32 size);
 bool writeFileAtomic(const char* path, const void* data, u32 size);
+/* Promotes an already-written temporary file using the same backup/restore
+ * transaction as writeFileAtomic. The temporary file must share a volume. */
+bool replaceFileAtomic(const char* path, const char* temporary);
+bool removeFile(const char* path);
+bool renameFile(const char* from, const char* to);
+
+/* Atomically promotes two already-written temporary files as one logical
+ * unit. Existing destinations are restored if either promotion fails. */
+bool replaceFilePairAtomic(const char* first, const char* firstTemp,
+                           const char* second, const char* secondTemp);
 
 /* Random-access read for streaming; returns bytes read or <0. */
 s32 readRange(const char* path, void* buf, u32 offset, u32 size);

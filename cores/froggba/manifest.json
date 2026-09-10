@@ -1,0 +1,10 @@
+{
+  "name": "froggba",
+  "version": "0.4.0-rc.1-9d75721-rs1",
+  "systems": "gba",
+  "priority": 80,
+  "testOnly": true,
+  "psp1000Safe": false,
+  "requiresFullContent": false,
+  "preferVfs": true
+}

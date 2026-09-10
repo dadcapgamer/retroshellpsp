@@ -32,4 +32,10 @@ u32    totalSize();
 u32    highWater();
 u32    allocationFailures();
 
+/* Newlib heap usage, for deciding whether the fixed PSP_HEAP_SIZE_KB
+ * reservation in main.cpp is larger than the frontend actually needs. Every
+ * KB reserved there is a KB the arena — and therefore the running core —
+ * never sees. `when` labels the sample in the log. */
+void   logHeapUsage(const char* when);
+
 }  // namespace rs::mem

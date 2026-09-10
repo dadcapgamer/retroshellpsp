@@ -47,6 +47,12 @@ target_compile_definitions(rs_core_gpsp PRIVATE
   RS_CORE_NAME="gpsp"
   RS_CORE_SYSTEMS="gba"
   RS_GPSP_PSP_DEFAULTS
+  # Render the GBA's native BGR555 pixels into a 256-wide surface. The PSP
+  # GE can sample this directly, avoiding a full-frame channel swap/upload.
+  RS_GPSP_DIRECT_FRAMEBUFFER
+  RS_PSP_NATIVE_BGR555
+  RS_PSP_NATIVE_STORAGE_HEIGHT=256
+  USE_XBGR1555_FORMAT
   GIT_VERSION="5b6e751"
   PSP
   MIPS_HAS_R2_INSTS
@@ -63,8 +69,12 @@ target_compile_definitions(rs_core_gpsp PRIVATE
 
 target_compile_options(rs_core_gpsp PRIVATE
   -O3
+  -G0
   -march=allegrex -mfp32 -mgp32 -mlong32 -mabi=eabi
+  -mllsc -mbranch-likely -mno-check-zero-division
   -fomit-frame-pointer -ffast-math
+  -fno-split-wide-types -fgcse-after-reload
+  -fno-unwind-tables -fno-asynchronous-unwind-tables
   -falign-functions=32 -falign-loops -falign-labels -falign-jumps
   -Wno-sign-compare -Wno-unused-variable -Wno-unused-but-set-variable
   -Wno-unused-function -Wno-missing-field-initializers)

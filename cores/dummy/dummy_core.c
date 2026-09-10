@@ -220,6 +220,9 @@ static int core_sram_dirty(void) {
     return d;
 }
 
+static uint32_t core_rtc_size(void) { return 0; }
+static void* core_rtc_data(void) { return NULL; }
+
 static int core_set_option(const char* key, const char* value) {
     g_host->log(RS_LOG_DEBUG, "dummy: option %s=%s", key, value);
     return 0;
@@ -248,6 +251,8 @@ static const RSCoreAPI g_api = {
     core_sram_size,
     core_sram_data,
     core_sram_dirty,
+    core_rtc_size,
+    core_rtc_data,
     core_set_option,
 };
 

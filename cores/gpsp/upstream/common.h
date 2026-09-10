@@ -108,7 +108,14 @@
 
 #define GBA_SCREEN_WIDTH  (240)
 #define GBA_SCREEN_HEIGHT (160)
-#define GBA_SCREEN_PITCH  (240)
+/* The extra columns are padding only; logical GBA geometry stays 240x160.
+ * A 256-pixel pitch lets RetroShell bind the core buffer as a native PSP
+ * texture instead of copying 76.8 KiB on every displayed frame. */
+#if defined(PSP) && defined(RS_GPSP_DIRECT_FRAMEBUFFER)
+  #define GBA_SCREEN_PITCH  (256)
+#else
+  #define GBA_SCREEN_PITCH  (240)
+#endif
 
 // The buffer is 16 bit color depth.
 // We reserve extra memory at the end for extra effects (winobj rendering).

@@ -65,6 +65,12 @@ def main() -> int:
         "--boxart", type=Path,
         help="optional PNG/JPG cover copied into the isolated visual test")
     parser.add_argument(
+        "--bios", type=Path,
+        help="optional user-owned/open BIOS copied to RETROSHELL/system/gba_bios.bin")
+    parser.add_argument(
+        "--core-package", type=Path,
+        help="seed an unopened .rscore.zip and verify startup installation")
+    parser.add_argument(
         "--ppsspp", type=Path,
         default=Path("/Applications/PPSSPPSDL.app/Contents/MacOS/PPSSPPSDL"))
     parser.add_argument("--build-dir", type=Path,
@@ -72,6 +78,11 @@ def main() -> int:
     parser.add_argument("--runs-dir", type=Path,
                         default=ROOT / "build-ppsspp-auto" / "runs")
     parser.add_argument("--timeout", type=int, default=75)
+    parser.add_argument(
+        "--psp-model", type=int, choices=(0, 1), default=0,
+        help="0 = PSP-1000 (32 MB, default), 1 = PSP-2000+ (64 MB). The "
+             "64 MB model is a required release gate that cores sized from "
+             "available memory behave differently under.")
     parser.add_argument("--theme", choices=("dark", "light"), default="dark",
                         help="frontend theme used for visual validation")
     storage_group = parser.add_mutually_exclusive_group()
@@ -87,6 +98,10 @@ def main() -> int:
     args.rom = args.rom.resolve()
     if args.boxart:
         args.boxart = args.boxart.resolve()
+    if args.bios:
+        args.bios = args.bios.resolve()
+    if args.core_package:
+        args.core_package = args.core_package.resolve()
     args.build_dir = args.build_dir.resolve()
     args.runs_dir = args.runs_dir.resolve()
     if not args.rom.is_file():
@@ -95,6 +110,13 @@ def main() -> int:
             not args.boxart.is_file() or
             args.boxart.suffix.lower() not in (".png", ".jpg", ".jpeg")):
         parser.error(f"box art must be a PNG/JPG file: {args.boxart}")
+    if args.bios and (
+            not args.bios.is_file() or args.bios.stat().st_size != 16 * 1024):
+        parser.error("GBA BIOS must be an existing 16 KB file")
+    if args.core_package and (
+            not args.core_package.is_file() or
+            not args.core_package.name.lower().endswith(".rscore.zip")):
+        parser.error("core package must be an existing .rscore.zip")
     if not args.ppsspp.is_file():
         parser.error(f"PPSSPP executable not found: {args.ppsspp}")
     if not re.fullmatch(r"[A-Za-z0-9_-]{1,48}", args.core):
@@ -136,6 +158,7 @@ def main() -> int:
     game_dir = memstick / "PSP" / "GAME" / "RetroShell"
     system_dir = memstick / "PSP" / "SYSTEM"
     rs_dir = memstick / "RETROSHELL"
+    rs_system_dir = rs_dir / "system"
     legacy_seed = args.legacy_storage or args.mixed_storage
     seed_dir = memstick / ("RETROSUITE" if legacy_seed else "RETROSHELL")
     cores_dir = (rs_dir if args.mixed_storage else seed_dir) / "cores"
@@ -143,25 +166,31 @@ def main() -> int:
     # production scanner's extension-based console sorting rather than
     # relying on a console-specific folder name.
     target_rom_dir = memstick / "ROMS"
-    for directory in (game_dir, system_dir, cores_dir, target_rom_dir):
+    for directory in (game_dir, system_dir, rs_system_dir, cores_dir,
+                      target_rom_dir):
         directory.mkdir(parents=True, exist_ok=True)
     shutil.copy2(eboot, game_dir / "EBOOT.PBP")
-    shutil.copy2(core_prx, cores_dir / core_prx.name)
-    shutil.copy2(core_json, cores_dir / core_json.name)
+    if args.core_package:
+        shutil.copy2(args.core_package, cores_dir / args.core_package.name)
+    else:
+        shutil.copy2(core_prx, cores_dir / core_prx.name)
+        shutil.copy2(core_json, cores_dir / core_json.name)
     if args.mixed_storage:
         legacy_cores = seed_dir / "cores"
         legacy_cores.mkdir(parents=True, exist_ok=True)
         shutil.copy2(core_prx, legacy_cores / core_prx.name)
         shutil.copy2(core_json, legacy_cores / core_json.name)
     shutil.copy2(args.rom, target_rom_dir / args.rom.name)
+    if args.bios:
+        shutil.copy2(args.bios, rs_system_dir / "gba_bios.bin")
     if args.boxart:
         shutil.copy2(args.boxart,
                      target_rom_dir /
                      f"{args.rom.stem}{args.boxart.suffix.lower()}")
     write_json(seed_dir / "config.json", {
-        # Candidate visibility is disabled; PPSSPP itself remains model 0
-        # and RetroShell still receives the 17 MB PSP-1000 core arena.
-        "psp1000SafeMode": False,
+        # The PSP model is selected by --psp-model; model 0 gives RetroShell
+        # the ~17 MB PSP-1000 core arena, model 1 the 64 MB machine.
+        # Installed experimental cores remain visible by policy.
         "showFps": True,
         "autoSave": False,
         "theme": args.theme,
@@ -170,7 +199,8 @@ def main() -> int:
         "[General]\nFirstRun = False\nCheckForNewVersion = False\n"
         "[Graphics]\nBackend = 3\nSoftwareRendering = True\n"
         "FrameSkip = 0\nAutoFrameSkip = False\n"
-        "[SystemParam]\nPSPModel = 0\nPSPFirmwareVersion = 660\n"
+        f"[SystemParam]\nPSPModel = {args.psp_model}\n"
+        "PSPFirmwareVersion = 660\n"
         "[CPU]\nFastMemoryAccess = True\n"
     )
 
@@ -211,9 +241,13 @@ def main() -> int:
     initial_arena_kb = int(arena_matches[0]) if arena_matches else 0
     checks = {
         "autopilot_complete": complete,
-        # PPSSPP's model-0 maximum block can vary by one page depending on
-        # loader alignment. Both values represent the 32 MB PSP-1000 model.
-        "psp1000_arena": 17_000 <= initial_arena_kb <= 18_000,
+        # PPSSPP's maximum block can vary by one page depending on loader
+        # alignment, so each model is range-checked rather than pinned. The
+        # model-0 range moved up by ~2 MB when PSP_HEAP_SIZE_KB was cut from
+        # 4096 to 2048 after hardware showed the newlib heap peaking at 326 KB.
+        "expected_arena_for_model": (
+            19_000 <= initial_arena_kb <= 20_000 if args.psp_model == 0
+            else 45_000 <= initial_arena_kb <= 56_000),
         "core_loaded_twice": text.count(f"core: '{args.core}' ready") >= 2,
         "rom_loaded_twice": text.count("session: ROM loaded") >= 2,
         "state_saved": "save: state slot 0 ok" in text,
@@ -224,6 +258,13 @@ def main() -> int:
         "no_allocation_failure": "allocfail 0" in text and
                                  "failures 0" in text,
     }
+    if args.core_package:
+        checks["core_package_installed"] = (
+            f"core package: installed {args.core}" in text and
+            (rs_dir / "cores" / f"{args.core}.prx").is_file() and
+            (rs_dir / "cores" / f"{args.core}.json").is_file())
+        checks["core_package_consumed"] = not (
+            rs_dir / "cores" / args.core_package.name).exists()
     if args.legacy_storage or args.mixed_storage:
         checks["legacy_storage_removed"] = not seed_dir.exists()
         checks["storage_migration_reported"] = (

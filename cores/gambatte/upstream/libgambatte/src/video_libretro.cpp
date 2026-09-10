@@ -306,7 +306,15 @@ namespace gambatte
          bFinal = static_cast<unsigned>((bDark * rgbMax) + 0.5) & 0x1F;
       }
       
-#ifdef VIDEO_RGB565
+#if defined(RS_PSP_BGR565)
+      /* The PSP GE samples GU_PSM_5650 with blue in the high bits. Packing
+       * that ordering here, once per palette entry, removes the shim's
+       * per-pixel channel swap over all 23,040 pixels of every frame.
+       * The interframe-blending paths need no change: their pack/unpack are
+       * symmetric, and the 0x821 mix mask is the low bit of each channel in
+       * either ordering. */
+      return bFinal << 11 | gFinal << 6 | rFinal;
+#elif defined(VIDEO_RGB565)
       return rFinal << 11 | gFinal << 6 | bFinal;
 #elif defined(VIDEO_ABGR1555)
       return bFinal << 10 | gFinal << 5 | rFinal;

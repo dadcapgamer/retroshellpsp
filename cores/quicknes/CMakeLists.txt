@@ -19,6 +19,10 @@ target_include_directories(rs_core_quicknes PRIVATE
 target_compile_definitions(rs_core_quicknes PRIVATE
   RS_CORE_NAME="quicknes"
   RS_CORE_SYSTEMS="nes"
+  # Emit the GE's channel ordering straight from the 256-entry palette so the
+  # shim can borrow the frame instead of swapping 61,440 pixels every frame.
+  RS_PSP_BGR565
+  RS_PSP_NATIVE_RGB565
   __LIBRETRO__
   NO_UNALIGNED_ACCESS
   HAVE_NO_LANGEXTRA)

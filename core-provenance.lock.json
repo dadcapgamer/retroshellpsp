@@ -10,10 +10,25 @@
       "license": "GPL-2.0",
       "licenseFile": "cores/gambatte/upstream/COPYING",
       "retainedSource": "cores/gambatte/upstream",
-      "sourceTreeSha256": "a68623148cbb06f62882cb7830aad48e9c030aa022e4b5ac8ac4050dc17f414e",
-      "localPatches": ["cores/shared/rs_libretro_shim.cpp"],
-      "compilerFlags": ["-O2", "-G0", "-fno-exceptions", "-fno-rtti", "-fno-strict-overflow", "-fno-strict-aliasing", "-DPSP"],
-      "expectedArtifactSha256": "ac9822c329395be0b53abd699201786c366da8eb4a1012b754a40caa69a2b458"
+      "sourceTreeSha256": "6c8a2df97483f2b5f3aadca352849d917813e56c64dc2565280406098dc96bf1",
+      "localPatches": [
+        "cores/shared/rs_libretro_shim.cpp: select Gambatte's low-cost PSP cosine audio resampler when no per-game override exists",
+        "cores/shared/rs_libretro_shim.cpp: honour SET_SYSTEM_AV_INFO/SET_GEOMETRY so a core that enlarges its output at runtime is no longer capped at its load-time geometry",
+        "cores/shared/rs_libretro_shim.cpp: throttle recurring video warnings; an unbuffered per-frame Memory Stick write collapses the frame budget on real hardware",
+        "cores/shared/rs_libretro_shim.cpp: export rs_psp_core_available() so cores can size their caches from the arena instead of a compile-time constant",
+        "cores/gambatte/upstream: pack PSP-native BGR565 in gbcToRgb32 and the rgb32->565 palette converter under RS_PSP_BGR565, removing the shim's per-pixel channel swap"
+      ],
+      "compilerFlags": [
+        "-O3",
+        "-G0",
+        "-fno-exceptions",
+        "-fno-rtti",
+        "-fno-strict-overflow",
+        "-fno-strict-aliasing",
+        "-DPSP",
+        "-DRS_GAMBATTE_PSP_DEFAULTS"
+      ],
+      "expectedArtifactSha256": "5fea4f69d8b5d493838baf120efc2478da55663c7cfcc2ac2fd6f68492b91cd7"
     },
     {
       "name": "gearboy",
@@ -24,9 +39,23 @@
       "licenseFile": "cores/gearboy/upstream/LICENSE",
       "retainedSource": "cores/gearboy/upstream",
       "sourceTreeSha256": "7e0a9d5c5f3f503c307c7c4a58d24b66ee8d66dd43eea2429e1aa4bf4433594d",
-      "localPatches": ["cores/shared/rs_libretro_shim.cpp", "cores/shared/psp_posix_stubs.c"],
-      "compilerFlags": ["-O2", "-G0", "-fno-exceptions", "-fno-rtti", "-fno-strict-overflow", "-fno-strict-aliasing", "-DPSP"],
-      "expectedArtifactSha256": "c3623a817c001e848acb20e6aba46d95e80b51ff40c4ac72830cf334f444d566"
+      "localPatches": [
+        "cores/shared/rs_libretro_shim.cpp",
+        "cores/shared/psp_posix_stubs.c",
+        "cores/shared/rs_libretro_shim.cpp: honour SET_SYSTEM_AV_INFO/SET_GEOMETRY so a core that enlarges its output at runtime is no longer capped at its load-time geometry",
+        "cores/shared/rs_libretro_shim.cpp: throttle recurring video warnings; an unbuffered per-frame Memory Stick write collapses the frame budget on real hardware",
+        "cores/shared/rs_libretro_shim.cpp: export rs_psp_core_available() so cores can size their caches from the arena instead of a compile-time constant"
+      ],
+      "compilerFlags": [
+        "-O2",
+        "-G0",
+        "-fno-exceptions",
+        "-fno-rtti",
+        "-fno-strict-overflow",
+        "-fno-strict-aliasing",
+        "-DPSP"
+      ],
+      "expectedArtifactSha256": "98c79e4c12264b39a9e035d85898b38f998069eaea5f7b370bf5a5e4ecb60086"
     },
     {
       "name": "gpsp",
@@ -36,10 +65,114 @@
       "license": "GPL-2.0",
       "licenseFile": "cores/gpsp/upstream/COPYING",
       "retainedSource": "cores/gpsp/upstream",
-      "sourceTreeSha256": "8c1045d1e0a1d9a2c4254de558de4907454cde3c19cfd5de60a13af0932a6e3b",
-      "localPatches": ["cores/gpsp/CMakeLists.txt: enable the PSP MIPS dynarec with an 8 MiB paged ROM cache and PSP-specific audio defaults", "cores/gpsp/upstream/libretro/libretro.c: honour the standard frontend video-disable bit on PSP audio-recovery frames", "cores/shared/rs_libretro_shim.cpp: provide read-only libretro VFS v2 and PSP gpSP option defaults"],
-      "compilerFlags": ["-O3", "-G0", "-DPSP", "-DHAVE_DYNAREC", "-DMIPS_ARCH", "-DSMALL_TRANSLATION_CACHE", "-DROM_BUFFER_SIZE=8", "-DRS_GPSP_PSP_DEFAULTS", "-march=allegrex", "-ffast-math", "-fno-strict-overflow", "-fno-strict-aliasing"],
-      "expectedArtifactSha256": "58a1ac62ec71a17752c77fa0250559a2223b4e37adff4958e76bcec82b679866"
+      "sourceTreeSha256": "820738cf4cd2bc7d37f2499f504a4a564ab19156f5c9e528ebed98435650eaa5",
+      "localPatches": [
+        "cores/gpsp/CMakeLists.txt: enable the PSP MIPS dynarec with an 8 MiB paged ROM cache and PSP-specific audio defaults",
+        "cores/gpsp/upstream/libretro/libretro.c: honour the standard frontend video-disable bit on PSP audio-recovery frames",
+        "cores/shared/rs_libretro_shim.cpp: provide read-only libretro VFS v2 and PSP gpSP option defaults",
+        "cores/shared/rs_libretro_shim.cpp: honour SET_SYSTEM_AV_INFO/SET_GEOMETRY so a core that enlarges its output at runtime is no longer capped at its load-time geometry",
+        "cores/shared/rs_libretro_shim.cpp: throttle recurring video warnings; an unbuffered per-frame Memory Stick write collapses the frame budget on real hardware",
+        "cores/shared/rs_libretro_shim.cpp: export rs_psp_core_available() so cores can size their caches from the arena instead of a compile-time constant",
+        "cores/gpsp/upstream/gba_memory.c: size the ROM page cache from host-available arena instead of a fixed ROM_BUFFER_SIZE count",
+        "cores/gpsp/upstream/gba_memory.c, cpu_threaded.c, libretro/libretro.c: count ROM page faults and JIT ROM-cache flushes, reported once at unload",
+        "cores/gpsp/upstream/common.h and CMakeLists.txt: render PSP-native BGR555 into a 256-pixel-pitch surface for direct GE sampling",
+        "cores/gpsp/upstream/gba_memory.c: apply exact, payload-fingerprinted compatibility profiles for validated ROM hacks without distributing ROM data"
+      ],
+      "compilerFlags": [
+        "-O3",
+        "-G0",
+        "-DPSP",
+        "-DHAVE_DYNAREC",
+        "-DMIPS_ARCH",
+        "-DSMALL_TRANSLATION_CACHE",
+        "-DROM_BUFFER_SIZE=8",
+        "-DRS_GPSP_PSP_DEFAULTS",
+        "-DRS_GPSP_DIRECT_FRAMEBUFFER",
+        "-DRS_PSP_NATIVE_BGR555",
+        "-DUSE_XBGR1555_FORMAT",
+        "-march=allegrex",
+        "-mllsc",
+        "-mbranch-likely",
+        "-ffast-math",
+        "-fno-strict-overflow",
+        "-fno-strict-aliasing"
+      ],
+      "expectedArtifactSha256": "e7f085b283a0d5490d07861f7b771d4a11afe87f500e166a85e26c6fd9d28b34"
+    },
+    {
+      "name": "mgba",
+      "delivery": "archived",
+      "repository": "https://github.com/libretro/mgba.git",
+      "commit": "e31759b24e7a4e3899285ff720d7b573ac328ae7",
+      "license": "MPL-2.0",
+      "licenseFile": "cores/mgba/upstream/LICENSE",
+      "retainedSource": "cores/mgba/upstream",
+      "sourceTreeSha256": "0268f94f63b4f95b7ad1b3f50ed5ffd7eb9ee42442ea8728db2666a93c920d77",
+      "localPatches": [
+        "cores/mgba/CMakeLists.txt: build the pinned GB/GBC/GBA libretro engines as one minimal compatibility PRX",
+        "cores/mgba/upstream/src/util/vfs.c: default invalid access modes to a defined read-only VFS mode",
+        "cores/shared/rs_libretro_shim.cpp: provide PSP idle-loop and audio-directed frameskip defaults plus host VFS v2",
+        "cores/shared/rs_libretro_shim.cpp: honour SET_SYSTEM_AV_INFO/SET_GEOMETRY so a core that enlarges its output at runtime is no longer capped at its load-time geometry",
+        "cores/shared/rs_libretro_shim.cpp: throttle recurring video warnings; an unbuffered per-frame Memory Stick write collapses the frame budget on real hardware",
+        "cores/shared/rs_libretro_shim.cpp: export rs_psp_core_available() so cores can size their caches from the arena instead of a compile-time constant"
+      ],
+      "compilerFlags": [
+        "-O3",
+        "-G0",
+        "-march=allegrex",
+        "-ffast-math",
+        "-DRS_MGBA_PSP_DEFAULTS",
+        "-DRS_PSP_NATIVE_RGB565",
+        "-fno-strict-overflow",
+        "-fno-strict-aliasing"
+      ],
+      "expectedArtifactSha256": "2254e5cb4960f86fdf24f7dee4b146934a5d1aea5da74830ff7aef4f514a41d6"
+    },
+    {
+      "name": "froggba",
+      "delivery": "archived",
+      "repository": "https://github.com/tzubertowski/FrogGBA.git",
+      "commit": "9d75721fe8e3df23db4148f49e92df2bafe6dd1a",
+      "license": "GPL-2.0",
+      "licenseFile": "cores/froggba/upstream/LICENSE",
+      "retainedSource": "cores/froggba/upstream",
+      "sourceTreeSha256": "0fa3db25be7506f6401cb46fa172fc18e781ed1e524a02b55fdec78a899b37a4",
+      "localPatches": [
+        "cores/froggba/upstream: adapt FrogGBA's gpSP/TempGBA engine through the libretro boundary so RetroShell owns GU, audio, input, lifecycle and persistence",
+        "cores/froggba/upstream/cpu.c: use FrogGBA's balanced 2 MiB read-only and 256 KiB writable dynarec cache profile for PSP locality and PSP-1000 headroom",
+        "cores/froggba/upstream/libretro.c and video_ge.h: identify FrogGBA, remove direct GU/VBlank/VRAM ownership and submit an aligned RAM framebuffer",
+        "cores/froggba/upstream/libretro.c and memory.c: expose a stable 128 KiB save region and defer persistence to RetroShell",
+        "cores/froggba/upstream/memory.c: cap the PSP-1000 ROM page cache at 8 MiB and harden legacy path/file-size handling",
+        "cores/froggba/upstream/mips_emit.h: retain the PSP stack fast path while resolving the actual mapped IWRAM or EWRAM page for ROM-hack safety",
+        "cores/froggba/upstream/sound_alt.c and libretro.c: retain FrogGBA-style masked audio ring operations at 32.768 kHz and skip scanline rendering during frontend audio-recovery frames",
+        "cores/froggba/upstream/video.c, video_ge.h, and the shared shim: expose a padded 256x256 PSP-native BGR555 texture for zero-conversion GE binding",
+        "src/frontend/game_session.cpp: defer FrogGBA's atomic SRAM write until gameplay is paused or the session exits",
+        "cores/froggba/CMakeLists.txt: build the pinned FrogGBA-derived Allegrex engine as an isolated RetroShell PRX",
+        "cores/shared/rs_libretro_shim.cpp: honour SET_SYSTEM_AV_INFO/SET_GEOMETRY so a core that enlarges its output at runtime is no longer capped at its load-time geometry",
+        "cores/shared/rs_libretro_shim.cpp: throttle recurring video warnings; an unbuffered per-frame Memory Stick write collapses the frame budget on real hardware",
+        "cores/shared/rs_libretro_shim.cpp: export rs_psp_core_available() so cores can size their caches from the arena instead of a compile-time constant"
+      ],
+      "compilerFlags": [
+        "-O3",
+        "-G0",
+        "-march=allegrex",
+        "-mabi=eabi",
+        "-mllsc",
+        "-mbranch-likely",
+        "-mno-check-zero-division",
+        "-fomit-frame-pointer",
+        "-fno-split-wide-types",
+        "-fgcse-after-reload",
+        "-DPSP",
+        "-D__LIBRETRO__",
+        "-DRS_RETROSHELL",
+        "-DRS_FROGGBA",
+        "-DRS_PSP_NATIVE_BGR555",
+        "-DRS_PSP_NATIVE_STORAGE_HEIGHT=256",
+        "-fno-strict-overflow",
+        "-fno-strict-aliasing"
+      ],
+      "expectedArtifactSha256": "1e682f6d90262c563dea79399cd268efc0d93b21d8e015bd748f09adf64a8107"
     },
     {
       "name": "tgbdual",
@@ -50,9 +183,22 @@
       "licenseFile": "cores/tgbdual/upstream/README",
       "retainedSource": "cores/tgbdual/upstream",
       "sourceTreeSha256": "6c66ca65bc2eb036e37f625097f3c94a46f7509e7956500b6ebdf024d3faf554",
-      "localPatches": ["cores/shared/rs_libretro_shim.cpp"],
-      "compilerFlags": ["-O2", "-G0", "-fno-exceptions", "-fno-rtti", "-fno-strict-overflow", "-fno-strict-aliasing", "-DPSP"],
-      "expectedArtifactSha256": "9d3b2f93535d7b340f6625a0ae74663d728845187695f579fdadc0239f0d9e60"
+      "localPatches": [
+        "cores/shared/rs_libretro_shim.cpp",
+        "cores/shared/rs_libretro_shim.cpp: honour SET_SYSTEM_AV_INFO/SET_GEOMETRY so a core that enlarges its output at runtime is no longer capped at its load-time geometry",
+        "cores/shared/rs_libretro_shim.cpp: throttle recurring video warnings; an unbuffered per-frame Memory Stick write collapses the frame budget on real hardware",
+        "cores/shared/rs_libretro_shim.cpp: export rs_psp_core_available() so cores can size their caches from the arena instead of a compile-time constant"
+      ],
+      "compilerFlags": [
+        "-O2",
+        "-G0",
+        "-fno-exceptions",
+        "-fno-rtti",
+        "-fno-strict-overflow",
+        "-fno-strict-aliasing",
+        "-DPSP"
+      ],
+      "expectedArtifactSha256": "a87f83eb929bc594717cbf4eb2858ebfaf4582c75116da2588bb586fcaa9e4ae"
     },
     {
       "name": "fceumm",
@@ -63,9 +209,23 @@
       "licenseFile": "cores/fceumm/upstream/COPYING",
       "retainedSource": "cores/fceumm/upstream",
       "sourceTreeSha256": "075ec03fe266514df0f99d505930e8504717b6b03218422b9e7282a4e60d6dff",
-      "localPatches": ["cores/shared/rs_libretro_shim.cpp", "cores/shared/psp_posix_stubs.c"],
-      "compilerFlags": ["-O2", "-G0", "-fno-exceptions", "-fno-rtti", "-fno-strict-overflow", "-fno-strict-aliasing", "-DPSP"],
-      "expectedArtifactSha256": "e73ba5ee55b859536c60a7258248ac520697c4c179dbad358dac27fe4f335d4a"
+      "localPatches": [
+        "cores/shared/rs_libretro_shim.cpp",
+        "cores/shared/psp_posix_stubs.c",
+        "cores/shared/rs_libretro_shim.cpp: honour SET_SYSTEM_AV_INFO/SET_GEOMETRY so a core that enlarges its output at runtime is no longer capped at its load-time geometry",
+        "cores/shared/rs_libretro_shim.cpp: throttle recurring video warnings; an unbuffered per-frame Memory Stick write collapses the frame budget on real hardware",
+        "cores/shared/rs_libretro_shim.cpp: export rs_psp_core_available() so cores can size their caches from the arena instead of a compile-time constant"
+      ],
+      "compilerFlags": [
+        "-O2",
+        "-G0",
+        "-fno-exceptions",
+        "-fno-rtti",
+        "-fno-strict-overflow",
+        "-fno-strict-aliasing",
+        "-DPSP"
+      ],
+      "expectedArtifactSha256": "0c9a1405a618c6cecfd5561c12c0fd79b3b6c922fad59b7bd1211313585d8fff"
     },
     {
       "name": "quicknes",
@@ -75,10 +235,27 @@
       "license": "GPL-2.0",
       "licenseFile": "cores/quicknes/upstream/LICENSE",
       "retainedSource": "cores/quicknes/upstream",
-      "sourceTreeSha256": "b08b89f7f25795bbc79ea2fd22ce750fc75c040c0192e8c0446504b83135d21b",
-      "localPatches": ["cores/quicknes/CMakeLists.txt: select portable RGB565 callback path", "cores/quicknes/upstream/libretro/libretro.cpp: initialize turbo input state", "cores/shared/rs_libretro_shim.cpp"],
-      "compilerFlags": ["-O3", "-G0", "-ffast-math", "-fno-exceptions", "-fno-rtti", "-fno-strict-overflow", "-fno-strict-aliasing", "-UPSP"],
-      "expectedArtifactSha256": "414c0553bba6652e8a0157ad27c06aea6e15440f9b50161bfbc544e3bfcd0531"
+      "sourceTreeSha256": "07ba4ee03192442272f60615d689fbe9500a9719ebb41e21b979ff82b1111b8c",
+      "localPatches": [
+        "cores/quicknes/CMakeLists.txt: select portable RGB565 callback path",
+        "cores/quicknes/upstream/libretro/libretro.cpp: initialize turbo input state",
+        "cores/shared/rs_libretro_shim.cpp",
+        "cores/shared/rs_libretro_shim.cpp: honour SET_SYSTEM_AV_INFO/SET_GEOMETRY so a core that enlarges its output at runtime is no longer capped at its load-time geometry",
+        "cores/shared/rs_libretro_shim.cpp: throttle recurring video warnings; an unbuffered per-frame Memory Stick write collapses the frame budget on real hardware",
+        "cores/shared/rs_libretro_shim.cpp: export rs_psp_core_available() so cores can size their caches from the arena instead of a compile-time constant",
+        "cores/quicknes/upstream/libretro/libretro.cpp: pack PSP-native BGR565 in the 256-entry palette under RS_PSP_BGR565, removing the shim's per-pixel channel swap"
+      ],
+      "compilerFlags": [
+        "-O3",
+        "-G0",
+        "-ffast-math",
+        "-fno-exceptions",
+        "-fno-rtti",
+        "-fno-strict-overflow",
+        "-fno-strict-aliasing",
+        "-UPSP"
+      ],
+      "expectedArtifactSha256": "ca9dbde7fb8f18fef278e1350d73fd494700eb771397f69762b5f170f49bb9f7"
     },
     {
       "name": "snes9x2005",
@@ -89,9 +266,49 @@
       "licenseFile": "cores/snes9x2005/upstream/copyright",
       "retainedSource": "cores/snes9x2005/upstream",
       "sourceTreeSha256": "7c4bc0e84d81f800d5030999e72cc0d03e4e3293c8e88a34728fb7213e059845",
-      "localPatches": ["cores/snes9x2005/upstream/source/port.h: select the upstream PSP BGR555 layout without enabling direct GU access", "cores/snes9x2005/upstream/source/pixform.h: expose BGR555 definitions to the isolated PSP build", "cores/snes9x2005/upstream/libretro.c: pad the primary PSP framebuffer for safe direct GE binding, use a PSP-balanced 22050 Hz mixer, and identify the verified clean-US Secret of Mana high-resolution output", "cores/snes9x2005/upstream/source/memmap.c: apply the exact byte-validated SNESAdvance/Snes9xTYL idle-loop substitutions for clean US Secret of Mana", "cores/snes9x2005/upstream/source/gfx.c: port Snes9xTYL's strict pseudo-hires detection and main/sub layer masks", "cores/shared/rs_libretro_shim.cpp: borrow PSP-native frames, write dirty CPU cache lines back before GE texture access, resolve ordinary 512-wide output by averaging, and preserve Secret of Mana's intended blue/text sample from each high-resolution pair", "cores/snes9x2005/CMakeLists.txt: restore upstream Allegrex/LAGFIX settings and apply the PRX-safe compiler portions of the Snes9xTYL PSP profile"],
-      "compilerFlags": ["-O3", "-G0", "-march=allegrex", "-mno-abicalls", "-fno-pic", "-fomit-frame-pointer", "-ffunction-sections", "-fdata-sections", "-fsingle-precision-constant", "-fpredictive-commoning", "-frename-registers", "-fno-gcse", "-finline-functions", "-finline-limit=20000", "-falign-functions=64", "-falign-loops=64", "-fno-align-jumps", "-fno-align-labels", "-DLAGFIX", "-DNDEBUG", "-DRS_PSP_NATIVE_PIXELS", "-DRS_PSP_BALANCED_AUDIO", "-DRS_PSP_SECRET_OF_MANA_HIRES_RESOLVE", "-DRS_PSP_NATIVE_STORAGE_HEIGHT=512", "-DUSE_OLD_COLOUR_OPS", "-fno-strict-overflow", "-fno-strict-aliasing", "-UPSP"],
-      "expectedArtifactSha256": "8dfbf72eb312f317b7a6c07f2ee35ef04f6ea9f822d41256ab258c61b32488ec"
+      "localPatches": [
+        "cores/snes9x2005/upstream/source/port.h: select the upstream PSP BGR555 layout without enabling direct GU access",
+        "cores/snes9x2005/upstream/source/pixform.h: expose BGR555 definitions to the isolated PSP build",
+        "cores/snes9x2005/upstream/libretro.c: pad the primary PSP framebuffer for safe direct GE binding, use a PSP-balanced 22050 Hz mixer, and identify the verified clean-US Secret of Mana high-resolution output",
+        "cores/snes9x2005/upstream/source/memmap.c: apply the exact byte-validated SNESAdvance/Snes9xTYL idle-loop substitutions for clean US Secret of Mana",
+        "cores/snes9x2005/upstream/source/gfx.c: port Snes9xTYL's strict pseudo-hires detection and main/sub layer masks",
+        "cores/shared/rs_libretro_shim.cpp: borrow PSP-native frames, write dirty CPU cache lines back before GE texture access, resolve ordinary 512-wide output by averaging, and preserve Secret of Mana's intended blue/text sample from each high-resolution pair",
+        "cores/snes9x2005/CMakeLists.txt: restore upstream Allegrex/LAGFIX settings and apply the PRX-safe compiler portions of the Snes9xTYL PSP profile",
+        "cores/shared/rs_libretro_shim.cpp: honour SET_SYSTEM_AV_INFO/SET_GEOMETRY so a core that enlarges its output at runtime is no longer capped at its load-time geometry",
+        "cores/shared/rs_libretro_shim.cpp: throttle recurring video warnings; an unbuffered per-frame Memory Stick write collapses the frame budget on real hardware",
+        "cores/shared/rs_libretro_shim.cpp: export rs_psp_core_available() so cores can size their caches from the arena instead of a compile-time constant"
+      ],
+      "compilerFlags": [
+        "-O3",
+        "-G0",
+        "-march=allegrex",
+        "-mno-abicalls",
+        "-fno-pic",
+        "-fomit-frame-pointer",
+        "-ffunction-sections",
+        "-fdata-sections",
+        "-fsingle-precision-constant",
+        "-fpredictive-commoning",
+        "-frename-registers",
+        "-fno-gcse",
+        "-finline-functions",
+        "-finline-limit=20000",
+        "-falign-functions=64",
+        "-falign-loops=64",
+        "-fno-align-jumps",
+        "-fno-align-labels",
+        "-DLAGFIX",
+        "-DNDEBUG",
+        "-DRS_PSP_NATIVE_PIXELS",
+        "-DRS_PSP_BALANCED_AUDIO",
+        "-DRS_PSP_SECRET_OF_MANA_HIRES_RESOLVE",
+        "-DRS_PSP_NATIVE_STORAGE_HEIGHT=512",
+        "-DUSE_OLD_COLOUR_OPS",
+        "-fno-strict-overflow",
+        "-fno-strict-aliasing",
+        "-UPSP"
+      ],
+      "expectedArtifactSha256": "52e9968d49876cbad1ed2b2cb83c57e411a016059983eeead2baff23430caae3"
     },
     {
       "name": "snes9x2005_plus",
@@ -102,9 +319,30 @@
       "licenseFile": "cores/snes9x2005/upstream/copyright",
       "retainedSource": "cores/snes9x2005/upstream",
       "sourceTreeSha256": "7c4bc0e84d81f800d5030999e72cc0d03e4e3293c8e88a34728fb7213e059845",
-      "localPatches": ["cores/snes9x2005_plus/CMakeLists.txt: enable Blargg APU and PSP-native isolated video", "cores/snes9x2005/upstream/source/port.h: select the upstream PSP BGR555 layout without enabling direct GU access", "cores/snes9x2005/upstream/source/pixform.h: expose BGR555 definitions to the isolated PSP build", "cores/snes9x2005/upstream/libretro.c: pad the primary PSP framebuffer for safe direct GE binding", "cores/snes9x2005/upstream/source/memmap.c: apply the exact byte-validated SNESAdvance/Snes9xTYL idle-loop substitutions for clean US Secret of Mana", "cores/snes9x2005/upstream/source/gfx.c: port Snes9xTYL's strict pseudo-hires detection and main/sub layer masks", "cores/shared/rs_libretro_shim.cpp: borrow PSP-native frames, write dirty CPU cache lines back before GE texture access, and resolve 512-wide pseudo-hires into PSP-safe blended output"],
-      "compilerFlags": ["-O3", "-G0", "-DUSE_BLARGG_APU", "-DRS_PSP_NATIVE_PIXELS", "-DRS_PSP_NATIVE_STORAGE_HEIGHT=512", "-DUSE_OLD_COLOUR_OPS", "-fno-strict-overflow", "-fno-strict-aliasing", "-UPSP"],
-      "expectedArtifactSha256": "d98e5010aadda0fa092ed7be759609d068f0467ea9ae87b213b0c6703ac0898b"
+      "localPatches": [
+        "cores/snes9x2005_plus/CMakeLists.txt: enable Blargg APU and PSP-native isolated video",
+        "cores/snes9x2005/upstream/source/port.h: select the upstream PSP BGR555 layout without enabling direct GU access",
+        "cores/snes9x2005/upstream/source/pixform.h: expose BGR555 definitions to the isolated PSP build",
+        "cores/snes9x2005/upstream/libretro.c: pad the primary PSP framebuffer for safe direct GE binding",
+        "cores/snes9x2005/upstream/source/memmap.c: apply the exact byte-validated SNESAdvance/Snes9xTYL idle-loop substitutions for clean US Secret of Mana",
+        "cores/snes9x2005/upstream/source/gfx.c: port Snes9xTYL's strict pseudo-hires detection and main/sub layer masks",
+        "cores/shared/rs_libretro_shim.cpp: borrow PSP-native frames, write dirty CPU cache lines back before GE texture access, and resolve 512-wide pseudo-hires into PSP-safe blended output",
+        "cores/shared/rs_libretro_shim.cpp: honour SET_SYSTEM_AV_INFO/SET_GEOMETRY so a core that enlarges its output at runtime is no longer capped at its load-time geometry",
+        "cores/shared/rs_libretro_shim.cpp: throttle recurring video warnings; an unbuffered per-frame Memory Stick write collapses the frame budget on real hardware",
+        "cores/shared/rs_libretro_shim.cpp: export rs_psp_core_available() so cores can size their caches from the arena instead of a compile-time constant"
+      ],
+      "compilerFlags": [
+        "-O3",
+        "-G0",
+        "-DUSE_BLARGG_APU",
+        "-DRS_PSP_NATIVE_PIXELS",
+        "-DRS_PSP_NATIVE_STORAGE_HEIGHT=512",
+        "-DUSE_OLD_COLOUR_OPS",
+        "-fno-strict-overflow",
+        "-fno-strict-aliasing",
+        "-UPSP"
+      ],
+      "expectedArtifactSha256": "c9128bd67fd2c2d4f39647f39f99d59775d0738a27ae1c25895e51d18e277434"
     },
     {
       "name": "picodrive",
@@ -115,9 +353,30 @@
       "licenseFile": "cores/picodrive/upstream/COPYING",
       "retainedSource": "cores/picodrive/upstream",
       "sourceTreeSha256": "b9f79e3e59709282e5e05b7abc90e2e5d395918cba43f81f6433cd1b1b6d5627",
-      "localPatches": ["cores/picodrive/upstream/platform/libretro/libretro.c: add PSP kernel declaration, select the compatibility-conscious Good renderer, and honour frontend video suppression on recovery frames", "cores/picodrive/upstream/Makefile.libretro: relocatable include path and PSP-native BGR565 output", "cores/shared/rs_libretro_shim.cpp: borrow PicoDrive's PSP-native frames without per-pixel conversion and select the supported 32 kHz PSP audio default", "src/frontend/game_session.cpp: retain the hardware-proven six-frame recovery profile after the three-frame experiment caused persistent PSP-1000 slowdown and underruns"],
-      "compilerFlags": ["platform=psp1", "LOW_MEMORY=1", "use_libchdr=0", "PLATFORM_TREMOR=1", "-O2", "-G0", "-ftracer", "-DUSE_BGR565", "-DRS_PSP_NATIVE_RGB565", "-DRS_PICODRIVE_PSP_DEFAULTS", "-fno-strict-overflow", "-fno-strict-aliasing"],
-      "expectedArtifactSha256": "eef28c02a0283f64bc1815304df2be3d11ec8bfc15cfc70c9cc45ad45e178e68"
+      "localPatches": [
+        "cores/picodrive/upstream/platform/libretro/libretro.c: add PSP kernel declaration, select the compatibility-conscious Good renderer, and honour frontend video suppression on recovery frames",
+        "cores/picodrive/upstream/Makefile.libretro: relocatable include path and PSP-native BGR565 output",
+        "cores/shared/rs_libretro_shim.cpp: borrow PicoDrive's PSP-native frames without per-pixel conversion and select the supported 32 kHz PSP audio default",
+        "src/frontend/game_session.cpp: retain the hardware-proven six-frame recovery profile after the three-frame experiment caused persistent PSP-1000 slowdown and underruns",
+        "cores/shared/rs_libretro_shim.cpp: honour SET_SYSTEM_AV_INFO/SET_GEOMETRY so a core that enlarges its output at runtime is no longer capped at its load-time geometry",
+        "cores/shared/rs_libretro_shim.cpp: throttle recurring video warnings; an unbuffered per-frame Memory Stick write collapses the frame budget on real hardware",
+        "cores/shared/rs_libretro_shim.cpp: export rs_psp_core_available() so cores can size their caches from the arena instead of a compile-time constant"
+      ],
+      "compilerFlags": [
+        "platform=psp1",
+        "LOW_MEMORY=1",
+        "use_libchdr=0",
+        "PLATFORM_TREMOR=1",
+        "-O2",
+        "-G0",
+        "-ftracer",
+        "-DUSE_BGR565",
+        "-DRS_PSP_NATIVE_RGB565",
+        "-DRS_PICODRIVE_PSP_DEFAULTS",
+        "-fno-strict-overflow",
+        "-fno-strict-aliasing"
+      ],
+      "expectedArtifactSha256": "bff18bb109b484a9e4280c8293e730ed42f4097795cbb8536ea35d54cba04b96"
     },
     {
       "name": "smsplus",
@@ -128,9 +387,22 @@
       "licenseFile": "cores/smsplus/upstream/docs/license",
       "retainedSource": "cores/smsplus/upstream",
       "sourceTreeSha256": "f4a4f6855fd91588050870a52ae9c05fa42db31884feb6971b7a6e80e7905248",
-      "localPatches": ["cores/smsplus/CMakeLists.txt: minimal PSP source selection", "cores/shared/rs_libretro_shim.cpp"],
-      "compilerFlags": ["-O3", "-G0", "-DNOZIP_SUPPORT", "-DMAXIM_PSG", "-fno-strict-overflow", "-fno-strict-aliasing"],
-      "expectedArtifactSha256": "d1bf5ac53a26b307efb8680dec23e6ec6681dafb272fa20cf5c772ed266ce3ac"
+      "localPatches": [
+        "cores/smsplus/CMakeLists.txt: minimal PSP source selection",
+        "cores/shared/rs_libretro_shim.cpp",
+        "cores/shared/rs_libretro_shim.cpp: honour SET_SYSTEM_AV_INFO/SET_GEOMETRY so a core that enlarges its output at runtime is no longer capped at its load-time geometry",
+        "cores/shared/rs_libretro_shim.cpp: throttle recurring video warnings; an unbuffered per-frame Memory Stick write collapses the frame budget on real hardware",
+        "cores/shared/rs_libretro_shim.cpp: export rs_psp_core_available() so cores can size their caches from the arena instead of a compile-time constant"
+      ],
+      "compilerFlags": [
+        "-O3",
+        "-G0",
+        "-DNOZIP_SUPPORT",
+        "-DMAXIM_PSG",
+        "-fno-strict-overflow",
+        "-fno-strict-aliasing"
+      ],
+      "expectedArtifactSha256": "13f535e88e3d1227d8f82b4460a13c32652a3c31010a0b89cf30be8a7a2eabbc"
     },
     {
       "name": "pcefast",
@@ -141,9 +413,32 @@
       "licenseFile": "cores/pcefast/upstream/COPYING",
       "retainedSource": "cores/pcefast/upstream",
       "sourceTreeSha256": "30906cedea372ad178defaa5df8507112773900345da2665d7e51d75debcade3",
-      "localPatches": ["cores/pcefast/CMakeLists.txt: use the upstream PSP target, enable native BGR565 frames, and exclude CHD/LZMA/Zstd for PSP-1000 HuCard qualification", "cores/pcefast/upstream/Makefile: select Allegrex O3 and native PSP BGR565 output", "cores/pcefast/upstream/libretro.c: use a 32 kHz PSP mixer and honour frontend video suppression on recovery frames", "cores/pcefast/upstream/mednafen/video.h: generate PSP-native BGR565 pixels without a per-frame channel conversion", "cores/pcefast/upstream/mednafen/tremor/sharedbook.c: use fixed-width point variables required by the current PSP SDK ABI", "cores/shared/rs_libretro_shim.cpp: borrow the PSP-native PCE frame directly", "src/frontend/game_session.cpp: use a four-frame recovery cap and guarantee its shortened recovery batch ends on a rendered frame"],
-      "compilerFlags": ["platform=psp1", "NEED_TREMOR=1", "HAVE_CHD=0", "-O3", "-G0", "-march=allegrex", "-fomit-frame-pointer", "-DRS_PSP_BGR565", "-DRS_PSP_NATIVE_RGB565", "-fno-strict-overflow", "-fno-strict-aliasing"],
-      "expectedArtifactSha256": "cf25ff4145cbeadc4d7dd30f7d7f3fb28c731aea55e455a62dc2d38b60e15e9e"
+      "localPatches": [
+        "cores/pcefast/CMakeLists.txt: use the upstream PSP target, enable native BGR565 frames, and exclude CHD/LZMA/Zstd for PSP-1000 HuCard qualification",
+        "cores/pcefast/upstream/Makefile: select Allegrex O3 and native PSP BGR565 output",
+        "cores/pcefast/upstream/libretro.c: use a 32 kHz PSP mixer and honour frontend video suppression on recovery frames",
+        "cores/pcefast/upstream/mednafen/video.h: generate PSP-native BGR565 pixels without a per-frame channel conversion",
+        "cores/pcefast/upstream/mednafen/tremor/sharedbook.c: use fixed-width point variables required by the current PSP SDK ABI",
+        "cores/shared/rs_libretro_shim.cpp: borrow the PSP-native PCE frame directly",
+        "src/frontend/game_session.cpp: use a four-frame recovery cap and guarantee its shortened recovery batch ends on a rendered frame",
+        "cores/shared/rs_libretro_shim.cpp: honour SET_SYSTEM_AV_INFO/SET_GEOMETRY so a core that enlarges its output at runtime is no longer capped at its load-time geometry",
+        "cores/shared/rs_libretro_shim.cpp: throttle recurring video warnings; an unbuffered per-frame Memory Stick write collapses the frame budget on real hardware",
+        "cores/shared/rs_libretro_shim.cpp: export rs_psp_core_available() so cores can size their caches from the arena instead of a compile-time constant"
+      ],
+      "compilerFlags": [
+        "platform=psp1",
+        "NEED_TREMOR=1",
+        "HAVE_CHD=0",
+        "-O3",
+        "-G0",
+        "-march=allegrex",
+        "-fomit-frame-pointer",
+        "-DRS_PSP_BGR565",
+        "-DRS_PSP_NATIVE_RGB565",
+        "-fno-strict-overflow",
+        "-fno-strict-aliasing"
+      ],
+      "expectedArtifactSha256": "058bf798bfed1d65b132cadb90ba535d6fe8a0f26c3050292eefb68b17213e79"
     }
   ]
 }

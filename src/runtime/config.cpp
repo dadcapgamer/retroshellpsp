@@ -64,18 +64,7 @@ void load() {
     if (const cJSON* v = cJSON_GetObjectItemCaseSensitive(root, "autosave");
         cJSON_IsBool(v))
         s_cfg.autosave = cJSON_IsTrue(v);
-    if (const cJSON* v =
-            cJSON_GetObjectItemCaseSensitive(root, "psp1000SafeMode");
-        cJSON_IsBool(v)) {
-        s_cfg.psp1000SafeMode = cJSON_IsTrue(v);
-        s_cfg.psp1000SafeModeConfigured = true;
-    }
     cJSON_Delete(root);
-}
-
-void applyHardwareDefaults(bool isPsp1000) {
-    if (!s_cfg.psp1000SafeModeConfigured)
-        s_cfg.psp1000SafeMode = isPsp1000;
 }
 
 void save() {
@@ -88,7 +77,6 @@ void save() {
     cJSON_AddBoolToObject(root, "clock24Hour", s_cfg.clock24Hour);
     cJSON_AddBoolToObject(root, "showFps", s_cfg.showFps);
     cJSON_AddBoolToObject(root, "autosave", s_cfg.autosave);
-    cJSON_AddBoolToObject(root, "psp1000SafeMode", s_cfg.psp1000SafeMode);
     fs::mkdirs(fs::ROOT);
     if (!json::writeFile(CFG_PATH, root)) RS_LOGW("config: save failed");
     cJSON_Delete(root);

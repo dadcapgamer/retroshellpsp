@@ -2142,7 +2142,11 @@ static void load_custom_palette(void)
          }
       }
 
-#ifdef VIDEO_RGB565
+#if defined(RS_PSP_BGR565)
+      rgb32 = (rgb32 & 0x0000F8) <<  8 | /* blue  -> high bits */
+              (rgb32 & 0x00FC00) >>  5 | /* green */
+              (rgb32 & 0xF80000) >> 19;  /* red   -> low bits  */
+#elif defined(VIDEO_RGB565)
       rgb32 = (rgb32 & 0x0000F8) >>  3 | /* blue */
               (rgb32 & 0x00FC00) >>  5 | /* green */
               (rgb32 & 0xF80000) >>  8;  /* red */

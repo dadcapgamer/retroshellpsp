@@ -54,6 +54,15 @@ if(RS_FAILURE_INJECTION)
   add_compile_definitions(RS_FAILURE_INJECTION=1)
 endif()
 
+# Stamp the release version into the binary so a running PSP can be matched
+# to the build that produced it. Installing a mismatched EBOOT and core set is
+# an easy mistake to make by hand and produced a confusing API-version error.
+file(STRINGS ${CMAKE_SOURCE_DIR}/RELEASE_VERSION RS_RELEASE_VERSION LIMIT_COUNT 1)
+string(TIMESTAMP RS_BUILD_STAMP "%Y-%m-%d %H:%M" UTC)
+add_compile_definitions(
+  RS_RELEASE_VERSION="${RS_RELEASE_VERSION}"
+  RS_BUILD_STAMP="${RS_BUILD_STAMP}")
+
 include(cmake/rs_assets.cmake)
 include(cmake/rs_add_core.cmake)
 

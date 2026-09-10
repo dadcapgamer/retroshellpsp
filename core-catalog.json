@@ -1,0 +1,83 @@
+{
+  "formatVersion": 1,
+  "cores": {
+    "gambatte": {
+      "displayName": "Gambatte",
+      "status": "Included",
+      "modelSupport": "Any PSP",
+      "notes": "Default Game Boy and Game Boy Color core."
+    },
+    "gpsp": {
+      "displayName": "gpSP",
+      "status": "Testing",
+      "modelSupport": "Later PSPs; PSP-1000 experimental",
+      "notes": "Game Boy Advance core with PSP dynarec and ROM streaming."
+    },
+    "mgba": {
+      "displayName": "mGBA",
+      "status": "Removed",
+      "modelSupport": "Not offered",
+      "notes": "Archived after the compatibility build crashed real PSP hardware."
+    },
+    "froggba": {
+      "displayName": "FrogGBA",
+      "status": "Experimental",
+      "modelSupport": "Any PSP; hardware qualification pending",
+      "notes": "The converted PRX integration is retired. The native FrogGBA adapter preserves the standalone emulator runtime and requires a user-supplied gba_bios.bin."
+    },
+    "pcefast": {
+      "displayName": "Beetle PCE Fast",
+      "status": "Testing",
+      "modelSupport": "Later PSPs; PSP-1000 experimental",
+      "notes": "PC Engine HuCard support."
+    },
+    "picodrive": {
+      "displayName": "PicoDrive",
+      "status": "Testing",
+      "modelSupport": "Any PSP",
+      "notes": "Genesis/Mega Drive support; Master System and Game Gear remain experimental."
+    },
+    "quicknes": {
+      "displayName": "QuickNES",
+      "status": "Included",
+      "modelSupport": "Any PSP",
+      "notes": "Default NES core."
+    },
+    "smsplus": {
+      "displayName": "SMS Plus GX",
+      "status": "Experimental",
+      "modelSupport": "Later PSPs; PSP-1000 unverified",
+      "notes": "Optional Master System and Game Gear compatibility core."
+    },
+    "snes9x2005": {
+      "displayName": "Snes9x 2005",
+      "status": "Testing",
+      "modelSupport": "Any PSP; PSP-1000 testing continues",
+      "notes": "SNES compatibility and performance vary by game."
+    },
+    "fceumm": {
+      "displayName": "FCEUmm",
+      "status": "Removed",
+      "modelSupport": "Not offered",
+      "notes": "Archived after PSP performance and state-path failures."
+    },
+    "gearboy": {
+      "displayName": "Gearboy",
+      "status": "Removed",
+      "modelSupport": "Not offered",
+      "notes": "Archived after sustained PSP-1000 audio starvation and low speed."
+    },
+    "snes9x2005_plus": {
+      "displayName": "Snes9x 2005 Plus",
+      "status": "Removed",
+      "modelSupport": "Not offered",
+      "notes": "Archived after failing the PSP-1000 performance gate."
+    },
+    "tgbdual": {
+      "displayName": "TGB Dual",
+      "status": "Removed",
+      "modelSupport": "Not offered",
+      "notes": "Archived after video output stopped during PSP-1000 testing."
+    }
+  }
+}

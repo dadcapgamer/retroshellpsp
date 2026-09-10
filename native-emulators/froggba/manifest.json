@@ -1,0 +1,39 @@
+{
+  "name": "froggba",
+  "version": "0.5.0-native",
+  "systems": "gba",
+  "priority": 90,
+  "testOnly": true,
+  "psp1000Safe": true,
+  "backend": "native",
+  "adapterProtocol": 1,
+  "pauseMode": "embedded",
+  "pauseHotkey": "L+R+SELECT",
+  "returnMode": "loadexec",
+  "capabilities": [
+    "pause",
+    "resume",
+    "saveState",
+    "loadState",
+    "reset",
+    "aspectRatio",
+    "filter",
+    "screenshot",
+    "emulatorSettings",
+    "exitToShell",
+    "sharedSaveLibrary"
+  ],
+  "executable": "emulators/froggba/EBOOT.PBP",
+  "maxRomPath": 767,
+  "biosSource": "system/gba_bios.bin",
+  "biosDestination": "emulators/froggba/gba_bios.bin",
+  "biosBytes": 16384,
+  "requiredDirectories": [
+    "emulators/froggba/roms",
+    "emulators/froggba/save",
+    "emulators/froggba/state",
+    "emulators/froggba/cfg",
+    "emulators/froggba/cheat",
+    "emulators/froggba/snapshot"
+  ]
+}

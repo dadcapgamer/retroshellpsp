@@ -7,6 +7,7 @@
 
 #include <pspgu.h>
 
+#include <cmath>
 #include <cstring>
 
 namespace rs {
@@ -14,16 +15,26 @@ namespace rs {
 namespace {
 constexpr float FADE_IN  = 0.45f;
 constexpr float HOLD_END = 1.15f;
+constexpr float SUBTITLE_Y = 181.f;
+constexpr float SUBTITLE_TRACKING = .2f;
+constexpr float SHIMMER_CYCLE = .72f;
+
+float trackedWidth(const text::Font& font, const char* value,
+                   float tracking) {
+    const int count = int(std::strlen(value));
+    float width = count > 1 ? tracking * float(count - 1) : 0.f;
+    for (int i = 0; i < count; i++) {
+        const char glyph[2] = {value[i], '\0'};
+        width += font.measure(glyph);
+    }
+    return width;
+}
 
 void drawTracked(gfx::Renderer& r, const text::Font& font, float centerX,
                  float y, const char* value, float tracking, u32 first,
                  u32 last, u32 alpha) {
     const int count = int(std::strlen(value));
-    float width = count > 1 ? tracking * float(count - 1) : 0.f;
-    for (int i = 0; i < count; i++) {
-        char glyph[2] = {value[i], '\0'};
-        width += font.measure(glyph);
-    }
+    const float width = trackedWidth(font, value, tracking);
     float x = centerX - width * .5f;
     for (int i = 0; i < count; i++) {
         char glyph[2] = {value[i], '\0'};
@@ -32,6 +43,29 @@ void drawTracked(gfx::Renderer& r, const text::Font& font, float centerX,
                   rsWithAlpha(rsLerpColor(first, last, t), alpha));
         x += font.measure(glyph) + tracking;
     }
+}
+
+void drawSubtitleShimmer(gfx::Renderer& r, const text::Font& font,
+                         float centerX, float elapsed, u32 alpha) {
+    constexpr const char* VALUE = "PSP Retro Emulation";
+    const u32 base = rsHex(0xD79A2B);
+    const u32 shine = rsHex(0xFFE6A3);
+    drawTracked(r, font, centerX, SUBTITLE_Y, VALUE, SUBTITLE_TRACKING,
+                base, base, alpha);
+
+    const float width = trackedWidth(font, VALUE, SUBTITLE_TRACKING);
+    const float phase = std::fmod(rsClamp(elapsed, 0.f, 1000.f) /
+                                  SHIMMER_CYCLE, 1.f);
+    const float center = centerX - width * .5f - 12.f +
+                         phase * (width + 24.f);
+    static const int OFFSETS[] = {-10, -6, -2, 2, 6};
+    static const u32 STRENGTH[] = {45, 105, 210, 105, 45};
+    for (int i = 0; i < 5; ++i) {
+        r.setScissor(int(center) + OFFSETS[i], int(SUBTITLE_Y - 1.f), 4, 16);
+        drawTracked(r, font, centerX, SUBTITLE_Y, VALUE, SUBTITLE_TRACKING,
+                    shine, shine, alpha * STRENGTH[i] / 255u);
+    }
+    r.resetScissor();
 }
 }
 
@@ -82,8 +116,8 @@ void BootScene::draw(App& app) {
 
     drawTracked(r, app.fonts().title, cx, 143.f, "RetroShell", 2.6f,
                 rsHex(0x17140F), rsHex(0x17140F), alpha);
-    drawTracked(r, app.fonts().small, cx, 181.f, "PSP Retro Emulation", .2f,
-                rsHex(0xC2BCB0), rsHex(0xFFB626), alpha);
+    drawSubtitleShimmer(r, app.fonts().small, cx,
+                        rsClamp(m_t - FADE_IN, 0.f, 1000.f), alpha);
 }
 
 }  // namespace rs
