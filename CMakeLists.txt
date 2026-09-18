@@ -58,10 +58,9 @@ endif()
 # to the build that produced it. Installing a mismatched EBOOT and core set is
 # an easy mistake to make by hand and produced a confusing API-version error.
 file(STRINGS ${CMAKE_SOURCE_DIR}/RELEASE_VERSION RS_RELEASE_VERSION LIMIT_COUNT 1)
-string(TIMESTAMP RS_BUILD_STAMP "%Y-%m-%d %H:%M" UTC)
-add_compile_definitions(
-  RS_RELEASE_VERSION="${RS_RELEASE_VERSION}"
-  RS_BUILD_STAMP="${RS_BUILD_STAMP}")
+add_compile_definitions(RS_RELEASE_VERSION="${RS_RELEASE_VERSION}")
+# RS_BUILD_STAMP comes from a header regenerated on every build; see
+# cmake/rs_build_stamp.cmake for why it cannot be computed here.
 
 include(cmake/rs_assets.cmake)
 include(cmake/rs_add_core.cmake)

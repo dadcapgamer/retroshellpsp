@@ -76,6 +76,30 @@ u32 backgroundAt(const theme::Palette& pal, float y) {
         255u);
 }
 
+/* Flatten a translucent surface against the gradient backdrop at height y.
+ * Used by the classic layout's recent shelf so box-art corner fills match the
+ * card they sit on rather than showing the gradient through them. */
+/* Classic layout's recent-game caption. The modern list shows play counts
+ * instead, so this was dropped in beta.3 and is restored alongside it. */
+void formatLastPlayedDate(u64 stamp, char* out, size_t n) {
+    if (!stamp) {
+        std::snprintf(out, n, "Last Played: Never");
+        return;
+    }
+    const int day = int((stamp / 10000u) % 100u);
+    const int month = int((stamp / 1000000u) % 100u);
+    const int year = int((stamp / 100000000u) % 100u);
+    if (month < 1 || month > 12 || day < 1 || day > 31) {
+        std::snprintf(out, n, "Last Played: Unknown");
+        return;
+    }
+    std::snprintf(out, n, "Last Played %02d/%02d/%02d", month, day, year);
+}
+
+u32 surfaceAt(const theme::Palette& pal, u32 surface, float y) {
+    return opaqueOver(surface, backgroundAt(pal, y));
+}
+
 void maskArtCorners(gfx::Renderer& r, float x, float y, float w, float h,
                     u32 color) {
     /* Pixel-aligned approximation of a 4px CSS radius. */
@@ -306,15 +330,31 @@ void HomeScene::updateCats(App& app) {
     const auto& pad = app.pad();
     if (m_recentFocus) {
         const int count = int(m_recentVisible.size());
-        if (pad.navPressed(PSP_CTRL_UP)) {
-            if (m_recentIdx > 0) m_recentIdx--;
-            else {
+        /* The two layouts arrange recents differently, so they are navigated
+         * differently: the classic shelf runs left-to-right with UP leaving
+         * it, the modern list runs top-to-bottom with UP walking out through
+         * the first row. Painting and input must agree or the focus ring
+         * moves in a direction the user cannot see. */
+        if (cfg::get().homeLayout == cfg::HOME_LAYOUT_CLASSIC) {
+            if (pad.navPressed(PSP_CTRL_LEFT) && m_recentIdx > 0)
+                m_recentIdx--;
+            if (pad.navPressed(PSP_CTRL_RIGHT) && m_recentIdx + 1 < count)
+                m_recentIdx++;
+            if (pad.navPressed(PSP_CTRL_UP)) {
                 m_recentFocus = false;
                 return;
             }
+        } else {
+            if (pad.navPressed(PSP_CTRL_UP)) {
+                if (m_recentIdx > 0) m_recentIdx--;
+                else {
+                    m_recentFocus = false;
+                    return;
+                }
+            }
+            if (pad.navPressed(PSP_CTRL_DOWN) && m_recentIdx + 1 < count)
+                m_recentIdx++;
         }
-        if (pad.navPressed(PSP_CTRL_DOWN) && m_recentIdx + 1 < count)
-            m_recentIdx++;
         if (pad.isPressed(PSP_CTRL_CIRCLE)) {
             m_recentFocus = false;
             return;
@@ -615,6 +655,13 @@ void HomeScene::update(App& app, float dt) {
 
 
 void HomeScene::drawHome(App& app, float alpha, float slide) {
+    if (cfg::get().homeLayout == cfg::HOME_LAYOUT_CLASSIC)
+        drawHomeClassic(app, alpha, slide);
+    else
+        drawHomeModern(app, alpha, slide);
+}
+
+void HomeScene::drawHomeModern(App& app, float alpha, float slide) {
     if (alpha <= 2.f) return;
     auto& r = app.renderer();
     const auto& pal = app.pal();
@@ -782,6 +829,182 @@ void HomeScene::drawHome(App& app, float alpha, float slide) {
             r, 456.f, y + 8.f, db::systemInfo(g->system).badge,
             rsWithAlpha(focused ? pal.accent : pal.textDim, listAlpha),
             text::Align::Right);
+    }
+}
+
+/* Pre-beta.3 presentation: 50px badge cards on a scrolling rail, with the
+ * recent games as a horizontal shelf beneath. Preserved verbatim apart from
+ * the rename so switching layouts is a faithful revert, not a reinterpretation. */
+void HomeScene::drawHomeClassic(App& app, float alpha, float slide) {
+    if (alpha <= 2.f) return;
+    auto& r = app.renderer();
+    const auto& pal = app.pal();
+    const auto& fonts = app.fonts();
+    const u32 a = u32(rsClamp(alpha, 0.f, 255.f));
+
+    fonts.body.draw(r, 12.f, 28.f + slide, "BROWSE LIBRARY",
+                    rsWithAlpha(pal.textPrimary, a));
+
+    constexpr float CARD_W = 50.f;
+    constexpr float CARD_H = 50.f;
+    constexpr float STEP = 56.f;
+    constexpr int VISIBLE_CATS = 8;
+    const float first =
+        rsClamp(m_catPos.v - 3.f, 0.f, float(NUM_CATS - VISIBLE_CATS));
+    r.setScissor(12, int(52.f + slide), 456, int(CARD_H + 4.f));
+    for (int i = 0; i < NUM_CATS; i++) {
+        const float x = 12.f + (float(i) - first) * STEP;
+        if (x + CARD_W < 0.f || x > RS_SCREEN_W) continue;
+        const bool current = i == m_catIdx;
+        const bool focused = current && !m_recentFocus;
+        const float y = 52.f + slide;
+        const u32 panelAlpha = u32((current ? rsAlphaOf(pal.tileFocusBg)
+                                             : rsAlphaOf(pal.tileBg)) *
+                                   a / 255u);
+        if (focused)
+            ui::prim::dropShadow(
+                r, x, y, CARD_W, CARD_H, 8.f,
+                rsWithAlpha(pal.shadow,
+                            rsAlphaOf(pal.shadow) * a / (255u * 2u)));
+        ui::prim::roundedRect(r, x, y, CARD_W, CARD_H, 8.f,
+                              rsWithAlpha(current ? pal.tileFocusBg
+                                                   : pal.tileBg,
+                                          panelAlpha));
+        ui::prim::roundedOutline(
+            r, x, y, CARD_W, CARD_H, 8.f,
+            focused
+                ? rsWithAlpha(pal.accent, a)
+                : rsWithAlpha(pal.panelOutline,
+                              rsAlphaOf(pal.panelOutline) * a / 255u));
+        const int systemIdx = cat(i).systemIdx;
+        const char* badge = systemIdx >= 0
+            ? db::systemInfo(db::System(systemIdx)).badge
+            : (systemIdx == CATEGORY_FAVORITES ? "FAV" : "SET");
+        if (systemIdx == CATEGORY_FAVORITES) {
+            ui::prim::iconStar(
+                r, x + CARD_W * .5f, y + 15.f, 10.f,
+                rsWithAlpha(current ? pal.accent : pal.textSecondary, a));
+        } else {
+            ui::prim::iconSystem(
+                r, systemIdx >= 0 ? systemIdx : SETTINGS_ICON,
+                x + 9.f, y + 1.f, 32.f,
+                rsWithAlpha(current ? pal.accent : pal.textSecondary, a),
+                rsWithAlpha(current ? pal.textPrimary : pal.textDim, a));
+        }
+        fonts.small.draw(r, x + CARD_W * .5f, y + 35.f, badge,
+                         rsWithAlpha(current ? pal.accent
+                                             : pal.textPrimary, a),
+                         text::Align::Center);
+    }
+    r.resetScissor();
+
+    const Category& selectedCategory = cat(m_catIdx);
+    const bool isSettings =
+        selectedCategory.systemIdx == CATEGORY_SETTINGS;
+    const bool isFavorites =
+        selectedCategory.systemIdx == CATEGORY_FAVORITES;
+    const db::GameEntry* focusedRecent =
+        (m_recentFocus && !m_recentVisible.empty())
+            ? m_recentVisible[size_t(m_recentIdx)] : nullptr;
+    if (focusedRecent) {
+        r.setScissor(12, int(108.f + slide), 456, 16);
+        drawEllipsized(fonts.body, r, 12.f, 108.f + slide, 456.f,
+                       focusedRecent->name,
+                       rsWithAlpha(pal.textPrimary, a), text::Align::Left);
+        r.resetScissor();
+        char played[48];
+        formatLastPlayedDate(
+            app.library().lastPlayed(focusedRecent->pathHash), played,
+            sizeof played);
+        char recentMeta[96];
+        std::snprintf(
+            recentMeta, sizeof recentMeta, "%s  ·  %s",
+            db::systemInfo(focusedRecent->system).displayName, played);
+        r.setScissor(12, int(128.f + slide), 456, 12);
+        fonts.small.draw(r, 12.f, 128.f + slide, recentMeta,
+                         rsWithAlpha(pal.textDim, a));
+        r.resetScissor();
+    } else if (isSettings) {
+        fonts.body.draw(r, 12.f, 108.f + slide, "Settings",
+                        rsWithAlpha(pal.textPrimary, a));
+        fonts.small.draw(r, 12.f, 128.f + slide,
+                         "Theme, display and performance",
+                         rsWithAlpha(pal.textDim, a));
+    } else if (isFavorites) {
+        fonts.body.draw(r, 12.f, 108.f + slide, "Favorites",
+                        rsWithAlpha(pal.textPrimary, a));
+        char favoriteCount[32];
+        std::snprintf(favoriteCount, sizeof favoriteCount, "%d GAME%s",
+                      int(m_visible.size()),
+                      m_visible.size() == 1 ? "" : "S");
+        fonts.small.draw(r, 12.f, 128.f + slide, favoriteCount,
+                         rsWithAlpha(pal.textDim, a));
+    } else {
+        const auto& system =
+            db::systemInfo(db::System(selectedCategory.systemIdx));
+        fonts.body.draw(r, 12.f, 108.f + slide, system.displayName,
+                        rsWithAlpha(pal.textPrimary, a));
+        char gameCount[32];
+        std::snprintf(gameCount, sizeof gameCount, "%d GAME%s",
+                      int(m_visible.size()), m_visible.size() == 1 ? "" : "S");
+        fonts.small.draw(r, 12.f, 128.f + slide, gameCount,
+                         rsWithAlpha(pal.textDim, a));
+    }
+    r.rect(0.f, 140.f + slide, RS_SCREEN_W, 1.f,
+           rsWithAlpha(pal.panelOutline,
+                       rsClamp<u32>(u32(rsAlphaOf(pal.panelOutline) * 2u),
+                                    28u, 76u)));
+
+    fonts.body.draw(r, 12.f, 148.f + slide, "RECENTLY PLAYED",
+                    rsWithAlpha(pal.textPrimary, a));
+    const int recentCount = int(m_recentVisible.size());
+    if (recentCount == 0) {
+        fonts.small.draw(r, 12.f, 180.f + slide,
+                         "Games you launch will appear here.",
+                         rsWithAlpha(pal.textDim, a));
+        return;
+    }
+
+    const int warm = int(app.time() * 18.f) % recentCount;
+    app.boxart().get(*m_recentVisible[size_t(warm)]);
+
+    for (int i = 0; i < recentCount; i++) {
+        const db::GameEntry* g = m_recentVisible[size_t(i)];
+        const float x = 12.f + float(i) * 56.f;
+        const float y = 170.f + slide;
+        const bool focused = m_recentFocus && i == m_recentIdx;
+        if (focused)
+            ui::prim::focusRow(
+                r, x, y, 50.f, 50.f,
+                rsWithAlpha(pal.tileFocusBg,
+                            rsAlphaOf(pal.tileFocusBg) * a / 255u),
+                rsWithAlpha(pal.accent, a),
+                rsWithAlpha(pal.shadow,
+                            rsAlphaOf(pal.shadow) * a / (255u * 2u)));
+        else
+            ui::prim::roundedRect(
+                r, x, y, 50.f, 50.f, 8.f,
+                rsWithAlpha(pal.tileBg,
+                            rsAlphaOf(pal.tileBg) * a / 255u));
+        if (const gfx::Texture* art = app.boxart().peek(*g))
+            drawArtCover(r, *art, x + 8.f, y + 4.f, 34.f, 34.f,
+                         rsWithAlpha(rsHex(0xFFFFFF), a),
+                         rsWithAlpha(
+                             surfaceAt(pal, focused ? pal.tileFocusBg
+                                                    : pal.tileBg,
+                                       y + 24.f),
+                             a));
+        else
+            ui::prim::iconSystem(
+                r, int(g->system), x + 9.f, y + 5.f, 32.f,
+                rsWithAlpha(pal.textSecondary, a),
+                rsWithAlpha(pal.accent, a));
+        r.setScissor(int(x + 3.f), int(y + 39.f), 44, 11);
+        drawEllipsized(
+            fonts.small, r, x + 25.f, y + 39.f, 44.f, g->name,
+            rsWithAlpha(focused ? pal.accent : pal.textPrimary, a),
+            text::Align::Center);
+        r.resetScissor();
     }
 }
 

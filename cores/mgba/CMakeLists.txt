@@ -25,6 +25,15 @@ set(BUILD_SUITE OFF CACHE BOOL "" FORCE)
 set(BUILD_HEADLESS OFF CACHE BOOL "" FORCE)
 set(BUILD_SHARED OFF CACHE BOOL "" FORCE)
 
+# Stop mGBA's version.cmake consulting git. It runs `git describe` with a
+# working directory inside this repository, so it silently adopted
+# RetroShell's own tag and "-dirty" state: cutting a release changed the bytes
+# of mgba.prx and broke the provenance lockfile every time. SKIP_GIT is
+# upstream's own guard and falls back to its static 0.11.0, making the
+# artifact depend only on the pinned source — which is what the lockfile is
+# meant to assert.
+set(SKIP_GIT ON CACHE BOOL "" FORCE)
+
 add_subdirectory(upstream EXCLUDE_FROM_ALL)
 
 rs_add_core(mgba

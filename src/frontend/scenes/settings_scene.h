@@ -22,6 +22,7 @@ private:
     enum Row {
         ROW_THEME = 0,
         ROW_ACCENT,
+        ROW_HOME_LAYOUT,
         ROW_TIME_FORMAT,
         ROW_CPU_MENU,
         ROW_CPU_GAME,

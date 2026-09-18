@@ -22,8 +22,8 @@
     "froggba": {
       "displayName": "FrogGBA",
       "status": "Experimental",
-      "modelSupport": "Any PSP; hardware qualification pending",
-      "notes": "The converted PRX integration is retired. The native FrogGBA adapter preserves the standalone emulator runtime and requires a user-supplied gba_bios.bin."
+      "modelSupport": "Any PSP; launch and return confirmed on PSP-1000",
+      "notes": "The converted PRX integration is retired. The native FrogGBA adapter preserves the standalone emulator runtime and requires a user-supplied 16 KB gba_bios.bin. Launch, working-directory creation and return-to-RetroShell are confirmed on hardware; extended play and the 20-cycle gate remain outstanding."
     },
     "pcefast": {
       "displayName": "Beetle PCE Fast",

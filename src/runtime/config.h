@@ -14,6 +14,12 @@
 
 namespace rs::cfg {
 
+enum HomeLayout {
+    HOME_LAYOUT_MODERN = 0,  /* beta.3 text rail: icon + label, no panels */
+    HOME_LAYOUT_CLASSIC = 1, /* pre-beta.3: 50px badge cards and a recent shelf */
+    HOME_LAYOUT_COUNT
+};
+
 struct Config {
     std::string theme  = "dark";    /* "dark", "light" or a theme dir name */
     int  accent        = 0;         /* index into theme::accentOption */
@@ -23,6 +29,9 @@ struct Config {
     bool clock24Hour   = false;
     bool showFps       = false;
     bool autosave      = true;
+    /* Home screen presentation. Classic is the pre-beta.3 card rail, kept
+     * because some users prefer its denser, more console-like shelf. */
+    int  homeLayout    = HOME_LAYOUT_MODERN;
 };
 
 Config& get();

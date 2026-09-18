@@ -35,6 +35,11 @@ private:
     void openActions(App& app, const db::GameEntry& game);
     void updateActions(App& app);
     void drawHome(App& app, float alpha, float slide);
+    /* Two presentations of level 1, selected by cfg::homeLayout. They differ
+     * in recents navigation as well as painting — classic uses a horizontal
+     * shelf, modern a vertical list — so updateCats branches too. */
+    void drawHomeModern(App& app, float alpha, float slide);
+    void drawHomeClassic(App& app, float alpha, float slide);
     void drawBrowser(App& app, float alpha);
     void drawActions(App& app);
 

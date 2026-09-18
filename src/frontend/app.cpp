@@ -9,6 +9,8 @@
 #include "platform/psp/power.h"
 #include "platform/psp/vram.h"
 #include "core_api/rs_core_api.h"
+
+#include "rs_build_stamp.h"
 #include "runtime/arena.h"
 #include "runtime/config.h"
 #include "runtime/log.h"

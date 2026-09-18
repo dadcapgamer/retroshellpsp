@@ -1,5 +1,6 @@
 #include "platform/psp/gu_renderer.h"
 #include "platform/psp/vram.h"
+#include "runtime/arena.h"
 #include "runtime/log.h"
 
 #include <pspdisplay.h>
@@ -210,6 +211,11 @@ void Renderer::captureNow() {
     }
     stbi_write_png(m_capturePath, RS_SCREEN_W, RS_SCREEN_H, 3, rgb,
                    RS_SCREEN_W * 3);
+    /* Sampled before the buffers are released: a capture is by far the
+     * largest newlib-heap burst in the application — a 255 KB framebuffer
+     * snapshot, a 383 KB RGB image and whatever the PNG encoder needs on top
+     * — and it is the peak that must fit inside PSP_HEAP_SIZE_KB. */
+    mem::logHeapUsage("screenshot peak");
     std::free(rgb);
     std::free(snapshot);
     m_capturePath[0] = 0;

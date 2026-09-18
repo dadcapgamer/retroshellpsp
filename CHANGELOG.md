@@ -1,5 +1,69 @@
 # Changelog
 
+## v1.0.0-beta.4
+
+Beta 4 completes the native adapter pipeline, adds a home-layout choice, and
+fixes a memory regression that could freeze the application mid-game.
+
+### Native emulator adapters
+
+- FrogGBA now launches, creates its own working directories, and returns to
+  RetroShell instead of exiting to the XMB. Launch and return are confirmed on
+  a real PSP-1000.
+- Fixed native launches failing with `0x80020149`
+  (`SCE_KERNEL_ERROR_ILLEGAL_PERM_CALL`). RetroShell is a user-mode module and
+  `sceKernelLoadExec` is privileged, so launches now go through custom
+  firmware's SystemCtrl loader with the direct call kept as a fallback.
+- Native manifests can declare `requiredDirectories`. A ZIP cannot carry empty
+  folders, so the adapter's `roms`/`save`/`state`/`cfg`/`cheat`/`snapshot`
+  directories are created before the emulator starts; FrogGBA previously
+  aborted naming each missing path.
+- Native launch failures now report the cause — a missing BIOS, an
+  uninstalled emulator, an over-long ROM path — instead of a status code.
+- Native adapters no longer outrank in-process cores. Both shipped adapters
+  were priority 140 against the PRX cores' 100, which would have silently made
+  them the default for their systems rather than the alternates the
+  documentation describes. A repository audit rule now prevents this.
+
+### Interface
+
+- Added **Settings -> Home layout**, switching between the beta.3 text rail
+  (`Modern`) and the pre-beta.3 badge cards (`Classic`). The two differ in
+  recents navigation as well as painting, and both are supported.
+- Settings now shows the build identity — release version, build timestamp and
+  core API version — so a console can be matched to the artifact that produced
+  it without reading the log. The timestamp is regenerated on every build; a
+  configure-time value went stale across incremental rebuilds, which would let
+  a console report a time from long before the binary it was running.
+
+### Fixes
+
+- Fixed the application freezing mid-game on the first in-game screenshot.
+  `PSP_HEAP_SIZE_KB` had been reduced on the strength of a core-launch heap
+  sample, which never observes a capture — the largest heap burst in the
+  application at 1,536 KB claimed. The PSP installs no exception handler, so
+  the failure appeared as the application silently stopping.
+- Fixed a zero-size SRAM being treated as an error for cartridges without
+  battery backup, which failed the release gate on ordinary games.
+- QuickNES and Gambatte now emit the PSP GE's native BGR565 ordering from
+  their palettes, removing a per-pixel channel swap of 61,440 and 23,040
+  pixels per frame respectively at no runtime cost.
+
+### Documentation and tooling
+
+- Added a step-by-step BIOS setup guide covering the required path, exact
+  size, and every failure message.
+- `tools/run_ppsspp_automation.py` gained `--psp-model` (the 64 MB model had
+  never been exercised) and `--home-layout`.
+- Corrected a stale hardware matrix that still reported July failures
+  superseded by the September run.
+- Fixed the vendored mGBA tree adopting this repository's git tag and dirty
+  state as its own version. Its `version.cmake` ran `git describe` from inside
+  the repository, so `mgba.prx` changed bytes on every commit and on every
+  release tag, breaking the provenance lockfile the artifact hash is meant to
+  pin. The build now passes `SKIP_GIT` through to the build-time version
+  script, making the artifact depend only on the pinned source.
+
 ## v1.0.0-beta.3
 
 Beta 3 expands RetroShell from a fixed PRX launcher into a PSP-focused frontend

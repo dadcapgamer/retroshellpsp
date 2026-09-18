@@ -1,3 +1,10 @@
+set(RS_BUILD_STAMP_HEADER ${CMAKE_CURRENT_BINARY_DIR}/rs_build_stamp.h)
+add_custom_target(rs_build_stamp ALL
+  COMMAND ${CMAKE_COMMAND} -DOUT_FILE=${RS_BUILD_STAMP_HEADER}
+          -P ${CMAKE_SOURCE_DIR}/cmake/rs_build_stamp.cmake
+  BYPRODUCTS ${RS_BUILD_STAMP_HEADER}
+  COMMENT "Stamping build time")
+
 add_executable(retrosuite
   main.cpp
   platform/psp/gu_renderer.cpp
@@ -41,6 +48,9 @@ target_compile_options(retrosuite PRIVATE
   -Werror=return-type
   -Werror=format
   -Werror=implicit-fallthrough)
+
+add_dependencies(retrosuite rs_build_stamp)
+target_include_directories(retrosuite PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 
 target_link_libraries(retrosuite PRIVATE
   rs_external

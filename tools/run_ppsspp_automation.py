@@ -79,6 +79,10 @@ def main() -> int:
                         default=ROOT / "build-ppsspp-auto" / "runs")
     parser.add_argument("--timeout", type=int, default=75)
     parser.add_argument(
+        "--home-layout", choices=("modern", "classic"), default="modern",
+        help="Home screen presentation seeded into config.json, so both "
+             "layouts can be captured without editing the stick by hand.")
+    parser.add_argument(
         "--psp-model", type=int, choices=(0, 1), default=0,
         help="0 = PSP-1000 (32 MB, default), 1 = PSP-2000+ (64 MB). The "
              "64 MB model is a required release gate that cores sized from "
@@ -194,6 +198,7 @@ def main() -> int:
         "showFps": True,
         "autoSave": False,
         "theme": args.theme,
+        "homeLayout": 1 if args.home_layout == "classic" else 0,
     })
     (system_dir / "ppsspp.ini").write_text(
         "[General]\nFirstRun = False\nCheckForNewVersion = False\n"
@@ -243,10 +248,12 @@ def main() -> int:
         "autopilot_complete": complete,
         # PPSSPP's maximum block can vary by one page depending on loader
         # alignment, so each model is range-checked rather than pinned. The
-        # model-0 range moved up by ~2 MB when PSP_HEAP_SIZE_KB was cut from
-        # 4096 to 2048 after hardware showed the newlib heap peaking at 326 KB.
+        # The model-0 range tracks PSP_HEAP_SIZE_KB: a brief reduction to
+        # 2048 KB raised it by ~2 MB, and reverting that (see main.cpp — a
+        # screenshot needs far more heap than a core-launch sample shows)
+        # restored the original window.
         "expected_arena_for_model": (
-            19_000 <= initial_arena_kb <= 20_000 if args.psp_model == 0
+            17_000 <= initial_arena_kb <= 18_000 if args.psp_model == 0
             else 45_000 <= initial_arena_kb <= 56_000),
         "core_loaded_twice": text.count(f"core: '{args.core}' ready") >= 2,
         "rom_loaded_twice": text.count("session: ROM loaded") >= 2,

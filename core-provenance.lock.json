@@ -107,14 +107,15 @@
       "license": "MPL-2.0",
       "licenseFile": "cores/mgba/upstream/LICENSE",
       "retainedSource": "cores/mgba/upstream",
-      "sourceTreeSha256": "0268f94f63b4f95b7ad1b3f50ed5ffd7eb9ee42442ea8728db2666a93c920d77",
+      "sourceTreeSha256": "2a06a190aa8dd95abff2b250a150c8e2ebde4a3392bffcfc8c16b26e0493e113",
       "localPatches": [
         "cores/mgba/CMakeLists.txt: build the pinned GB/GBC/GBA libretro engines as one minimal compatibility PRX",
         "cores/mgba/upstream/src/util/vfs.c: default invalid access modes to a defined read-only VFS mode",
         "cores/shared/rs_libretro_shim.cpp: provide PSP idle-loop and audio-directed frameskip defaults plus host VFS v2",
         "cores/shared/rs_libretro_shim.cpp: honour SET_SYSTEM_AV_INFO/SET_GEOMETRY so a core that enlarges its output at runtime is no longer capped at its load-time geometry",
         "cores/shared/rs_libretro_shim.cpp: throttle recurring video warnings; an unbuffered per-frame Memory Stick write collapses the frame budget on real hardware",
-        "cores/shared/rs_libretro_shim.cpp: export rs_psp_core_available() so cores can size their caches from the arena instead of a compile-time constant"
+        "cores/shared/rs_libretro_shim.cpp: export rs_psp_core_available() so cores can size their caches from the arena instead of a compile-time constant",
+        "cores/mgba/CMakeLists.txt + upstream/CMakeLists.txt: set SKIP_GIT and pass it to the build-time version script so the vendored tree cannot adopt this repository's git tag and dirty state"
       ],
       "compilerFlags": [
         "-O3",
@@ -126,7 +127,7 @@
         "-fno-strict-overflow",
         "-fno-strict-aliasing"
       ],
-      "expectedArtifactSha256": "2254e5cb4960f86fdf24f7dee4b146934a5d1aea5da74830ff7aef4f514a41d6"
+      "expectedArtifactSha256": "024f344b85fabae121d630f2d7b8a5ce05fd52b411d71c5c56855daa3c573deb"
     },
     {
       "name": "froggba",

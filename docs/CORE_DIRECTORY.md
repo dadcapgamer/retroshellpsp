@@ -19,7 +19,7 @@ compatibility.
 | Super Nintendo | Snes9x 2005 | Testing | Any PSP; PSP-1000 testing continues | Beta ZIP + standalone package |
 | Super Nintendo | Snes9xTYL ME native | Testing alternate | Any PSP | Adapter source; binary package pending |
 | Game Boy Advance | gpSP | Testing | Later PSPs; PSP-1000 experimental | Beta ZIP + standalone package |
-| Game Boy Advance | FrogGBA native | Testing alternate | Any PSP; launch qualification pending | Adapter source; binary package pending |
+| Game Boy Advance | FrogGBA native | Testing alternate | Any PSP; launch and return confirmed on PSP-1000 | Adapter source; binary package pending |
 | PC Engine | Beetle PCE Fast | Testing | Later PSPs; PSP-1000 experimental | Beta ZIP + standalone package |
 | Master System / Game Gear | SMS Plus GX | Experimental | Later PSPs; PSP-1000 unverified | Beta ZIP + standalone package |
 
@@ -46,9 +46,11 @@ are deliberately not downloadable:
 | TGB Dual | Video output stopped during PSP-1000 testing. |
 | mGBA | Crashed real PSP hardware during GBA testing. |
 
-FrogGBA requires a user-supplied `RETROSHELL/system/gba_bios.bin`; BIOS files
-are not included. RetroShell copies the verified 16 KB file into FrogGBA's
-private folder before launching the native emulator.
+FrogGBA requires a user-supplied `RETROSHELL/system/gba_bios.bin` of exactly
+16,384 bytes; BIOS files are not included. RetroShell verifies the size and
+copies it into FrogGBA's private folder before launching, so one copy serves
+every emulator that needs it. Step-by-step setup and the exact failure
+messages are in [Installing cores](INSTALLING_CORES.md#cores-that-need-a-bios-file).
 
 ## Package trust
 

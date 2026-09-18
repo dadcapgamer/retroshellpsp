@@ -162,9 +162,16 @@ include(FindFunction)
 include(DebugStrip)
 
 # Version information
+# RetroShell: this target re-runs version.cmake as a separate script process
+# on every build, where the parent's SKIP_GIT cache entry is not visible, so
+# it must be passed explicitly. Without it the vendored tree's `git describe`
+# resolves against the *enclosing* RetroShell repository and embeds its tag
+# and dirty state, which changed mgba.prx's bytes on every commit and broke
+# the provenance lockfile that is supposed to pin this artifact to its source.
 add_custom_target(${BINARY_NAME}-version-info ALL
 	COMMAND ${CMAKE_COMMAND}
 	-DBINARY_NAME=${BINARY_NAME}
+	-DSKIP_GIT=${SKIP_GIT}
 	-DCONFIG_FILE=${CMAKE_CURRENT_SOURCE_DIR}/src/core/version.c.in
 	-DOUT_FILE=${CMAKE_CURRENT_BINARY_DIR}/version.c
 	-P ${CMAKE_CURRENT_SOURCE_DIR}/version.cmake

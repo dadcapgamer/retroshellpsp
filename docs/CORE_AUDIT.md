@@ -702,6 +702,64 @@ Neither result is hardware evidence. The original Master System complaint came
 from real hardware, and its most plausible mechanism — per-frame Memory Stick
 I/O — is precisely what PPSSPP cannot reproduce.
 
+## 2026-09-18 QuickNES gameplay hang — RESOLVED (heap regression)
+
+The hang was caused by this project's own earlier change, not by beta.3.
+`PSP_HEAP_SIZE_KB` had been cut from 4096 to 2048 on the strength of a
+"heap: core launch" sample showing a 326 KB peak. That sample is taken in
+`evictForCore()` and therefore never observes a screenshot, which is the
+application's largest heap burst by a wide margin.
+
+Measured with a new sample taken inside `Renderer` before the capture buffers
+are released:
+
+| Moment | In use | Claimed |
+|---|---|---|
+| Core launch | 511 KB | 640 KB |
+| During a capture | 1277 KB | **1536 KB** |
+
+A capture allocates a 255 KB framebuffer snapshot, a 383 KB RGB image and the
+PNG encoder's zlib buffers on top. Against a 2048 KB heap that left too little
+room for the 383 KB *contiguous* request once the heap had fragmented. The PSP
+installs no exception handler, so the failure surfaced as the application
+silently stopping — emulation, logging and autopilot all ceasing at once, with
+no error in either log.
+
+Restored to 4096 KB, roughly 2.7x the measured peak claim. QuickNES and
+Gambatte both pass all fourteen checks again.
+
+Two lessons worth keeping:
+
+- Never size this heap from a core-launch sample. The capture path is
+  transient and dominates.
+- Reclaiming arena space from this reservation is still desirable (it cost
+  the ROM cache ~2 MB on a PSP-1000), but the correct route is to stop the
+  capture path allocating from the newlib heap at all, not to lower the
+  number again.
+
+Hardware corroborates the diagnosis: QuickNES plays Darkwing Duck correctly on
+a real PSP-1000, because ordinary play takes no screenshots and so never
+triggers the burst. Only autopilot builds capture during gameplay.
+
+## 2026-09-18 Home layout switcher
+
+`cfg::homeLayout` selects between the beta.3 text rail (`Modern`, default) and
+the pre-beta.3 badge cards (`Classic`), exposed as **Home layout** in Settings
+below Accent color. The classic `drawHome` is restored verbatim from
+`a1d4780` apart from its rename, so switching is a faithful revert rather than
+a reinterpretation; two helpers it depends on, `surfaceAt` and
+`formatLastPlayedDate`, were restored with it.
+
+The two layouts also differ in *input*, not only painting: classic navigates
+its recent shelf horizontally with UP leaving it, modern navigates its recent
+list vertically with UP walking out through the first row. `updateCats`
+branches accordingly — painting and input must agree or the focus ring moves
+in a direction the user cannot see.
+
+`tools/run_ppsspp_automation.py` gained `--home-layout {modern,classic}` so
+both can be captured without hand-editing the stick. Both pass all fourteen
+checks with Gambatte and render distinctly.
+
 ## Required lab runs before tagging a release
 
 1. Extend the passing PSP-1000 PPSSPP lifecycle matrix with malformed-input

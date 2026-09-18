@@ -1,4 +1,8 @@
 #include "frontend/scenes/settings_scene.h"
+
+#include "core_api/rs_core_api.h"
+
+#include "rs_build_stamp.h"
 #include "frontend/app.h"
 #include "frontend/scenes/home_scene.h"
 #include "platform/psp/power.h"
@@ -13,7 +17,7 @@ namespace rs {
 
 namespace {
 const char* ROW_LABELS[] = {
-    "Theme", "Accent color", "Time format", "Menu CPU clock",
+    "Theme", "Accent color", "Home layout", "Time format", "Menu CPU clock",
     "In-game CPU clock", "UI sounds", "Show FPS", "Auto-save",
     "Rescan library",
 };
@@ -50,6 +54,13 @@ void SettingsScene::adjust(App& app, int dir) {
             const int next =
                 (c.accent + dir + theme::ACCENT_COUNT) % theme::ACCENT_COUNT;
             app.setAccentIndex(next);
+            break;
+        }
+        case ROW_HOME_LAYOUT: {
+            const int next = (c.homeLayout + dir + cfg::HOME_LAYOUT_COUNT) %
+                             cfg::HOME_LAYOUT_COUNT;
+            c.homeLayout = next;
+            cfg::save();
             break;
         }
         case ROW_TIME_FORMAT:
@@ -108,6 +119,9 @@ const char* SettingsScene::valueText(App& app, int row, char* buf,
             std::snprintf(buf, n, "%s",
                           theme::accentOption(c.accent).name);
             return buf;
+        case ROW_HOME_LAYOUT:
+            return c.homeLayout == cfg::HOME_LAYOUT_CLASSIC ? "Classic"
+                                                            : "Modern";
         case ROW_TIME_FORMAT: return c.clock24Hour ? "24-hour" : "12-hour";
         case ROW_CPU_MENU:
             std::snprintf(buf, n, "%d MHz", c.cpuMenuMhz);
@@ -224,6 +238,19 @@ void SettingsScene::draw(App& app) {
         }
     }
     r.resetScissor();
+
+    /* Build identity, parked above the hint bar. Testers report problems
+     * against a build, and matching a PSP to the artifact that produced it
+     * was previously only possible by reading the log — which already cost
+     * one round of confusion when a stale EBOOT was left installed. The core
+     * API version is included because a mismatched EBOOT and core set fails
+     * with a version error that is otherwise hard to interpret. */
+    char build[96];
+    std::snprintf(build, sizeof build, "%s  ·  built %s UTC  ·  core API v%u",
+                  RS_RELEASE_VERSION, RS_BUILD_STAMP,
+                  unsigned(RS_CORE_API_VERSION));
+    fonts.small.draw(r, px, py + ph + 8.f, build,
+                     rsWithAlpha(pal.textDim, a));
 
     const App::Hint hints[] = {
         {ui::prim::Button::Cross, "Change"},

@@ -78,6 +78,43 @@ When more than one installed core supports a game, use the selected game's
 **Options** menu to choose which core launches it. RetroShell remembers the
 choice for that game.
 
+## Cores that need a BIOS file
+
+Some emulators cannot run without the original console's BIOS. RetroShell does
+not include BIOS files and never will: they are copyrighted, and dumping one
+from hardware you own is the only route the project can endorse. A core that
+needs one stays unusable until you supply it.
+
+**FrogGBA** is the current example. It requires a Game Boy Advance BIOS.
+
+1. Obtain `gba_bios.bin` from a GBA you own. It must be **exactly 16,384
+   bytes** (16 KB).
+2. Create `RETROSHELL/system/` on the Memory Stick if it does not exist.
+3. Copy the file there, named exactly `gba_bios.bin`:
+
+```text
+RETROSHELL/system/gba_bios.bin
+```
+
+4. Install the FrogGBA package as normal, then pick it for a game through
+   **Options -> Per-game Settings**.
+
+RetroShell verifies the size before every launch and copies the file into the
+emulator's own folder, so you maintain one copy rather than one per emulator.
+You do not need to place it under `RETROSHELL/emulators/froggba/` yourself.
+
+If the file is missing or the wrong size, the launch is refused with a message
+naming the cause rather than an error code:
+
+| Message | Meaning |
+| --- | --- |
+| `froggba: needs a valid BIOS in RETROSHELL/system` | No `gba_bios.bin`, or it is not 16 KB |
+| `froggba: could not create its working folders` | The emulator's `roms`/`save`/`state`/`cfg`/`cheat`/`snapshot` folders could not be made — usually a full or write-protected Memory Stick |
+| `froggba: emulator is not installed` | The package did not install; check `RETROSHELL/emulators/froggba/EBOOT.PBP` exists |
+
+A wrong-size file is the common mistake. Headered dumps, zipped files renamed
+to `.bin`, and BIOS images from other consoles all fail this check.
+
 ## What cannot be installed directly
 
 These files are **not** interchangeable with RetroShell cores:

@@ -64,6 +64,10 @@ void load() {
     if (const cJSON* v = cJSON_GetObjectItemCaseSensitive(root, "autosave");
         cJSON_IsBool(v))
         s_cfg.autosave = cJSON_IsTrue(v);
+    if (const cJSON* v = cJSON_GetObjectItemCaseSensitive(root, "homeLayout");
+        cJSON_IsNumber(v) && v->valueint >= 0 &&
+        v->valueint < HOME_LAYOUT_COUNT)
+        s_cfg.homeLayout = v->valueint;
     cJSON_Delete(root);
 }
 
@@ -77,6 +81,7 @@ void save() {
     cJSON_AddBoolToObject(root, "clock24Hour", s_cfg.clock24Hour);
     cJSON_AddBoolToObject(root, "showFps", s_cfg.showFps);
     cJSON_AddBoolToObject(root, "autosave", s_cfg.autosave);
+    cJSON_AddNumberToObject(root, "homeLayout", s_cfg.homeLayout);
     fs::mkdirs(fs::ROOT);
     if (!json::writeFile(CFG_PATH, root)) RS_LOGW("config: save failed");
     cJSON_Delete(root);
