@@ -22,6 +22,15 @@ public:
     float measure(const char* text) const;
     float ascent() const     { return float(m_ascent); }
     float lineHeight() const { return float(m_lineHeight); }
+    /* Height of a capital and its offset below the line-box top, measured
+     * from 'H' at load. Layout centres labels on their caps, not on the line
+     * box, so a row's text sits optically centred whatever the face. */
+    float capHeight() const  { return float(m_capHeight); }
+    /* Line-box top that centres caps in [boxY, boxY+boxH], pixel-snapped. */
+    float centerY(float boxY, float boxH) const {
+        return float(int(boxY + (boxH - float(m_capHeight)) * .5f + .5f)) -
+               float(m_capTop);
+    }
 
     /* (x,y) is the TOP-left of the line box. */
     void draw(gfx::Renderer& r, float x, float y, const char* text, u32 color,
@@ -53,6 +62,8 @@ private:
     s16 m_ascent      = 0;
     s16 m_descent     = 0;
     s16 m_lineHeight  = 0;
+    s16 m_capHeight   = 0;
+    s16 m_capTop      = 0;
 };
 
 }  // namespace rs::text

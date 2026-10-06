@@ -50,6 +50,14 @@ bool Font::load(const void* data, u32 size) {
     m_descent    = h.descent;
     m_lineHeight = h.lineHeight;
 
+    if (const Glyph* cap = find('H')) {
+        m_capHeight = s16(cap->h);
+        m_capTop = s16(m_ascent + cap->yoff);
+    } else {
+        m_capHeight = s16(m_ascent);
+        m_capTop = 0;
+    }
+
     const u8* atlas = p + glyphBytes;
     /* Persistent UI atlases stay linear in ordinary RAM. Real PSP hardware
      * showed shared red/green corruption after the first clipped grid page

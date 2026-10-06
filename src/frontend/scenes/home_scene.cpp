@@ -1,6 +1,7 @@
 #include "frontend/scenes/home_scene.h"
 #include "frontend/app.h"
 #include "frontend/scenes/settings_scene.h"
+#include "frontend/ui/chrome.h"
 #include "frontend/ui/grid_window.h"
 #include "frontend/ui/relative_time.h"
 #include "frontend/ui/state_panel.h"
@@ -23,48 +24,52 @@ namespace rs {
 
 namespace {
 
-/* --- layout (480x272, measured from the redesign mockups) ---------------- */
-constexpr float MARGIN = 21.f;
+/* --- layout (480x272; shared grid in ui/chrome.h) ------------------------ */
+namespace L = ui::layout;
+using ui::fade;
 
+/* Systems rail: five slots, selected slot in a flat container. */
 constexpr int   RAIL_VISIBLE = 5;
-constexpr float RAIL_PITCH = 84.f;
-constexpr float RAIL_X0 = 78.f;           /* centre of the first slot */
-constexpr float BOX_W = 72.f, BOX_H = 88.f, BOX_TOP = 62.f;
-constexpr float RAIL_LABEL_Y = 132.f;
+constexpr float RAIL_PITCH = 88.f;
+constexpr float RAIL_X0 = RS_SCREEN_W * .5f - 2.f * RAIL_PITCH;   /* slot 0 */
+constexpr float RAIL_BOX_W = 80.f, RAIL_BOX_H = 100.f, RAIL_BOX_Y = 58.f;
+constexpr float RAIL_ICON_CY = 98.f;      /* icon centre line */
+constexpr float RAIL_LABEL_Y = 137.f;     /* caps top of the badge */
 
-constexpr float CARD_W = 92.f, CARD_H = 80.f, CARD_PITCH = 107.f;
-constexpr float CARD_X0 = 31.f, CARD_Y = 84.f;
-constexpr int   RECENT_MAX = 5;
+/* Continue Playing: exactly three cards on screen. */
+constexpr int   CARDS_VISIBLE = 3;
+constexpr float CARD_W = 136.f, CARD_ART_H = 102.f, CARD_PITCH = 156.f;
+constexpr float CARD_Y = 72.f;
+constexpr int   RECENT_MAX = 6;
 
-constexpr float LIST_X = 12.f, LIST_W = 256.f;
-constexpr float LIST_TOP = 63.f, LIST_ROW = 19.f;
+/* Library: list left, one preview right. */
+constexpr float LIST_X = L::MARGIN, LIST_W = 268.f;
+constexpr float LIST_TOP = 60.f, LIST_ROW = L::ROW_H;
 constexpr int   LIST_VISIBLE = 9;
-constexpr float PREVIEW_X = 305.f, PREVIEW_Y = 67.f;
-constexpr float PREVIEW_W = 145.f, PREVIEW_H = 109.f;
+constexpr float PREVIEW_X = 300.f, PREVIEW_Y = 60.f;
+constexpr float PREVIEW_W = L::RIGHT - PREVIEW_X, PREVIEW_H = 116.f;
 
-constexpr float SHIFT = 34.f;             /* vertical layer travel */
-constexpr float SLIDE = 44.f;             /* horizontal system-switch travel */
+/* Game Detail: art left, title and actions right. */
+constexpr float DETAIL_ART_X = L::MARGIN, DETAIL_ART_Y = L::CONTENT_TOP;
+constexpr float DETAIL_ART_W = 148.f, DETAIL_ART_H = 112.f;
+constexpr float DETAIL_X = 180.f;
+constexpr float DETAIL_W = L::RIGHT - DETAIL_X;
+constexpr float DETAIL_ACTIONS_Y = 116.f;
+constexpr float DETAIL_ACTION_W = 212.f;
+constexpr float PLAY_H = 26.f;
+
+constexpr float SHIFT = 24.f;             /* vertical layer travel */
+constexpr float SLIDE = 36.f;             /* horizontal system-switch travel */
 constexpr float SETTLE_SECONDS = 0.18f;
 
 using ui::drawEllipsized;
 using ui::drawWrapped;
 
-const char* systemTitle(int systemId) {
-    static const char* NAMES[] = {
-        "GAME BOY", "GAME BOY COLOR", "GAME BOY ADVANCE", "NES",
-        "SUPER NINTENDO", "GENESIS", "MASTER SYSTEM", "GAME GEAR",
-        "PC ENGINE",
-    };
-    return NAMES[rsClamp(systemId, 0, db::SYSTEM_COUNT - 1)];
-}
+const char* systemTitle(int systemId) { return ui::systemName(systemId); }
 
 const char* badge(int systemId) {
     return db::systemInfo(db::System(rsClamp(systemId, 0,
                                              db::SYSTEM_COUNT - 1))).badge;
-}
-
-u32 fade(u32 color, u32 alpha) {
-    return rsWithAlpha(color, rsAlphaOf(color) * alpha / 255u);
 }
 
 float layerAlpha(float pos, float index) {
@@ -76,7 +81,14 @@ int listStart(int selected, int count) {
                    rsClamp(count - LIST_VISIBLE, 0, count));
 }
 
-/* Cover-fit art into a rect, cropping to the destination aspect. */
+/* First card of the three on screen: the focus stays in the middle slot
+ * except at either end of the row. */
+int continueFirst(int selected, int count) {
+    return rsClamp(selected - 1, 0, rsClamp(count - CARDS_VISIBLE, 0, count));
+}
+
+/* Cover-fit art into a rect, cropping to the destination aspect. Cards are
+ * uniform tiles, so they crop; the single previews contain-fit instead. */
 void drawArtCover(gfx::Renderer& r, const gfx::Texture& art, float x, float y,
                   float w, float h, u32 color) {
     const float srcAspect = float(art.width) / float(art.height);
@@ -91,30 +103,6 @@ void drawArtCover(gfx::Renderer& r, const gfx::Texture& art, float x, float y,
         sy = (float(art.height) - sh) * .5f;
     }
     r.sprite(art, sx, sy, sw, sh, x, y, w, h, color);
-}
-
-/* The designed fallback: flat field, dot lattice, faded system icon and the
- * system abbreviation. Used whenever artwork is absent or not yet decoded,
- * so the slot is never blank and never shows a broken-image glyph. */
-void drawPlaceholder(App& app, int systemId, float x, float y, float w,
-                     float h, u32 a, bool withBadge) {
-    auto& r = app.renderer();
-    const auto& pal = app.pal();
-    x = float(int(x)); y = float(int(y));
-    w = float(int(w)); h = float(int(h));
-    r.rect(x, y, w, h, fade(pal.tileBg, a));
-    ui::prim::dotField(r, x, y, w, h, fade(pal.fallbackDot, a));
-    ui::prim::outlineRect(r, x, y, w, h, 1.f, fade(pal.divider, a));
-    const float icon = h >= 96.f ? 64.f : 48.f;
-    const float iconY = y + (h - icon) * .5f - (withBadge ? 6.f : 0.f);
-    ui::prim::iconSystem(r, systemId, x + (w - icon) * .5f, iconY, icon,
-                         rsWithAlpha(pal.textSecondary, a * 150u / 255u),
-                         pal.accent);
-    if (withBadge)
-        app.fonts().pixelTiny.draw(r, x + w * .5f, y + h - 16.f,
-                                   badge(systemId),
-                                   fade(pal.textSecondary, a),
-                                   text::Align::Center);
 }
 
 std::string upper(std::string s) {
@@ -142,24 +130,20 @@ std::string librarySubtitle(const db::ViewState& view, const std::string& query,
     return out;
 }
 
-/* Publisher (else developer, else genre) and year, whichever exist, joined —
- * nothing is printed for a field the metadata does not have. */
-std::string metaLine(const db::GameMeta& m) {
-    std::string out = !m.publisher.empty() ? m.publisher
-                    : !m.developer.empty() ? m.developer : m.genre;
-    if (m.year > 0) {
-        if (!out.empty()) out += " \xC2\xB7 ";
-        out += std::to_string(m.year);
-    }
-    return out;
-}
-
 constexpr const char SEARCH_CHARS[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 -':.";
 constexpr int SEARCH_CHAR_COUNT = int(sizeof SEARCH_CHARS) - 1;
 constexpr size_t SEARCH_MAX = 16;
 
-void drawStar(gfx::Renderer& r, float cx, float cy, float radius, u32 color) {
-    ui::prim::iconStar(r, float(int(cx)), float(int(cy)), radius, color);
+/* Layers paint inside the content band so vertical travel never crosses the
+ * header or legend; any inner clip is intersected with it and restored to it,
+ * never reset to the full screen. */
+void clipContent(gfx::Renderer& r, float x, float y, float w, float h) {
+    const float top = L::HEADER_RULE_Y + 1.f, bottom = L::FOOTER_RULE_Y;
+    const float y0 = rsClamp(y, top, bottom), y1 = rsClamp(y + h, top, bottom);
+    r.setScissor(int(x), int(y0), int(w), int(y1 - y0));
+}
+void restoreContent(gfx::Renderer& r) {
+    clipContent(r, 0.f, 0.f, RS_SCREEN_W, RS_SCREEN_H);
 }
 
 }  // namespace
@@ -197,8 +181,8 @@ void HomeScene::enter(App& app) {
     m_railFirst.snap(float(nav::railFirst(m_nav.systemPos,
                                           int(m_systems.size()),
                                           RAIL_VISIBLE)));
-    m_contScroll.snap(float(rsClamp(m_nav.continueIdx - 2, 0,
-                                    rsClamp(int(m_recents.size()) - 4, 0, 8))));
+    m_contScroll.snap(float(continueFirst(m_nav.continueIdx,
+                                          int(m_recents.size()))));
     m_scroll.snap(float(listStart(m_nav.currentGame(), gamesInCurrent())));
     m_slideX.snap(0.f);
     m_trackedHash = 0;
@@ -359,6 +343,8 @@ void HomeScene::switchSystem(App& app, int dir) {
         m_slideX.snap(float(dir) * SLIDE);
         m_slideX.to(0.f);
     }
+    m_titleFade.start(0.14f);
+    m_titleDir = dir;
     noteSelection(app);
 }
 
@@ -390,7 +376,7 @@ void HomeScene::openError(App& app, const db::GameEntry& game,
     const size_t cores = app.cores().coresFor(game.system).size();
     if (m_notice.kind == launch::Kind::CoreMissing && cores == 0) {
         m_noticeMessage = std::string("No emulator is installed for ") +
-            db::systemInfo(game.system).displayName +
+            ui::systemName(int(game.system)) +
             ". Copy a core package into ms0:/RETROSHELL/cores and restart.";
         m_notice.action = launch::Action::None;
     } else if (m_notice.action == launch::Action::ChooseCore) {
@@ -474,12 +460,6 @@ void HomeScene::activateOption(App& app, int row) {
             m_overlay = Overlay::None;
             openDetail(app, game);
             break;
-        case OPT_CHEATS:
-            app.toast("No cheats available for this game");
-            break;
-        case OPT_MANUAL:
-            app.toast("No manual available for this game");
-            break;
         case OPT_DELETE_SAVE:
             if (!m_optionsHasSave) {
                 app.toast("No save data to delete");
@@ -521,8 +501,6 @@ void HomeScene::activateDetail(App& app, int row) {
         case DET_PLAY:     launch(app, game); break;
         case DET_FAVORITE: toggleFavorite(app, game); break;
         case DET_DETAILS:  m_detailExpanded = !m_detailExpanded; break;
-        case DET_CHEATS:   app.toast("No cheats available for this game"); break;
-        case DET_MANUAL:   app.toast("No manual available for this game"); break;
         case DET_RETURN:   m_nav.back(); break;
     }
 }
@@ -608,9 +586,8 @@ void HomeScene::updateLibrary(App& app) {
     }
     const db::GameEntry* game = focusedGame();
     if (!game) return;
-    /* X opens the game's detail view; Play is its first action, so launching
-     * is X, X — never an accident from scrolling a list. */
-    if (pad.isPressed(PSP_CTRL_CROSS)) openDetail(app, *game);
+    /* X plays; the full Game Detail view is one row into Options. */
+    if (pad.isPressed(PSP_CTRL_CROSS)) launch(app, *game);
     else if (pad.isPressed(PSP_CTRL_SQUARE)) toggleFavorite(app, *game);
     else if (pad.isPressed(PSP_CTRL_TRIANGLE)) openOptions(app, *game);
 }
@@ -894,8 +871,8 @@ void HomeScene::update(App& app, float dt) {
     m_railFirst.to(float(nav::railFirst(m_nav.systemPos,
                                         int(m_systems.size()), RAIL_VISIBLE)));
     m_railFirst.update(dt, 14.f);
-    m_contScroll.to(float(rsClamp(m_nav.continueIdx - 2, 0,
-                                  rsClamp(int(m_recents.size()) - 4, 0, 8))));
+    m_contScroll.to(float(continueFirst(m_nav.continueIdx,
+                                        int(m_recents.size()))));
     m_contScroll.update(dt, 14.f);
     m_scroll.to(float(listStart(m_nav.currentGame(), gamesInCurrent())));
     if (std::fabs(m_scroll.target - m_scroll.v) > 12.f)
@@ -903,12 +880,59 @@ void HomeScene::update(App& app, float dt) {
     m_scroll.update(dt, 16.f);
     m_slideX.update(dt, 16.f);
     m_entrance.update(dt);
+    m_titleFade.update(dt);
     m_overlayFade.update(dt);
 }
 
 /* ---------------------------------------------------------------------- */
 /* Drawing                                                                 */
 /* ---------------------------------------------------------------------- */
+
+namespace {
+/* Line-box top that puts a face's caps at `capsTop`. */
+float capsAt(const text::Font& f, float capsTop) {
+    return f.centerY(capsTop, f.capHeight());
+}
+
+/* Up to three chips in a row, stopping before one would overflow. */
+float chipRow(App& app, float x, float y, float maxW, const char* const* items,
+              int count, u32 alpha) {
+    float cx = x;
+    for (int i = 0; i < count && i < 3; i++) {
+        if (!items[i] || !*items[i]) continue;
+        const float w = ui::chipWidth(app, items[i]);
+        if (cx + w > x + maxW) break;
+        ui::chip(app, cx, y, items[i], alpha);
+        cx += w + 4.f;
+    }
+    return cx - x;
+}
+
+/* Panel geometry shared by every popup: centred in the content band. */
+struct PanelBox { float x, y, w, h; };
+PanelBox centeredPanel(float w, float h, float t) {
+    const float top = L::HEADER_RULE_Y, bottom = L::FOOTER_RULE_Y;
+    return {float(int((RS_SCREEN_W - w) * .5f)),
+            float(int(top + (bottom - top - h) * .5f + (1.f - t) * 6.f)), w, h};
+}
+
+/* Panel heading: overline label, then a title line. Returns its height. */
+constexpr float PANEL_HEAD = 36.f;
+void panelHeading(App& app, const PanelBox& b, const char* overline,
+                  const std::string& title, const char* right, u32 a) {
+    const auto& pal = app.pal();
+    const auto& fonts = app.fonts();
+    auto& r = app.renderer();
+    ui::label(app, b.x + 10.f, capsAt(fonts.monoTiny, b.y + 9.f), overline,
+              fade(pal.textMuted, a));
+    if (right)
+        ui::label(app, b.x + b.w - 10.f, capsAt(fonts.monoTiny, b.y + 9.f),
+                  right, fade(pal.textMuted, a), text::Align::Right);
+    drawEllipsized(fonts.bodyStrong, r, b.x + 10.f,
+                   capsAt(fonts.bodyStrong, b.y + 20.f), b.w - 20.f, title,
+                   fade(pal.textPrimary, a));
+}
+}  // namespace
 
 void HomeScene::drawSystems(App& app, u32 a, float dy) {
     if (a <= 2u) return;
@@ -931,16 +955,16 @@ void HomeScene::drawSystems(App& app, u32 a, float dy) {
             panel.kind = ui::StatePanel::Kind::Empty;
             panel.title = "ROM folder not found";
             panel.message = "Create ms0:/ROMS on the Memory Stick, copy your "
-                            "games into it, then scan.";
-            panel.actionLabel = "Scan for games";
+                            "games into it, then rescan.";
+            panel.actionLabel = "Rescan Library";
             panel.actionButton = ui::prim::Button::Cross;
         } else {
             panel.kind = ui::StatePanel::Kind::Empty;
             panel.title = "No games found";
             panel.message = "Copy ROMs into ms0:/ROMS (sub-folders are fine), "
-                            "then scan. GB, GBC, GBA, NES, SNES, Genesis, "
-                            "SMS, Game Gear and PC Engine are supported.";
-            panel.actionLabel = "Scan for games";
+                            "then rescan.";
+            panel.detail = "GB, GBC, GBA, NES, SNES, Genesis, SMS, Game Gear, PC Engine";
+            panel.actionLabel = "Rescan Library";
             panel.actionButton = ui::prim::Button::Cross;
         }
         ui::drawStatePanel(app, panel, a, dy);
@@ -952,47 +976,56 @@ void HomeScene::drawSystems(App& app, u32 a, float dy) {
     auto slotX = [&](float index) {
         return RAIL_X0 + pad + (index - m_railFirst.v) * RAIL_PITCH;
     };
-    const float selX = slotX(m_railPos.v);
+    const float selX = ui::snap(slotX(m_railPos.v));
 
-    r.setScissor(36, 0, RS_SCREEN_W - 72, RS_SCREEN_H);
+    /* The selected slot sits in a small flat container that glides with the
+     * selection; the accent underline beneath its badge is the focus. */
+    ui::pixelRect(r, selX - RAIL_BOX_W * .5f, RAIL_BOX_Y + dy, RAIL_BOX_W,
+                  RAIL_BOX_H, 3, fade(pal.surface, a));
+
+    clipContent(r, L::MARGIN + 20.f, 0.f,
+                RS_SCREEN_W - 2.f * (L::MARGIN + 20.f), RS_SCREEN_H);
     for (int i = 0; i < n; i++) {
-        const float x = slotX(float(i));
-        if (x < 12.f || x > RS_SCREEN_W - 12.f) continue;
+        const float x = ui::snap(slotX(float(i)));
+        if (x < 0.f || x > RS_SCREEN_W) continue;
         const int system = m_systems[size_t(i)];
-        const float strength =
-            1.f - rsClamp(std::fabs(float(i) - m_railPos.v), 0.f, 1.f);
-        const bool active = strength > .5f;
+        const bool active = std::fabs(float(i) - m_railPos.v) < .5f;
         const float size = active ? 64.f : 48.f;
-        const float iconY = (active ? 66.f : 74.f) + dy;
-        ui::prim::iconSystem(r, system, x - size * .5f, iconY, size,
-                             rsWithAlpha(rsHex(0xFFFFFF), a), pal.accent);
-        fonts.pixelSmall.draw(r, x, RAIL_LABEL_Y + dy, badge(system),
-                              fade(pal.textPrimary, a), text::Align::Center);
+        const u32 iconA = active ? a : a * 140u / 255u;
+        ui::prim::iconSystem(r, system, x - size * .5f,
+                             RAIL_ICON_CY - size * .5f + dy, size,
+                             rsWithAlpha(rsHex(0xFFFFFF), iconA), pal.accent);
+        const float labelY = capsAt(fonts.mono, RAIL_LABEL_Y) + dy;
+        if (active)
+            fonts.mono.drawBold(r, x, labelY, badge(system),
+                                fade(pal.textPrimary, a), text::Align::Center);
+        else
+            fonts.mono.draw(r, x, labelY, badge(system),
+                            fade(pal.textMuted, a), text::Align::Center);
     }
-    r.resetScissor();
+    restoreContent(r);
+    ui::focusUnderline(app, selX, RAIL_BOX_Y + RAIL_BOX_H - 11.f + dy, 24.f, a);
 
-    /* Selection: a flat outlined box that glides to the active slot, with a
-     * dot beneath it — no card, no fill. */
-    ui::prim::outlineRect(r, selX - BOX_W * .5f, BOX_TOP + dy, BOX_W, BOX_H,
-                          2.f, fade(pal.railOutline, a));
-    ui::prim::circle(r, float(int(selX)), 160.f + dy, 2.5f,
-                     fade(pal.textPrimary, a));
+    const u32 leftA = m_nav.systemPos > 0 ? a : a * 50u / 255u;
+    const u32 rightA = m_nav.systemPos + 1 < n ? a : a * 50u / 255u;
+    ui::prim::chevron(r, ui::prim::Dir::Left, L::MARGIN + 6.f,
+                      RAIL_ICON_CY + dy, 5.f, 1.5f, fade(pal.textMuted, leftA));
+    ui::prim::chevron(r, ui::prim::Dir::Right, L::RIGHT - 6.f,
+                      RAIL_ICON_CY + dy, 5.f, 1.5f, fade(pal.textMuted, rightA));
 
-    const u32 leftA = m_nav.systemPos > 0 ? a : a * 70u / 255u;
-    const u32 rightA = m_nav.systemPos + 1 < n ? a : a * 70u / 255u;
-    ui::prim::chevron(r, ui::prim::Dir::Left, 19.f, 106.f + dy, 6.f, 2.f,
-                      fade(pal.textPrimary, leftA));
-    ui::prim::chevron(r, ui::prim::Dir::Right, 461.f, 106.f + dy, 6.f, 2.f,
-                      fade(pal.textPrimary, rightA));
-
+    /* Name and count crossfade in from the direction of travel. */
+    const float tf = ui::easeOutCubic(m_titleFade.t);
+    const u32 ta = u32(float(a) * tf);
+    const float tdx = ui::snap((1.f - tf) * 6.f * float(m_titleDir));
     const int sys = currentSystemId();
-    fonts.pixel.drawBold(r, RS_SCREEN_W * .5f, 176.f + dy, systemTitle(sys),
-                     fade(pal.textPrimary, a), text::Align::Center);
+    fonts.display.draw(r, RS_SCREEN_W * .5f + tdx,
+                       capsAt(fonts.display, 180.f) + dy, systemTitle(sys),
+                       fade(pal.textPrimary, ta), text::Align::Center);
     char count[32];
     std::snprintf(count, sizeof count, "%d GAME%s", m_systemTotal,
                   m_systemTotal == 1 ? "" : "S");
-    fonts.pixelSmall.draw(r, RS_SCREEN_W * .5f, 204.f + dy, count,
-                          fade(pal.textSecondary, a), text::Align::Center);
+    fonts.mono.draw(r, RS_SCREEN_W * .5f + tdx, capsAt(fonts.mono, 202.f) + dy,
+                    count, fade(pal.textMuted, ta), text::Align::Center);
 }
 
 void HomeScene::drawContinue(App& app, u32 a, float dy) {
@@ -1002,55 +1035,49 @@ void HomeScene::drawContinue(App& app, u32 a, float dy) {
     const auto& fonts = app.fonts();
     const int n = int(m_recents.size());
 
-    fonts.pixelMedium.drawBold(r, MARGIN, 53.f + dy, "CONTINUE PLAYING",
-                           fade(pal.textPrimary, a));
+    fonts.mono.drawBold(r, L::MARGIN, capsAt(fonts.mono, 40.f) + dy,
+                        "CONTINUE PLAYING", fade(pal.textPrimary, a));
+    fonts.small.draw(r, L::MARGIN, capsAt(fonts.small, 55.f) + dy,
+                     "Recent games across all systems.",
+                     fade(pal.textMuted, a));
+    if (n > CARDS_VISIBLE) {
+        char pos[32];
+        std::snprintf(pos, sizeof pos, "%d / %d", m_nav.continueIdx + 1, n);
+        ui::label(app, L::RIGHT, capsAt(fonts.monoTiny, 41.f) + dy, pos,
+                  fade(pal.textMuted, a), text::Align::Right);
+    }
 
-    /* A single recent game collapses to one compact, centred resume item. */
-    auto cardX = [&](int i) {
-        if (n == 1) return (RS_SCREEN_W - CARD_W) * .5f;
-        return CARD_X0 + (float(i) - m_contScroll.v) * CARD_PITCH;
-    };
+    const int shown = n < CARDS_VISIBLE ? n : CARDS_VISIBLE;
+    const float groupW = float(shown) * CARD_W +
+                         float(shown - 1) * (CARD_PITCH - CARD_W);
+    const float x0 = float(int((RS_SCREEN_W - groupW) * .5f));
+    const float chipY = CARD_Y + CARD_ART_H + 8.f;
 
-    r.setScissor(0, 0, RS_SCREEN_W, RS_SCREEN_H);
     for (int i = 0; i < n; i++) {
-        const float x = float(int(cardX(i)));
-        if (x + CARD_W < 28.f || x > RS_SCREEN_W) continue;
+        const float x = ui::snap(x0 + (float(i) - m_contScroll.v) * CARD_PITCH);
+        if (x + CARD_W <= 0.f || x >= RS_SCREEN_W) continue;
         const db::GameEntry& g = *m_recents[size_t(i)];
         const bool selected = i == m_nav.continueIdx;
+        const u32 ca = selected ? a : a * 190u / 255u;
         const float y = CARD_Y + dy;
         if (const gfx::Texture* art = app.boxart().peek(g))
-            drawArtCover(r, *art, x, y, CARD_W, CARD_H,
-                         rsWithAlpha(rsHex(0xFFFFFF), a));
+            drawArtCover(r, *art, x, y, CARD_W, CARD_ART_H,
+                         rsWithAlpha(rsHex(0xFFFFFF), ca));
         else
-            drawPlaceholder(app, int(g.system), x, y, CARD_W, CARD_H, a, true);
-        if (selected)
-            ui::prim::outlineRect(r, x - 3.f, y - 3.f, CARD_W + 6.f,
-                                  CARD_H + 6.f, 3.f,
-                                  fade(pal.accent, a));
-        const float cx = x + CARD_W * .5f;
-        const float textW = CARD_PITCH - 8.f;
-        r.setScissor(int(cx - textW * .5f), int(y + CARD_H), int(textW), 40);
-        drawEllipsized(fonts.pixelTiny, r, cx, y + CARD_H + 6.f, textW,
-                       g.shown(), fade(pal.textPrimary, a), text::Align::Center);
-        char when[24], meta[48];
+            ui::artFallback(app, int(g.system), x, y, CARD_W, CARD_ART_H, ca);
+        if (selected) ui::focusFrame(app, x, y, CARD_W, CARD_ART_H, a);
+
+        const float cy = chipY + dy;
+        ui::chip(app, x, cy, db::systemInfo(g.system).badge, ca);
+        char when[24];
         ui::formatRelative(app.library().lastPlayed(g.pathHash), m_now, when,
                            sizeof when);
-        std::snprintf(meta, sizeof meta, "%s \xC2\xB7 %s",
-                      db::systemInfo(g.system).badge, when);
-        fonts.pixelTiny.draw(r, cx, y + CARD_H + 26.f, meta,
-                             fade(pal.textSecondary, a), text::Align::Center);
-        r.setScissor(0, 0, RS_SCREEN_W, RS_SCREEN_H);
-    }
-    r.resetScissor();
-
-    if (n > 1) {
-        ui::prim::chevron(r, ui::prim::Dir::Left, 14.f, 128.f + dy, 6.f, 2.f,
-                          fade(pal.textPrimary,
-                               m_nav.continueIdx > 0 ? a : a * 70u / 255u));
-        ui::prim::chevron(r, ui::prim::Dir::Right, 466.f, 128.f + dy, 6.f, 2.f,
-                          fade(pal.textPrimary,
-                               m_nav.continueIdx + 1 < n ? a
-                                                         : a * 70u / 255u));
+        fonts.monoTiny.draw(r, x + CARD_W, fonts.monoTiny.centerY(cy, ui::CHIP_H),
+                            when, fade(pal.textMuted, ca), text::Align::Right);
+        const text::Font& face = selected ? fonts.bodyStrong : fonts.body;
+        drawEllipsized(face, r, x, capsAt(face, cy + ui::CHIP_H + 10.f),
+                       CARD_W, g.shown(),
+                       fade(selected ? pal.textPrimary : pal.textSecondary, a));
     }
 }
 
@@ -1062,36 +1089,49 @@ void HomeScene::drawLibrary(App& app, u32 a, float dy) {
     const int sys = currentSystemId();
     const int count = gamesInCurrent();
 
-    /* Slide the whole body with the system switch; fade as it travels. */
-    const float dx = m_slideX.v;
+    /* The body slides with a system switch and fades as it travels. */
+    const float dx = ui::snap(m_slideX.v);
     const u32 body = u32(float(a) * (1.f - rsClamp(std::fabs(dx) / SLIDE,
                                                    0.f, 1.f) * .6f));
 
-    /* Header: system icon, name, count and the L/R neighbour hints. */
-    ui::prim::iconSystem(r, sys, 13.f + dx, 3.f + dy, 48.f,
-                         rsWithAlpha(rsHex(0xFFFFFF), body), pal.accent);
-    fonts.pixelMedium.drawBold(r, 64.f + dx, 14.f + dy, systemTitle(sys),
-                           fade(pal.textPrimary, body));
-    const std::string header = librarySubtitle(m_view, m_query, count);
-    drawEllipsized(fonts.pixelSmall, r, 64.f + dx, 34.f + dy, 252.f, header,
-                   fade(pal.textSecondary, body));
+    /* Sub-header: badge chip, system name, count; L/R neighbours right. */
+    constexpr float HEAD_Y = 36.f;
+    const float chipW = ui::chip(app, L::MARGIN + dx, HEAD_Y + dy, badge(sys),
+                                 body);
+    const float nameX = L::MARGIN + chipW + 8.f + dx;
+    fonts.title.draw(r, nameX, fonts.title.centerY(HEAD_Y + dy, ui::CHIP_H),
+                     systemTitle(sys), fade(pal.textPrimary, body));
+    const float countX = nameX + fonts.title.measure(systemTitle(sys)) + 10.f;
+    drawEllipsized(fonts.monoTiny, r, countX,
+                   fonts.monoTiny.centerY(HEAD_Y + dy, ui::CHIP_H), 180.f,
+                   librarySubtitle(m_view, m_query, count),
+                   fade(pal.textMuted, body));
 
     const int n = int(m_systems.size());
-    if (m_nav.systemPos > 0) {
-        ui::prim::buttonGlyph(r, ui::prim::Button::L1, 326.f, 41.f + dy, 6.f,
-                              fade(pal.textPrimary, a));
-        fonts.pixelTiny.draw(
-            r, 340.f, 36.f + dy,
-            badge(m_systems[size_t(m_nav.systemPos - 1)]),
-            fade(pal.textSecondary, a));
-    }
-    if (m_nav.systemPos + 1 < n) {
-        ui::prim::buttonGlyph(r, ui::prim::Button::R1, 456.f, 41.f + dy, 6.f,
-                              fade(pal.textPrimary, a));
-        fonts.pixelTiny.draw(
-            r, 441.f, 36.f + dy,
-            badge(m_systems[size_t(m_nav.systemPos + 1)]),
-            fade(pal.textSecondary, a), text::Align::Right);
+    {
+        using ui::prim::Button;
+        const float cy = HEAD_Y + ui::CHIP_H * .5f + dy;
+        const float ty = fonts.monoTiny.centerY(HEAD_Y + dy, ui::CHIP_H);
+        float right = L::RIGHT;
+        if (m_nav.systemPos + 1 < n) {
+            const float gw = ui::prim::buttonGlyphWidth(Button::R1);
+            ui::prim::buttonGlyph(r, Button::R1, right - gw * .5f, cy, 6.f,
+                                  fade(pal.textSecondary, a));
+            right -= gw + 5.f;
+            const char* next = badge(m_systems[size_t(m_nav.systemPos + 1)]);
+            fonts.monoTiny.draw(r, right, ty, next, fade(pal.textMuted, a),
+                                text::Align::Right);
+            right -= fonts.monoTiny.measure(next) + 12.f;
+        }
+        if (m_nav.systemPos > 0) {
+            const char* prev = badge(m_systems[size_t(m_nav.systemPos - 1)]);
+            fonts.monoTiny.draw(r, right, ty, prev, fade(pal.textMuted, a),
+                                text::Align::Right);
+            right -= fonts.monoTiny.measure(prev) + 5.f;
+            const float gw = ui::prim::buttonGlyphWidth(Button::L1);
+            ui::prim::buttonGlyph(r, Button::L1, right - gw * .5f, cy, 6.f,
+                                  fade(pal.textSecondary, a));
+        }
     }
 
     if (count == 0) {
@@ -1118,77 +1158,70 @@ void HomeScene::drawLibrary(App& app, u32 a, float dy) {
         return;
     }
 
-    /* List: flat text rows, one blue selection bar, star for favorites. */
+    /* List: compact rows, one accent fill, a star for favorites. Text-only
+     * mode widens the list to the margin and drops the preview entirely. */
     const bool textOnly = !cfg::get().showArt;
-    /* Text-only collapses the preview column entirely: rows widen to the
-     * safe area and no empty image slot is left behind. */
-    const float listW = textOnly ? RS_SCREEN_W - 2.f * LIST_X : LIST_W;
+    const float listW = textOnly ? L::RIGHT - LIST_X - 8.f : LIST_W;
     const float listH = LIST_ROW * float(LIST_VISIBLE);
     const float scroll = rsClamp(m_scroll.v, 0.f,
                                  float(rsClamp(count - LIST_VISIBLE, 0, count)));
     const ui::GridWindow win =
         ui::visibleGridWindow(count, 1, LIST_VISIBLE, scroll);
-    r.setScissor(0, int(LIST_TOP + dy), int(LIST_X + listW + 6.f),
-                 int(listH));
+    clipContent(r, 0.f, LIST_TOP + dy, LIST_X + listW + 1.f, listH);
     for (int i = win.first; i < win.pastLast; i++) {
-        const float y = float(int(LIST_TOP + (float(i) - scroll) * LIST_ROW)) + dy;
+        const float y =
+            ui::snap(LIST_TOP + (float(i) - scroll) * LIST_ROW) + dy;
         const db::GameEntry& g = *m_visible[size_t(i)];
         const bool selected = i == m_nav.currentGame();
-        const float textY = y + (LIST_ROW - fonts.pixelSmall.lineHeight()) * .5f;
-        if (selected) {
-            r.rect(LIST_X + dx, y, listW, LIST_ROW, fade(pal.selectBg, body));
-            ui::prim::chevron(r, ui::prim::Dir::Right, 24.f + dx,
-                              y + LIST_ROW * .5f, 5.f, 2.f,
-                              fade(pal.selectText, body));
-        }
-        const u32 ink = fade(selected ? pal.selectText : pal.textPrimary, body);
-        drawEllipsized(fonts.pixelSmall, r, 36.f + dx, textY, listW - 64.f,
-                       g.shown(), ink);
-        if (app.library().isFavorite(g.pathHash))
-            drawStar(r, LIST_X + listW - 14.f + dx, y + LIST_ROW * .5f, 6.5f,
-                     ink);
+        const bool favorite = app.library().isFavorite(g.pathHash);
+        if (selected) ui::focusFill(app, LIST_X + dx, y, listW, LIST_ROW, body);
+        const text::Font& face = selected ? fonts.bodyStrong : fonts.body;
+        const u32 ink = fade(selected ? pal.onAccent : pal.textPrimary, body);
+        drawEllipsized(face, r, LIST_X + 10.f + dx, face.centerY(y, LIST_ROW),
+                       listW - 20.f - (favorite ? 16.f : 0.f), g.shown(), ink);
+        if (favorite)
+            ui::prim::iconStar(r, LIST_X + listW - 12.f + dx, y + 10.f, 5.f,
+                               fade(selected ? pal.onAccent
+                                             : pal.textSecondary, body));
     }
-    r.resetScissor();
+    restoreContent(r);
 
-    /* Divider and, for long libraries, a position marker. */
-    if (!textOnly)
-        r.rect(LIST_X + listW + 6.f, LIST_TOP + dy, 1.f, listH,
-               fade(pal.divider, a));
+    /* Position marker for long libraries: hairline track, short thumb. */
     if (count > LIST_VISIBLE) {
-        const float track = listH;
-        const float thumb = rsClamp(track * float(LIST_VISIBLE) / float(count),
-                                    10.f, track);
-        const float t = rsClamp(float(m_nav.currentGame()) /
-                                    float(count - 1), 0.f, 1.f);
-        r.rect(LIST_X + listW + 5.f, LIST_TOP + dy + (track - thumb) * t, 3.f,
-               thumb, fade(pal.textSecondary, a));
+        const float trackX = LIST_X + listW + 5.f;
+        r.rect(trackX, LIST_TOP + dy, 1.f, listH, fade(pal.line, a));
+        const float thumb = rsClamp(listH * float(LIST_VISIBLE) / float(count),
+                                    12.f, listH);
+        const float t = rsClamp(float(m_nav.currentGame()) / float(count - 1),
+                                0.f, 1.f);
+        r.rect(trackX - 1.f, ui::snap(LIST_TOP + dy + (listH - thumb) * t), 3.f,
+               ui::snap(thumb), fade(pal.textMuted, a));
     }
     if (textOnly) return;
 
-    /* Preview column: artwork or the designed fallback, title, one meta line. */
+    /* Preview: one artwork (or the branded fallback), title, at most three
+     * chips and one quiet line — only what is known. */
     const db::GameEntry& sel = *m_visible[size_t(m_nav.currentGame())];
     const float px = PREVIEW_X + dx, py = PREVIEW_Y + dy;
-    if (const gfx::Texture* art = app.boxart().peek(sel)) {
-        drawArtCover(r, *art, px, py, PREVIEW_W, PREVIEW_H,
-                     rsWithAlpha(rsHex(0xFFFFFF), body));
-        ui::prim::outlineRect(r, px, py, PREVIEW_W, PREVIEW_H, 1.f,
-                              fade(pal.divider, body));
-    } else {
-        drawPlaceholder(app, int(sel.system), px, py, PREVIEW_W, PREVIEW_H,
-                        body, false);
-    }
-    r.setScissor(int(px), int(py + PREVIEW_H), int(PREVIEW_W), 48);
-    drawEllipsized(fonts.pixelBody, r, px, py + PREVIEW_H + 9.f, PREVIEW_W,
-                   sel.shown(), fade(pal.textPrimary, body), text::Align::Left,
-                   true);
-    /* Whatever metadata exists, nothing for what does not: a game with no
-     * sidecar file just shows its system. */
-    const std::string meta = metaLine(m_selMeta);
-    drawEllipsized(fonts.pixelSmall, r, px, py + PREVIEW_H + 30.f, PREVIEW_W,
-                   meta.empty() ? std::string(db::systemInfo(sel.system).displayName)
-                                : meta,
-                   fade(pal.textSecondary, body));
-    r.resetScissor();
+    if (const gfx::Texture* art = app.boxart().peek(sel))
+        ui::artWell(app, *art, px, py, PREVIEW_W, PREVIEW_H, body);
+    else
+        ui::artFallback(app, int(sel.system), px, py, PREVIEW_W, PREVIEW_H,
+                        body);
+    drawEllipsized(fonts.title, r, px, capsAt(fonts.title, py + PREVIEW_H + 12.f),
+                   PREVIEW_W, sel.shown(), fade(pal.textPrimary, body));
+    char year[12] = "";
+    if (m_selMeta.year > 0) std::snprintf(year, sizeof year, "%d", m_selMeta.year);
+    std::string genre = upper(m_selMeta.genre);
+    const char* chips[3] = {badge(int(sel.system)), genre.c_str(), year};
+    chipRow(app, px, py + PREVIEW_H + 30.f, PREVIEW_W, chips, 3, body);
+    const std::string maker = !m_selMeta.publisher.empty() ? m_selMeta.publisher
+                                                           : m_selMeta.developer;
+    drawEllipsized(fonts.small, r, px, capsAt(fonts.small, py + PREVIEW_H + 53.f),
+                   PREVIEW_W,
+                   maker.empty() ? std::string(systemTitle(int(sel.system)))
+                                 : maker,
+                   fade(pal.textMuted, body));
 }
 
 void HomeScene::drawDetail(App& app, u32 a, float dy) {
@@ -1199,128 +1232,122 @@ void HomeScene::drawDetail(App& app, u32 a, float dy) {
     const db::GameEntry& g = m_detailGame;
     const bool favorite = app.library().isFavorite(g.pathHash);
 
-    /* Artwork block (flat, 116x80) and title block. */
-    constexpr float AX = 18.f, AY = 13.f, AW = 116.f, AH = 80.f;
-    if (const gfx::Texture* art = app.boxart().peek(g)) {
-        drawArtCover(r, *art, AX, AY + dy, AW, AH,
-                     rsWithAlpha(rsHex(0xFFFFFF), a));
-        ui::prim::outlineRect(r, AX, AY + dy, AW, AH, 1.f, fade(pal.divider, a));
-    } else {
-        drawPlaceholder(app, int(g.system), AX, AY + dy, AW, AH, a, true);
-    }
+    /* Left: artwork, then the description, quiet. */
+    if (const gfx::Texture* art = app.boxart().peek(g))
+        ui::artWell(app, *art, DETAIL_ART_X, DETAIL_ART_Y + dy, DETAIL_ART_W,
+                    DETAIL_ART_H, a);
+    else
+        ui::artFallback(app, int(g.system), DETAIL_ART_X, DETAIL_ART_Y + dy,
+                        DETAIL_ART_W, DETAIL_ART_H, a);
+    drawWrapped(fonts.small, r, DETAIL_ART_X,
+                capsAt(fonts.small, DETAIL_ART_Y + DETAIL_ART_H + 12.f) + dy,
+                DETAIL_ART_W, 13.f, 6,
+                m_selMeta.description.empty()
+                    ? std::string("No description available.")
+                    : m_selMeta.description,
+                fade(pal.textMuted, a));
 
-    const float tx = 152.f;
+    /* Right: title (two lines at most), system, chips. */
     const std::string& title = g.shown();
-    r.setScissor(int(tx), int(AY + dy), int(RS_SCREEN_W - tx - MARGIN), 90);
-    drawEllipsized(fonts.pixelBody, r, tx, 18.f + dy,
-                   RS_SCREEN_W - tx - MARGIN - (favorite ? 18.f : 0.f), title,
-                   fade(pal.textPrimary, a), text::Align::Left, true);
-    if (favorite) {
-        const float w = std::fmin(fonts.pixelBody.measure(title.c_str()),
-                                  RS_SCREEN_W - tx - MARGIN - 18.f);
-        drawStar(r, tx + w + 12.f, 25.f + dy, 6.f, fade(pal.accent, a));
-    }
-    /* Facts only: every line exists because the data does. */
-    std::string lines[4];
-    int lineCount = 0;
-    lines[lineCount++] = db::systemInfo(g.system).displayName;
-    if (const std::string meta = metaLine(m_selMeta); !meta.empty())
-        lines[lineCount++] = meta;
-    if (!m_selMeta.genre.empty() && !m_selMeta.publisher.empty())
-        lines[lineCount++] = m_selMeta.genre;
-    if (const u32 seconds = app.library().playSeconds(g.pathHash)) {
-        char played[32];
-        ui::formatPlaytime(seconds, played, sizeof played);
-        lines[lineCount++] = std::string("Played ") + played;
-    }
-    for (int i = 0; i < lineCount; i++)
-        drawEllipsized(fonts.pixelSmall, r, tx, 41.f + float(i) * 15.f + dy,
-                       RS_SCREEN_W - tx - MARGIN, lines[i],
-                       fade(pal.textSecondary, a));
-    r.resetScissor();
+    const int titleLines =
+        rsClamp(ui::wrappedLineCount(fonts.display, DETAIL_W, 2, title), 1, 2);
+    drawWrapped(fonts.display, r, DETAIL_X,
+                capsAt(fonts.display, DETAIL_ART_Y + 2.f) + dy, DETAIL_W, 21.f,
+                2, title, fade(pal.textPrimary, a));
+    float y = DETAIL_ART_Y + 2.f + 11.f + float(titleLines - 1) * 21.f + 10.f;
+    std::string sub = systemTitle(int(g.system));
+    const std::string maker = !m_selMeta.publisher.empty() ? m_selMeta.publisher
+                                                           : m_selMeta.developer;
+    if (!maker.empty()) sub += " \xC2\xB7 " + maker;
+    drawEllipsized(fonts.body, r, DETAIL_X, capsAt(fonts.body, y) + dy, DETAIL_W,
+                   sub, fade(pal.textSecondary, a));
+    y += 8.f + 9.f;
+    char year[12] = "";
+    if (m_selMeta.year > 0) std::snprintf(year, sizeof year, "%d", m_selMeta.year);
+    const std::string genre = upper(m_selMeta.genre);
+    const char* chips[3] = {badge(int(g.system)), genre.c_str(), year};
+    const float chipsW = chipRow(app, DETAIL_X, y + dy, DETAIL_W - 20.f, chips, 3, a);
+    if (favorite)
+        ui::prim::iconStar(r, DETAIL_X + chipsW + 8.f, y + ui::CHIP_H * .5f + dy,
+                           5.f, fade(pal.textSecondary, a));
+    const float actionsY = std::fmax(DETAIL_ACTIONS_Y, y + ui::CHIP_H + 14.f) + dy;
 
-    /* Action list. */
-    const char* labels[DET_COUNT] = {
-        "Play",
-        favorite ? "Remove from Favorites" : "Add to Favorites",
-        "Game Details", "Cheats", "View Manual",
-        m_nav.detailFrom == nav::Layer::Continue ? "Return" : "Return to Library",
-    };
-    constexpr float ROW_X = 11.f, ROW_W = 224.f, ROW_TOP = 99.f, ROW_STEP = 21.f;
-    for (int i = 0; i < DET_COUNT; i++) {
-        const float y = ROW_TOP + float(i) * ROW_STEP + dy;
-        const bool selected = i == m_detailRow;
-        const float textY = y + (20.f - fonts.pixelSmall.lineHeight()) * .5f;
-        if (selected) {
-            r.rect(ROW_X, y, ROW_W, 20.f, fade(pal.selectBg, a));
-            ui::prim::chevron(r, ui::prim::Dir::Right, 23.f, y + 10.f, 5.f, 2.f,
-                              fade(pal.selectText, a));
-        }
-        fonts.pixelSmall.draw(r, selected ? 40.f : 28.f, textY, labels[i],
-                              fade(selected ? pal.selectText : pal.textPrimary,
-                                   a));
-    }
-    r.rect(254.f, ROW_TOP + dy, 1.f, ROW_STEP * float(DET_COUNT) - 1.f,
-           fade(pal.divider, a));
-
-    /* Description, or the expanded stats for "Game Details". */
-    constexpr float DX = 269.f, DW = 190.f, DY = 104.f, STEP = 15.f;
     if (m_detailExpanded) {
+        /* Game Details: facts only, every row exists because the data does. */
         char buf[64];
-        float y = DY + dy;
+        float sy = actionsY;
+        ui::label(app, DETAIL_X, capsAt(fonts.monoTiny, sy) , "GAME DETAILS",
+                  fade(pal.textMuted, a));
+        sy += 14.f;
         auto stat = [&](const char* key, const char* value) {
-            fonts.pixelTiny.draw(r, DX, y, key, fade(pal.textSecondary, a));
-            drawEllipsized(fonts.pixelTiny, r, DX + 76.f, y, DW - 76.f, value,
-                           fade(pal.textPrimary, a));
-            y += STEP;
+            fonts.monoTiny.draw(r, DETAIL_X, fonts.monoTiny.centerY(sy, 14.f),
+                                key, fade(pal.textMuted, a));
+            drawEllipsized(fonts.small, r, DETAIL_X + 84.f,
+                           fonts.small.centerY(sy, 14.f), DETAIL_W - 84.f,
+                           value, fade(pal.textPrimary, a));
+            sy += 14.f;
         };
         ui::formatRelative(app.library().lastPlayed(g.pathHash), m_now, buf,
                            sizeof buf);
-        stat("Last played", buf);
+        stat("LAST PLAYED", buf);
         if (const u32 seconds = app.library().playSeconds(g.pathHash)) {
             ui::formatPlaytime(seconds, buf, sizeof buf);
-            stat("Play time", buf);
+            stat("PLAY TIME", buf);
         }
         std::snprintf(buf, sizeof buf, "%d", app.library().playCount(g.pathHash));
-        stat("Play count", buf);
-        stat("Core", m_selCore ? m_selCore->name.c_str() : "Auto");
+        stat("PLAY COUNT", buf);
+        stat("EMULATOR", m_selCore ? m_selCore->name.c_str() : "Automatic");
         if (g.size >= 1024u * 1024u)
             std::snprintf(buf, sizeof buf, "%.1f MB", double(g.size) / 1048576.0);
         else
             std::snprintf(buf, sizeof buf, "%u KB", unsigned(g.size / 1024u));
-        stat("ROM size", buf);
-        stat("Save data", m_detailHasSave ? "Present" : "None");
-        if (!g.variant.empty()) stat("Version", g.variant.c_str());
+        stat("ROM SIZE", buf);
+        stat("SAVE DATA", m_detailHasSave ? "Present" : "None");
+        if (!g.variant.empty()) stat("VERSION", g.variant.c_str());
         /* The cleaned title hides the file's real name; keep it findable. */
-        stat("File", g.name.c_str());
-    } else {
-        drawWrapped(fonts.pixelTiny, r, DX, DY + dy, DW, STEP, 8,
-                    m_selMeta.description.empty()
-                        ? std::string("No description available.")
-                        : m_selMeta.description,
-                    fade(pal.textSecondary, a));
+        stat("FILE", g.name.c_str());
+        return;
+    }
+
+    /* Actions: Play is the one dominant control — taller, filled even at
+     * rest, with the emulator it will use; the rest are plain rows. */
+    {
+        const bool focused = m_detailRow == DET_PLAY;
+        const float px = DETAIL_X, py = actionsY;
+        if (focused) ui::focusFill(app, px, py, DETAIL_ACTION_W, PLAY_H, a);
+        else ui::pixelRect(r, px, py, DETAIL_ACTION_W, PLAY_H, 2,
+                           fade(pal.surface2, a));
+        const u32 ink = fade(focused ? pal.onAccent : pal.textPrimary, a);
+        const float cy = py + PLAY_H * .5f;
+        r.tri(px + 11.f, cy - 5.f, px + 11.f, cy + 5.f, px + 19.f, cy, ink);
+        fonts.bodyStrong.draw(r, px + 27.f, fonts.bodyStrong.centerY(py, PLAY_H),
+                              "Play", ink);
+        if (m_selCore && m_selMultiCore)
+            drawEllipsized(fonts.monoTiny, r, px + DETAIL_ACTION_W - 10.f,
+                           fonts.monoTiny.centerY(py, PLAY_H), 110.f,
+                           upper(m_selCore->name),
+                           fade(focused ? pal.onAccent : pal.textMuted, a),
+                           text::Align::Right);
+    }
+    const char* labels[DET_COUNT] = {
+        "Play",
+        favorite ? "Remove from Favorites" : "Add to Favorites",
+        "Game Details",
+        m_nav.detailFrom == nav::Layer::Continue ? "Return" : "Return to Library",
+    };
+    float ry = actionsY + PLAY_H + 6.f;
+    for (int i = DET_FAVORITE; i < DET_COUNT; i++, ry += L::ROW_H) {
+        ui::RowStyle style;
+        style.focused = i == m_detailRow;
+        ui::menuRow(app, DETAIL_X, ry, DETAIL_ACTION_W, L::ROW_H, labels[i],
+                    nullptr, style, a);
     }
 }
 
-void HomeScene::drawBackdrop(App& app, u32 alpha) {
-    app.renderer().rect(0, 0, RS_SCREEN_W, RS_SCREEN_H,
-                        rsWithAlpha(app.pal().dim, alpha * 150u / 255u));
-}
-
 void HomeScene::drawOptions(App& app) {
-    auto& r = app.renderer();
-    const auto& pal = app.pal();
-    const auto& fonts = app.fonts();
     const float t = ui::easeOutCubic(m_overlayFade.t);
     const u32 a = u32(t * 255.f);
-    drawBackdrop(app, a);
-
-    constexpr float PX = 218.f, PW = 192.f, ROW = 22.f, PAD = 6.f;
-    constexpr float PY = 33.f;
-    const float ph = PAD * 2.f + ROW * float(OPT_COUNT) + 6.f;
-    const float py = PY + (1.f - t) * 8.f;
-    r.rect(PX, py, PW, ph, fade(pal.menuBg, a));
-    ui::prim::outlineRect(r, PX, py, PW, ph, 2.f, fade(pal.railOutline, a));
+    ui::backdrop(app, a);
 
     const db::GameEntry& game = m_optionsGame;
     const bool favorite = app.library().isFavorite(game.pathHash);
@@ -1328,149 +1355,99 @@ void HomeScene::drawOptions(App& app) {
     for (u32 h : app.library().recents())
         if (h == game.pathHash) inRecents = true;
 
+    constexpr float GAP = 7.f;     /* rule before Back */
+    const PanelBox b = centeredPanel(
+        248.f, PANEL_HEAD + L::ROW_H * float(OPT_COUNT) + GAP + 6.f, t);
+    ui::panel(app, b.x, b.y, b.w, b.h, a);
+    panelHeading(app, b, "OPTIONS", game.shown(), badge(int(game.system)), a);
+
     const char* labels[OPT_COUNT] = {
         "Play",
         favorite ? "Remove from Favorites" : "Add to Favorites",
-        "Game Details", "Cheats", "View Manual",
-        m_confirmDelete ? "Press X to confirm" : "Delete Save Data",
-        "Remove from Recent", "Back",
+        "Game Details",
+        m_confirmDelete ? "Press X again to delete" : "Delete Save Data",
+        "Remove from Continue", "Back",
     };
     for (int i = 0; i < OPT_COUNT; i++) {
-        /* A divider separates Back from the game actions. */
-        const float y = py + PAD + float(i) * ROW + (i == OPT_BACK ? 6.f : 0.f);
-        if (i == OPT_BACK)
-            r.rect(PX + 8.f, y - 4.f, PW - 16.f, 1.f, fade(pal.divider, a));
-        const bool selected = i == m_optionsRow;
-        const bool disabled = (i == OPT_DELETE_SAVE && !m_optionsHasSave) ||
-                              (i == OPT_REMOVE_RECENT && !inRecents);
-        const float textY = y + (ROW - 2.f - fonts.pixelSmall.lineHeight()) * .5f
-                            + 1.f;
-        if (selected) {
-            r.rect(PX + 6.f, y, PW - 12.f, ROW - 2.f, fade(pal.selectBg, a));
-            ui::prim::chevron(r, ui::prim::Dir::Right, PX + 17.f, y + (ROW - 2.f) * .5f,
-                              5.f, 2.f, fade(pal.selectText, a));
-        }
-        u32 ink = selected ? pal.selectText : pal.textPrimary;
-        if (disabled) ink = pal.textSecondary;
+        float y = b.y + PANEL_HEAD + float(i) * L::ROW_H;
         if (i == OPT_BACK) {
-            ui::prim::buttonGlyph(r, ui::prim::Button::Circle, PX + 32.f,
-                                  y + (ROW - 2.f) * .5f, 6.f, fade(ink, a));
-            fonts.pixelSmall.draw(r, PX + 50.f, textY, labels[i], fade(ink, a));
-        } else {
-            fonts.pixelSmall.draw(r, selected ? PX + 30.f : PX + 14.f, textY,
-                                  labels[i],
-                                  fade(ink, disabled ? a * 160u / 255u : a));
+            app.renderer().rect(b.x + 10.f, y + 3.f, b.w - 20.f, 1.f,
+                                fade(app.pal().line, a));
+            y += GAP;
         }
+        ui::RowStyle style;
+        style.focused = i == m_optionsRow;
+        style.disabled = (i == OPT_DELETE_SAVE && !m_optionsHasSave) ||
+                         (i == OPT_REMOVE_RECENT && !inRecents);
+        ui::menuRow(app, b.x + 3.f, y, b.w - 6.f, L::ROW_H, labels[i], nullptr,
+                    style, a);
     }
 }
 
 void HomeScene::drawPicker(App& app) {
-    auto& r = app.renderer();
-    const auto& pal = app.pal();
-    const auto& fonts = app.fonts();
     const float t = ui::easeOutCubic(m_overlayFade.t);
     const u32 a = u32(t * 255.f);
-    drawBackdrop(app, a);
+    ui::backdrop(app, a);
 
     constexpr int VISIBLE = 6;
-    constexpr float ROW = 22.f, PAD = 6.f, PW = 288.f;
     const int visible = rsClamp(int(m_pickerCores.size()), 1, VISIBLE);
     const int first = rsClamp(m_pickerIdx - 2, 0,
                               int(m_pickerCores.size()) - visible);
-    const float ph = PAD * 2.f + 40.f + ROW * float(visible);
-    const float px = (RS_SCREEN_W - PW) * .5f;
-    const float py = (RS_SCREEN_H - ph) * .5f - (1.f - t) * 8.f;
-    r.rect(px, py, PW, ph, fade(pal.menuBg, a));
-    ui::prim::outlineRect(r, px, py, PW, ph, 2.f, fade(pal.railOutline, a));
+    const PanelBox b =
+        centeredPanel(288.f, PANEL_HEAD + L::ROW_H * float(visible) + 6.f, t);
+    ui::panel(app, b.x, b.y, b.w, b.h, a);
+    panelHeading(app, b, "RUN WITH", m_pickerGame.shown(),
+                 badge(int(m_pickerGame.system)), a);
 
-    fonts.pixelTiny.draw(r, px + 14.f, py + PAD + 4.f, "RUN WITH",
-                         fade(pal.accent, a));
-    r.setScissor(int(px + 14.f), int(py + PAD + 18.f), int(PW - 28.f), 14);
-    fonts.pixelSmall.draw(r, px + 14.f, py + PAD + 18.f,
-                          m_pickerGame.shown().c_str(),
-                          fade(pal.textSecondary, a));
-    r.resetScissor();
-
-    float y = py + PAD + 40.f;
-    for (int i = first; i < first + visible; i++, y += ROW) {
+    float y = b.y + PANEL_HEAD;
+    for (int i = first; i < first + visible; i++, y += L::ROW_H) {
         const CoreInfo& c = *m_pickerCores[size_t(i)];
-        const bool selected = i == m_pickerIdx;
-        const u32 ink = selected ? pal.selectText : pal.textPrimary;
-        if (selected)
-            r.rect(px + 6.f, y, PW - 12.f, ROW - 2.f, fade(pal.selectBg, a));
-        const float textY = y + (ROW - 2.f - fonts.pixelSmall.lineHeight()) * .5f
-                            + 1.f;
-        const char* status = c.isNative()
-            ? "NATIVE" : (c.psp1000Safe ? "ANY PSP" : "TESTING");
-        fonts.pixelSmall.draw(r, px + 16.f, textY,
-                              (std::string(&c == m_pickerCurrent ? "* " : "") +
-                               c.name).c_str(), fade(ink, a));
-        fonts.pixelTiny.draw(r, px + PW - 14.f, textY + 1.f, status,
-                             fade(selected ? pal.selectText : pal.textSecondary,
-                                  a),
-                             text::Align::Right);
+        char value[32];
+        std::snprintf(value, sizeof value, "%s%s",
+                      &c == m_pickerCurrent ? "IN USE  " : "",
+                      c.isNative() ? "NATIVE"
+                                   : (c.psp1000Safe ? "ANY PSP" : "TESTING"));
+        ui::RowStyle style;
+        style.focused = i == m_pickerIdx;
+        ui::menuRow(app, b.x + 3.f, y, b.w - 6.f, L::ROW_H, c.name.c_str(),
+                    value, style, a);
     }
 }
 
 void HomeScene::drawViewMenu(App& app) {
-    auto& r = app.renderer();
-    const auto& pal = app.pal();
-    const auto& fonts = app.fonts();
     const float t = ui::easeOutCubic(m_overlayFade.t);
     const u32 a = u32(t * 255.f);
-    drawBackdrop(app, a);
+    ui::backdrop(app, a);
 
     int rows[5];
     const int n = viewRows(rows);
-    constexpr float PW = 280.f, ROW = 22.f, PAD = 6.f, HEAD = 22.f;
-    const float ph = PAD * 2.f + HEAD + ROW * float(n);
-    const float px = (RS_SCREEN_W - PW) * .5f;
-    const float py = float(int((RS_SCREEN_H - ph) * .5f)) - (1.f - t) * 8.f - 8.f;
-    r.rect(px, py, PW, ph, fade(pal.menuBg, a));
-    ui::prim::outlineRect(r, px, py, PW, ph, 2.f, fade(pal.railOutline, a));
-    fonts.pixelTiny.draw(r, px + 14.f, py + PAD + 6.f, "VIEW",
-                         fade(pal.accent, a));
-    fonts.pixelTiny.draw(r, px + PW - 14.f, py + PAD + 6.f,
-                         systemTitle(currentSystemId()),
-                         fade(pal.textSecondary, a), text::Align::Right);
+    const PanelBox b =
+        centeredPanel(280.f, PANEL_HEAD + L::ROW_H * float(n) + 6.f, t);
+    ui::panel(app, b.x, b.y, b.w, b.h, a);
+    panelHeading(app, b, "VIEW", systemTitle(currentSystemId()),
+                 badge(currentSystemId()), a);
 
     for (int i = 0; i < n; i++) {
-        const float y = py + PAD + HEAD + float(i) * ROW;
-        const bool selected = i == m_viewRow;
         const int row = rows[i];
-        const u32 ink = selected ? pal.selectText : pal.textPrimary;
-        const u32 sub = selected ? pal.selectText : pal.textSecondary;
-        const float textY = y + (ROW - 2.f - fonts.pixelSmall.lineHeight()) * .5f
-                            + 1.f;
-        if (selected)
-            r.rect(px + 6.f, y, PW - 12.f, ROW - 2.f, fade(pal.selectBg, a));
         const char* label = row == VR_SHOW ? "Show" : row == VR_SORT ? "Sort by"
                           : row == VR_SEARCH ? "Search"
                           : row == VR_CLEAR ? "Clear search" : "Back";
-        fonts.pixelSmall.draw(r, px + 16.f, textY, label, fade(ink, a));
         std::string value;
-        if (row == VR_SHOW) value = db::filterName(m_view.filter);
+        if (row == VR_SHOW) value = upper(db::filterName(m_view.filter));
         else if (row == VR_SORT)
-            value = m_view.filter == db::ViewFilter::RecentlyAdded
-                        ? "Newest first" : db::sortName(m_view.sort);
+            value = upper(m_view.filter == db::ViewFilter::RecentlyAdded
+                              ? "Newest first" : db::sortName(m_view.sort));
         else if (row == VR_SEARCH)
-            value = m_query.empty() ? std::string("Press X") : "\"" + m_query + "\"";
-        const bool adjustable =
+            value = m_query.empty() ? std::string("PRESS X")
+                                    : "\"" + m_query + "\"";
+        ui::RowStyle style;
+        style.focused = i == m_viewRow;
+        style.adjustable =
             row == VR_SHOW || (row == VR_SORT &&
                                m_view.filter != db::ViewFilter::RecentlyAdded);
-        if (!value.empty()) {
-            const float vx = px + PW - (adjustable ? 28.f : 16.f);
-            drawEllipsized(fonts.pixelSmall, r, vx, textY, 150.f, value,
-                           fade(sub, a), text::Align::Right);
-            if (adjustable && selected) {
-                ui::prim::chevron(r, ui::prim::Dir::Left,
-                                  vx - fonts.pixelSmall.measure(value.c_str()) -
-                                      10.f, y + (ROW - 2.f) * .5f, 4.f, 2.f,
-                                  fade(ink, a));
-                ui::prim::chevron(r, ui::prim::Dir::Right, px + PW - 16.f,
-                                  y + (ROW - 2.f) * .5f, 4.f, 2.f, fade(ink, a));
-            }
-        }
+        ui::menuRow(app, b.x + 3.f, b.y + PANEL_HEAD + float(i) * L::ROW_H,
+                    b.w - 6.f, L::ROW_H, label,
+                    value.empty() ? nullptr : value.c_str(), style, a);
     }
 }
 
@@ -1480,68 +1457,63 @@ void HomeScene::drawSearch(App& app) {
     const auto& fonts = app.fonts();
     const float t = ui::easeOutCubic(m_overlayFade.t);
     const u32 a = u32(t * 255.f);
-    drawBackdrop(app, a);
+    ui::backdrop(app, a);
 
-    constexpr float PW = 300.f, PH = 132.f;
-    const float px = (RS_SCREEN_W - PW) * .5f;
-    const float py = float(int((RS_SCREEN_H - PH) * .5f)) - (1.f - t) * 8.f - 8.f;
-    r.rect(px, py, PW, PH, fade(pal.menuBg, a));
-    ui::prim::outlineRect(r, px, py, PW, PH, 2.f, fade(pal.railOutline, a));
-    fonts.pixelTiny.draw(r, px + 14.f, py + 12.f, "SEARCH",
-                         fade(pal.accent, a));
+    const PanelBox b = centeredPanel(300.f, 140.f, t);
+    ui::panel(app, b.x, b.y, b.w, b.h, a);
     char count[40];
-    std::snprintf(count, sizeof count, "%d match%s", m_searchCount,
-                  m_searchCount == 1 ? "" : "es");
-    fonts.pixelTiny.draw(r, px + PW - 14.f, py + 12.f, count,
-                         fade(pal.textSecondary, a), text::Align::Right);
+    std::snprintf(count, sizeof count, "%d MATCH%s", m_searchCount,
+                  m_searchCount == 1 ? "" : "ES");
+    panelHeading(app, b, "SEARCH", systemTitle(currentSystemId()), count, a);
 
-    /* Text field: locked letters, then the pending one on an accent block. */
-    const float fx = px + 14.f, fy = py + 30.f, fw = PW - 28.f, fh = 26.f;
-    ui::prim::outlineRect(r, fx, fy, fw, fh, 1.f, fade(pal.divider, a));
-    const float ty = fy + (fh - fonts.pixelBody.lineHeight()) * .5f;
-    const float lockedW = fonts.pixelBody.measure(m_searchBuf.c_str());
-    fonts.pixelBody.draw(r, fx + 8.f, ty, m_searchBuf.c_str(),
-                         fade(pal.textPrimary, a));
+    /* Text field: locked letters, then the pending one on the focus fill. */
+    const float fx = b.x + 10.f, fy = b.y + PANEL_HEAD + 2.f;
+    const float fw = b.w - 20.f, fh = 24.f;
+    ui::pixelRect(r, fx, fy, fw, fh, 2, fade(pal.bg, a));
+    ui::pixelFrame(r, fx, fy, fw, fh, 1, 2, fade(pal.line, a));
+    const float ty = fonts.title.centerY(fy, fh);
+    const float lockedW = fonts.title.measure(m_searchBuf.c_str());
+    fonts.title.draw(r, fx + 8.f, ty, m_searchBuf.c_str(),
+                     fade(pal.textPrimary, a));
     const char pending[2] = {SEARCH_CHARS[m_searchChar] == ' ' ? '_'
                                  : SEARCH_CHARS[m_searchChar], '\0'};
-    const float cw = fonts.pixelBody.measure("M") + 2.f;
+    const float cw = fonts.title.measure("M") + 2.f;
     if (m_searchTouched) {
-        r.rect(fx + 8.f + lockedW, fy + 3.f, cw, fh - 6.f, fade(pal.selectBg, a));
-        fonts.pixelBody.draw(r, fx + 9.f + lockedW, ty, pending,
-                             fade(pal.selectText, a));
+        ui::focusFill(app, fx + 8.f + lockedW, fy + 4.f, cw, fh - 8.f, a);
+        fonts.title.draw(r, fx + 8.f + lockedW + cw * .5f, ty, pending,
+                         fade(pal.onAccent, a), text::Align::Center);
     } else if (std::fmod(app.time(), 1.f) < .6f) {
-        r.rect(fx + 8.f + lockedW, fy + fh - 7.f, cw, 2.f,
-               fade(pal.textSecondary, a));
+        r.rect(fx + 9.f + lockedW, fy + 5.f, 1.f, fh - 10.f,
+               fade(pal.focusEdge, a));
     }
 
-    /* Letter strip: the pending letter in the middle, neighbours either side,
-     * so the D-pad's up/down has somewhere visible to go. */
-    const float sy = py + 74.f;
+    /* Letter strip: the pending letter centred, neighbours either side, so
+     * the D-pad's up/down has somewhere visible to go. */
+    const float sy = fy + fh + 10.f;
     for (int d = -3; d <= 3; d++) {
         const int idx = (m_searchChar + d + SEARCH_CHAR_COUNT * 4) %
                         SEARCH_CHAR_COUNT;
         char one[2] = {SEARCH_CHARS[idx] == ' ' ? '_' : SEARCH_CHARS[idx], '\0'};
-        const float cx = px + PW * .5f + float(d) * 34.f;
+        const float cx = b.x + b.w * .5f + float(d) * 32.f;
         if (d == 0) {
-            r.rect(cx - 13.f, sy - 4.f, 26.f, 26.f, fade(pal.selectBg, a));
-            fonts.pixelBody.draw(r, cx, sy + 1.f, one, fade(pal.selectText, a),
-                                 text::Align::Center);
+            ui::focusFill(app, cx - 12.f, sy, 24.f, 24.f, a);
+            fonts.title.draw(r, cx, fonts.title.centerY(sy, 24.f), one,
+                             fade(pal.onAccent, a), text::Align::Center);
         } else {
-            fonts.pixelSmall.draw(r, cx, sy + 3.f, one,
-                                  fade(pal.textSecondary,
-                                       a * (d == -3 || d == 3 ? 90u : 190u) /
-                                           255u),
-                                  text::Align::Center);
+            fonts.body.draw(r, cx, fonts.body.centerY(sy, 24.f), one,
+                            fade(pal.textMuted,
+                                 a * (d == -3 || d == 3 ? 110u : 220u) / 255u),
+                            text::Align::Center);
         }
     }
-    fonts.pixelTiny.draw(r, px + PW * .5f, py + PH - 20.f,
-                         "L / R skip five letters  -  Square clears",
-                         fade(pal.textSecondary, a), text::Align::Center);
+    ui::label(app, b.x + b.w * .5f, capsAt(fonts.monoTiny, b.y + b.h - 15.f),
+              "L / R SKIP FIVE  \xC2\xB7  SQUARE CLEARS", fade(pal.textMuted, a),
+              text::Align::Center);
 }
 
 void HomeScene::drawError(App& app) {
     app.drawBackground();
-    app.drawTopBar(false);
+    app.drawTopBar("GAME");
     const float t = ui::easeOutCubic(m_overlayFade.t);
     const u32 a = u32(t * 255.f);
 
@@ -1558,7 +1530,7 @@ void HomeScene::drawError(App& app) {
         panel.actionLabel = label;
         panel.actionButton = ui::prim::Button::Triangle;
     }
-    ui::drawStatePanel(app, panel, a, (1.f - t) * 8.f);
+    ui::drawStatePanel(app, panel, a, (1.f - t) * 6.f);
 
     /* The action sits under the message, where the eye lands; the legend
      * only needs to say how to leave. */
@@ -1568,9 +1540,13 @@ void HomeScene::drawError(App& app) {
 
 void HomeScene::drawLegend(App& app) {
     using B = ui::prim::Button;
-    const bool picker = m_overlay == Overlay::CorePicker;
-    if (picker) {
+    if (m_overlay == Overlay::CorePicker) {
         const App::Hint hints[] = {{B::Cross, "Play"}, {B::Circle, "Cancel"}};
+        app.drawHintBar(hints, 2);
+        return;
+    }
+    if (m_overlay == Overlay::Options) {
+        const App::Hint hints[] = {{B::Cross, "Select"}, {B::Circle, "Close"}};
         app.drawHintBar(hints, 2);
         return;
     }
@@ -1594,31 +1570,30 @@ void HomeScene::drawLegend(App& app) {
         case nav::Layer::Systems: {
             if (m_empty) {
                 const App::Hint hints[] = {
-                    {B::Cross, "Scan"}, {B::Triangle, "Settings"},
+                    {B::Cross, "Rescan Library"}, {B::Triangle, "Settings"},
                 };
                 app.drawHintBar(hints, 2);
                 break;
             }
-            App::Hint hints[4];
+            App::Hint hints[3];
             int n = 0;
             if (!m_recents.empty()) hints[n++] = {B::DpadUp, "Continue"};
-            hints[n++] = {B::DpadDown, "Library"};
+            hints[n++] = {B::Cross, "Library"};
             hints[n++] = {B::Triangle, "Settings"};
-            hints[n++] = {B::Start, "Home"};
             app.drawHintBar(hints, n);
             break;
         }
         case nav::Layer::Continue: {
             const App::Hint hints[] = {
-                {B::DpadDown, "Systems"}, {B::Triangle, "Options"},
-                {B::Square, "Favorite"}, {B::Cross, "Resume"},
+                {B::Cross, "Resume"}, {B::Square, "Favorite"},
+                {B::Triangle, "Options"}, {B::Circle, "Back"},
             };
             app.drawHintBar(hints, 4);
             break;
         }
         case nav::Layer::Library: {
             const App::Hint hints[] = {
-                {B::Cross, "Details"}, {B::Square, "Favorite"},
+                {B::Cross, "Play"}, {B::Square, "Favorite"},
                 {B::Triangle, "Options"}, {B::Select, "View"},
                 {B::Circle, "Back"},
             };
@@ -1628,15 +1603,18 @@ void HomeScene::drawLegend(App& app) {
         case nav::Layer::Detail: {
             if (m_detailExpanded && m_selMultiCore) {
                 const App::Hint hints[] = {
-                    {B::Cross, "Confirm"}, {B::Triangle, "Core"},
+                    {B::Triangle, "Change Emulator"}, {B::Circle, "Back"},
+                };
+                app.drawHintBar(hints, 2);
+            } else if (m_detailExpanded) {
+                const App::Hint hints[] = {{B::Circle, "Back"}};
+                app.drawHintBar(hints, 1);
+            } else {
+                const App::Hint hints[] = {
+                    {B::Cross, "Select"}, {B::Square, "Favorite"},
                     {B::Circle, "Back"},
                 };
                 app.drawHintBar(hints, 3);
-            } else {
-                const App::Hint hints[] = {
-                    {B::Cross, "Confirm"}, {B::Circle, "Back"},
-                };
-                app.drawHintBar(hints, 2);
             }
             break;
         }
@@ -1656,16 +1634,22 @@ void HomeScene::draw(App& app) {
     auto layerA = [&](float index) {
         return u32(layerAlpha(pos, index) * float(enterA));
     };
-    auto offset = [&](float index) { return (index - pos) * SHIFT; };
+    auto offset = [&](float index) { return ui::snap((index - pos) * SHIFT); };
 
-    /* Status cluster stays for every layer except the focused Detail view;
-     * the wordmark belongs to Systems and Continue only. */
-    if (pos < 1.5f) app.drawTopBar(pos < .5f);
+    /* One header for every layer; only its context label changes. */
+    const char* context = m_nav.layer == nav::Layer::Library ? "LIBRARY"
+                        : m_nav.layer == nav::Layer::Detail  ? "GAME"
+                        : nullptr;
+    app.drawTopBar(context);
 
+    /* Layers draw inside the content band so travel never crosses the
+     * header or the legend. */
+    restoreContent(app.renderer());
     drawContinue(app, layerA(-1.f), offset(-1.f));
     drawSystems(app, layerA(0.f), offset(0.f));
     drawLibrary(app, layerA(1.f), offset(1.f));
     drawDetail(app, layerA(2.f), offset(2.f));
+    app.renderer().resetScissor();
 
     drawLegend(app);
 

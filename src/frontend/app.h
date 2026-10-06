@@ -58,15 +58,16 @@ public:
     CoreRegistry&     cores()          { return m_cores; }
     FrontendSnapshot& snapshot()       { return m_snapshot; }
 
+    /* Two roles: Inter for content, Geist Pixel (monospaced) for technical
+     * text — wordmark, status, badges, counts, section labels, legend. */
     struct Fonts {
-        text::Font title;   /* Inter SemiBold 26 */
-        text::Font body;    /* Inter Regular 15  */
-        text::Font small;   /* Inter Regular 12  */
-        text::Font pixel;   /* Geist Pixel Square 19 (mono) — system name */
-        text::Font pixelBody;   /* Geist Pixel Square 14 — item titles */
-        text::Font pixelMedium; /* Geist Pixel Square 16 — screen titles */
-        text::Font pixelSmall;  /* Geist Pixel Square 12 — lists, metadata */
-        text::Font pixelTiny;   /* Geist Pixel Square 10 — legend, labels */
+        text::Font display;     /* Inter SemiBold 18 — system name, Detail title */
+        text::Font title;       /* Inter SemiBold 15 — pane and state titles */
+        text::Font bodyStrong;  /* Inter SemiBold 13 — focused rows, Play */
+        text::Font body;        /* Inter Regular 13  — rows, actions, labels */
+        text::Font small;       /* Inter Regular 11  — metadata, descriptions */
+        text::Font mono;        /* Geist Pixel 12    — wordmark, status, counts */
+        text::Font monoTiny;    /* Geist Pixel 10    — badges, labels, legend */
     };
     const Fonts& fonts() const { return m_fonts; }
 
@@ -103,14 +104,13 @@ public:
 
     /* --- shared chrome ---------------------------------------------------- */
     void drawBackground();
-    /* Status cluster (clock, battery %, battery). With `wordmark` the
-     * RETROSHELL mark is drawn at the left; screens with their own header
-     * (Library, Details) pass false. */
-    void drawTopBar(bool wordmark = true);
+    /* The one header: mark + RETROSHELL (+ an optional context label such
+     * as "LIBRARY") left, clock and battery right, hairline below. */
+    void drawTopBar(const char* context = nullptr, u32 alpha = 255);
     struct Hint { ui::prim::Button button; const char* label; };
-    /* Compact control legend: thin rule, then glyph+label pairs spread
-     * edge to edge across the safe area. */
-    void drawHintBar(const Hint* hints, int count);
+    /* The one footer: hairline, then glyph+label groups flowing left to
+     * right at a fixed gap. `solid` lays a band under it (over gameplay). */
+    void drawHintBar(const Hint* hints, int count, bool solid = false);
     void toast(const char* msg);
 
     float time() const { return m_time; }
@@ -121,7 +121,6 @@ private:
     void drawWave(float baseY, float amp, float freq, float speed,
                   float phase, float height, u32 color);
     void drawToast();
-    void drawScanStatus();
 #ifdef RS_DEBUG_OVERLAY
     void drawDebugOverlay();
 #endif

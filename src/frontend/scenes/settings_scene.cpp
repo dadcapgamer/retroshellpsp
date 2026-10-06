@@ -6,6 +6,7 @@
 #include "frontend/app.h"
 #include "frontend/scenes/home_scene.h"
 #include "frontend/scenes/setup_scene.h"
+#include "frontend/ui/chrome.h"
 #include "platform/psp/power.h"
 #include "runtime/config.h"
 
@@ -17,32 +18,79 @@
 namespace rs {
 
 namespace {
+namespace L = ui::layout;
+using ui::fade;
+
 const char* ROW_LABELS[] = {
-    "Theme", "Accent color", "Time format", "Artwork", "Menu CPU clock",
-    "In-game CPU clock", "UI sounds", "Show FPS", "Auto-save",
-    "Rescan library", "Run setup again",
+    "Theme", "Accent", "Time format", "Artwork", "Menu CPU clock",
+    "In-game CPU clock", "Show FPS", "Auto-save", "Rescan library",
+    "Run setup again", "UI sounds",
 };
+const char* TAB_LABELS[] = {"Appearance", "Performance", "System"};
+
+/* Each tab is two labelled sections. */
+struct Section { const char* label; int rows[3]; };
+struct TabDef { Section sections[2]; };
+const TabDef TABS[] = {
+    {{{"THEME", {0, 1, -1}}, {"DISPLAY", {2, 3, -1}}}},
+    {{{"CPU CLOCK", {4, 5, -1}}, {"IN GAME", {6, 7, -1}}}},
+    {{{"LIBRARY", {8, 9, -1}}, {"SOUND", {10, -1, -1}}}},
+};
+
 constexpr int CPU_STEPS[] = {222, 266, 333};
+constexpr float TAB_Y = 34.f, TAB_H = 20.f;
+constexpr float RULE_Y = TAB_Y + TAB_H + 1.f;
+constexpr float BODY_Y = 64.f;
+constexpr float SECTION_GAP = 8.f;
+constexpr float LABEL_H = 14.f;
 
 int cpuStepIndex(int mhz) {
     for (int i = 0; i < 3; i++)
         if (CPU_STEPS[i] == mhz) return i;
     return 0;
 }
+
+bool isAction(int row) { return row == 8 || row == 9; }
 }  // namespace
 
 void SettingsScene::enter(App& app) {
-    m_row = 0;
-    m_entrance.start(0.22f);
+    m_tab = TAB_APPEARANCE;
+    m_index = 0;
+    m_entrance.start(0.18f);
+    m_tabFade.t = 1.f;
     m_themes = theme::availableThemes();
     m_themeIdx = 0;
     for (size_t i = 0; i < m_themes.size(); i++)
         if (m_themes[i] == app.theme().id) m_themeIdx = int(i);
 }
 
-void SettingsScene::adjust(App& app, int dir) {
+int SettingsScene::tabRows(int out[6]) const {
+    int n = 0;
+    for (const Section& sec : TABS[m_tab].sections)
+        for (int r : sec.rows)
+            if (r >= 0) out[n++] = r;
+    return n;
+}
+
+int SettingsScene::currentRow() const {
+    if (m_index < 0) return -1;
+    int rows[6];
+    const int n = tabRows(rows);
+    return rows[rsClamp(m_index, 0, n - 1)];
+}
+
+void SettingsScene::switchTab(int dir) {
+    const int next = rsClamp(m_tab + dir, 0, TAB_COUNT - 1);
+    if (next == m_tab) return;
+    m_tab = next;
+    if (m_index >= 0) m_index = 0;
+    m_tabDir = dir;
+    m_tabFade.start(0.13f);
+}
+
+void SettingsScene::adjust(App& app, int row, int dir) {
     auto& c = cfg::get();
-    switch (m_row) {
+    switch (row) {
         case ROW_THEME: {
             m_themeIdx =
                 (m_themeIdx + dir + int(m_themes.size())) % int(m_themes.size());
@@ -93,16 +141,16 @@ void SettingsScene::adjust(App& app, int dir) {
     }
 }
 
-void SettingsScene::activate(App& app) {
-    if (m_row == ROW_SETUP) {
+void SettingsScene::activate(App& app, int row) {
+    if (row == ROW_SETUP) {
         app.switchScene(std::make_unique<SetupScene>(/*fromSettings=*/true));
-    } else if (m_row == ROW_RESCAN) {
+    } else if (row == ROW_RESCAN) {
         if (!app.scanner().running()) {
             app.scanner().start();
             app.toast("Rescanning library...");
         }
     } else {
-        adjust(app, 1);
+        adjust(app, row, 1);
     }
 }
 
@@ -112,42 +160,55 @@ const char* SettingsScene::valueText(App& app, int row, char* buf,
     switch (row) {
         case ROW_THEME:
             std::snprintf(buf, n, "%s", app.theme().title.c_str());
+            for (char* p = buf; *p; ++p)
+                if (*p >= 'a' && *p <= 'z') *p = char(*p - 32);
             return buf;
-        case ROW_ACCENT:
-            std::snprintf(buf, n, "%s",
-                          theme::accentOption(c.accent).name);
-            return buf;
-        case ROW_TIME_FORMAT: return c.clock24Hour ? "24-hour" : "12-hour";
-        case ROW_ARTWORK:   return c.showArt ? "On" : "Text only";
+        case ROW_TIME_FORMAT: return c.clock24Hour ? "24-HOUR" : "12-HOUR";
+        case ROW_ARTWORK:   return c.showArt ? "ON" : "TEXT ONLY";
         case ROW_CPU_MENU:
-            std::snprintf(buf, n, "%d MHz", c.cpuMenuMhz);
+            std::snprintf(buf, n, "%d MHZ", c.cpuMenuMhz);
             return buf;
         case ROW_CPU_GAME:
-            std::snprintf(buf, n, "%d MHz", c.cpuGameMhz);
+            std::snprintf(buf, n, "%d MHZ", c.cpuGameMhz);
             return buf;
-        case ROW_UI_SOUNDS: return c.uiSounds ? "On" : "Off";
-        case ROW_SHOW_FPS:  return c.showFps ? "On" : "Off";
-        case ROW_AUTOSAVE:  return c.autosave ? "On" : "Off";
+        case ROW_UI_SOUNDS: return c.uiSounds ? "ON" : "OFF";
+        case ROW_SHOW_FPS:  return c.showFps ? "ON" : "OFF";
+        case ROW_AUTOSAVE:  return c.autosave ? "ON" : "OFF";
         case ROW_RESCAN:
-            return app.scanner().running() ? "Scanning..." : "Press X";
-        case ROW_SETUP:     return "Press X";
+            return app.scanner().running() ? "SCANNING..." : "PRESS X";
+        case ROW_SETUP:     return "PRESS X";
         default: return "";
     }
 }
 
 void SettingsScene::update(App& app, float dt) {
     const auto& pad = app.pad();
-    if (pad.navPressed(PSP_CTRL_UP) && m_row > 0) m_row--;
-    if (pad.navPressed(PSP_CTRL_DOWN) && m_row < ROW_COUNT - 1) m_row++;
-    if (pad.navPressed(PSP_CTRL_LEFT)) adjust(app, -1);
-    if (pad.navPressed(PSP_CTRL_RIGHT)) adjust(app, 1);
-    if (pad.isPressed(PSP_CTRL_CROSS)) activate(app);
+    int rows[6];
+    const int n = tabRows(rows);
+
+    if (pad.isPressed(PSP_CTRL_LTRIGGER)) switchTab(-1);
+    if (pad.isPressed(PSP_CTRL_RTRIGGER)) switchTab(1);
+    if (pad.navPressed(PSP_CTRL_UP) && m_index >= 0) m_index--;
+    if (pad.navPressed(PSP_CTRL_DOWN) && m_index < n - 1) m_index++;
+
+    if (m_index < 0) {
+        /* Tab bar focused: Left/Right switch category, X/Down enters it. */
+        if (pad.navPressed(PSP_CTRL_LEFT)) switchTab(-1);
+        if (pad.navPressed(PSP_CTRL_RIGHT)) switchTab(1);
+        if (pad.isPressed(PSP_CTRL_CROSS)) m_index = 0;
+    } else {
+        const int row = currentRow();
+        if (pad.navPressed(PSP_CTRL_LEFT)) adjust(app, row, -1);
+        if (pad.navPressed(PSP_CTRL_RIGHT)) adjust(app, row, 1);
+        if (pad.isPressed(PSP_CTRL_CROSS)) activate(app, row);
+    }
     /* O goes back; Start jumps Home like everywhere else. */
     if (pad.isPressed(PSP_CTRL_CIRCLE) || pad.isPressed(PSP_CTRL_START) ||
         pad.isPressed(PSP_CTRL_TRIANGLE))
         app.switchScene(std::make_unique<HomeScene>());
 
     m_entrance.update(dt);
+    m_tabFade.update(dt);
 }
 
 void SettingsScene::draw(App& app) {
@@ -156,67 +217,113 @@ void SettingsScene::draw(App& app) {
     const auto& fonts = app.fonts();
 
     app.drawBackground();
-    app.drawTopBar(false);
+    app.drawTopBar("SETTINGS");
 
-    /* Settings arrives from below, like the Library: a short vertical shift
-     * and fade, reversed by the scene fade on the way back. */
+    /* Arrives from below like the Library; a tab switch slides its body in
+     * from the direction of travel. */
     const float enter = ui::easeOutCubic(m_entrance.t);
     const u32 a = u32(enter * 255.f);
-    const float dy = (1.f - enter) * 24.f;
-    auto fade = [&](u32 c) {
-        return rsWithAlpha(c, rsAlphaOf(c) * a / 255u);
-    };
+    const float dy = ui::snap((1.f - enter) * 16.f);
+    const float tf = ui::easeOutCubic(m_tabFade.t);
+    const u32 ba = u32(float(a) * tf);
+    const float bdx = ui::snap((1.f - tf) * 14.f * float(m_tabDir));
 
-    fonts.pixelMedium.drawBold(r, 21.f, 13.f + dy, "SETTINGS",
-                               fade(pal.textPrimary));
-    /* Build identity. Testers report problems against a build, and matching
-     * a PSP to the artifact that produced it was previously only possible by
-     * reading the log. The core API version is included because a mismatched
-     * EBOOT and core set fails with a version error that is otherwise hard
-     * to interpret. */
-    char build[96];
-    std::snprintf(build, sizeof build, "%s \xC2\xB7 built %s UTC \xC2\xB7 core API v%u",
-                  RS_RELEASE_VERSION, RS_BUILD_STAMP,
-                  unsigned(RS_CORE_API_VERSION));
-    fonts.pixelTiny.draw(r, 21.f, 34.f + dy, build, fade(pal.textSecondary));
+    /* Tabs: the active one carries the accent underline; with the tab bar
+     * itself focused it takes the focus fill instead. */
+    float tx = L::MARGIN;
+    for (int t = 0; t < TAB_COUNT; t++) {
+        const bool active = t == m_tab;
+        const text::Font& face = active ? fonts.bodyStrong : fonts.body;
+        const float w = face.measure(TAB_LABELS[t]);
+        const float pillW = w + 20.f;
+        u32 ink = active ? pal.textPrimary : pal.textMuted;
+        if (active && m_index < 0) {
+            ui::focusFill(app, tx, TAB_Y + dy, pillW, TAB_H, a);
+            ink = pal.onAccent;
+        }
+        face.draw(r, tx + 10.f, face.centerY(TAB_Y + dy, TAB_H), TAB_LABELS[t],
+                  fade(ink, a));
+        if (active)
+            ui::focusUnderline(app, tx + pillW * .5f, RULE_Y - 1.f + dy, pillW,
+                               a);
+        tx += pillW + 4.f;
+    }
+    r.rect(L::MARGIN, RULE_Y + dy, L::RIGHT - L::MARGIN, 1.f,
+           fade(pal.line, a));
 
-    constexpr float TOP = 48.f, ROW = 17.f, X = 12.f, W = 456.f;
+    /* Body: labelled sections of rows. */
+    const int focusedRow = currentRow();
+    float y = BODY_Y + dy;
     char buf[48];
-    for (int i = 0; i < ROW_COUNT; i++) {
-        const float y = TOP + float(i) * ROW + dy;
-        const bool sel = i == m_row;
-        const float textY = y + (ROW - fonts.pixelSmall.lineHeight()) * .5f;
-        if (sel) {
-            r.rect(X, y, W, ROW, fade(pal.selectBg));
-            ui::prim::chevron(r, ui::prim::Dir::Right, 24.f, y + ROW * .5f,
-                              5.f, 2.f, fade(pal.selectText));
-        }
-        const u32 ink = sel ? pal.selectText : pal.textPrimary;
-        fonts.pixelSmall.draw(r, 36.f, textY, ROW_LABELS[i], fade(ink));
-        if (i == ROW_ACCENT) {
-            /* The accent row shows its swatches in place of a value. */
-            for (int s = 0; s < theme::ACCENT_COUNT; s++) {
-                const float cx = X + W - 14.f -
-                                 float(theme::ACCENT_COUNT - 1 - s) * 14.f;
-                const float cy = y + ROW * .5f;
-                if (s == cfg::get().accent)
-                    ui::prim::ring(r, cx, cy, 6.f, fade(ink));
-                ui::prim::circle(r, cx, cy, 4.f,
-                                 fade(rsHex(theme::accentOption(s).rgb)));
+    for (const Section& sec : TABS[m_tab].sections) {
+        ui::label(app, L::MARGIN + bdx,
+                  fonts.monoTiny.centerY(y, fonts.monoTiny.capHeight()),
+                  sec.label, fade(pal.textMuted, ba));
+        y += LABEL_H;
+        for (int row : sec.rows) {
+            if (row < 0) continue;
+            ui::RowStyle style;
+            style.focused = row == focusedRow;
+            style.adjustable = !isAction(row);
+            const bool swatches = row == ROW_ACCENT;
+            ui::menuRow(app, L::MARGIN + bdx, y, L::RIGHT - L::MARGIN, L::ROW_H,
+                        ROW_LABELS[row],
+                        swatches ? nullptr : valueText(app, row, buf, sizeof buf),
+                        style, ba);
+            if (swatches) {
+                /* Accent swatches in place of a value, the active one ringed. */
+                const float cy = y + L::ROW_H * .5f;
+                for (int s = 0; s < theme::ACCENT_COUNT; s++) {
+                    const float cx = L::RIGHT - 16.f + bdx -
+                                     float(theme::ACCENT_COUNT - 1 - s) * 16.f;
+                    if (s == cfg::get().accent)
+                        ui::pixelFrame(r, cx - 6.f, cy - 6.f, 12.f, 12.f, 1, 2,
+                                       fade(style.focused ? pal.onAccent
+                                                          : pal.textPrimary, ba));
+                    ui::pixelRect(r, cx - 4.f, cy - 4.f, 8.f, 8.f, 2,
+                                  fade(rsHex(theme::accentOption(s).rgb), ba));
+                }
             }
-        } else {
-            fonts.pixelSmall.draw(r, X + W - 12.f, textY,
-                                  valueText(app, i, buf, sizeof buf),
-                                  fade(ink), text::Align::Right);
+            y += L::ROW_H;
         }
+        y += SECTION_GAP;
     }
 
-    const App::Hint hints[] = {
-        {ui::prim::Button::Cross, "Change"},
-        {ui::prim::Button::Circle, "Back"},
-        {ui::prim::Button::Start, "Home"},
-    };
-    app.drawHintBar(hints, 3);
+    /* About lives at the end of System, quiet: testers report against a
+     * build, and a mismatched EBOOT/core set fails with an API version
+     * error that is otherwise hard to read. */
+    if (m_tab == TAB_SYSTEM) {
+        ui::label(app, L::MARGIN + bdx,
+                  fonts.monoTiny.centerY(y, fonts.monoTiny.capHeight()),
+                  "ABOUT", fade(pal.textMuted, ba));
+        y += LABEL_H + 2.f;
+        char line[96];
+        std::snprintf(line, sizeof line, "RETROSHELL %s", RS_RELEASE_VERSION);
+        fonts.monoTiny.draw(r, L::MARGIN + 10.f + bdx, y, line,
+                            fade(pal.textSecondary, ba));
+        std::snprintf(line, sizeof line, "BUILT %s UTC  \xC2\xB7  CORE API V%u",
+                      RS_BUILD_STAMP, unsigned(RS_CORE_API_VERSION));
+        fonts.monoTiny.draw(r, L::MARGIN + 10.f + bdx, y + 13.f, line,
+                            fade(pal.textMuted, ba));
+    }
+
+    using B = ui::prim::Button;
+    if (m_index < 0) {
+        const App::Hint hints[] = {
+            {B::DpadLeftRight, "Tab"}, {B::DpadDown, "Enter"},
+            {B::Circle, "Back"},
+        };
+        app.drawHintBar(hints, 3);
+    } else {
+        App::Hint hints[4];
+        int n = 0;
+        hints[n++] = {B::L1, ""};
+        hints[n++] = {B::R1, "Tab"};
+        hints[n++] = isAction(focusedRow) ? App::Hint{B::Cross, "Select"}
+                                          : App::Hint{B::DpadLeftRight, "Change"};
+        hints[n++] = {B::Circle, "Back"};
+        app.drawHintBar(hints, n);
+    }
 }
 
 }  // namespace rs

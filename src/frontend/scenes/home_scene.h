@@ -6,8 +6,9 @@
  *   Game Detail        (deeper)  focused single-game view
  *
  * Horizontal always changes system, vertical moves within or between
- * layers, X selects, O goes back, Square favorites, Triangle opens options
- * and Start returns Home. Select, in the Library only, opens the secondary
+ * layers, X plays (Library, Continue) or enters (Systems), O goes back,
+ * Square favorites, Triangle opens options — whose first rows are Play and
+ * Game Details — and Start returns Home. Select, in the Library only, opens the secondary
  * View menu (filter, sort, search) — kept off the primary path on purpose.
  * The navigation rules live in home_nav.h so they are unit-testable; this
  * class owns input, data and painting.
@@ -42,15 +43,15 @@ private:
     /* View menu rows; Clear only exists while a search is active. */
     enum ViewRow : int { VR_SHOW, VR_SORT, VR_SEARCH, VR_CLEAR, VR_BACK };
 
-    /* Options menu rows, in mockup order. */
+    /* Options menu rows. Cheats and manuals have no data source yet, so
+     * they are not offered rather than offered and refused. */
     enum Option : int {
-        OPT_PLAY, OPT_FAVORITE, OPT_DETAILS, OPT_CHEATS, OPT_MANUAL,
-        OPT_DELETE_SAVE, OPT_REMOVE_RECENT, OPT_BACK, OPT_COUNT
+        OPT_PLAY, OPT_FAVORITE, OPT_DETAILS, OPT_DELETE_SAVE,
+        OPT_REMOVE_RECENT, OPT_BACK, OPT_COUNT
     };
-    /* Game Detail action rows. */
+    /* Game Detail action rows: one dominant action, a short list after it. */
     enum DetailRow : int {
-        DET_PLAY, DET_FAVORITE, DET_DETAILS, DET_CHEATS, DET_MANUAL,
-        DET_RETURN, DET_COUNT
+        DET_PLAY, DET_FAVORITE, DET_DETAILS, DET_RETURN, DET_COUNT
     };
 
     /* --- data ------------------------------------------------------------ */
@@ -104,7 +105,6 @@ private:
     void drawSearch(App& app);
     void drawError(App& app);
     void drawLegend(App& app);
-    void drawBackdrop(App& app, u32 alpha);
 
     /* --- state ----------------------------------------------------------- */
     nav::HomeNav m_nav;
@@ -133,6 +133,8 @@ private:
     ui::Smooth m_scroll;        /* Library list scroll, in rows */
     ui::Smooth m_slideX;        /* horizontal slide-in after a system switch */
     ui::Tween  m_entrance;
+    ui::Tween  m_titleFade;     /* system name crossfade after a switch */
+    int        m_titleDir = 0;
 
     /* Deferred, stick-backed data for the focused game. */
     const CoreInfo* m_selCore = nullptr;

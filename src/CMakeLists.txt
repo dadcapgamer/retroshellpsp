@@ -31,6 +31,7 @@ add_executable(retrosuite
   frontend/ui/prim.cpp
   frontend/ui/text_layout.cpp
   frontend/ui/state_panel.cpp
+  frontend/ui/chrome.cpp
   frontend/themes/palette.cpp
   frontend/themes/theme.cpp
   frontend/database/game_index.cpp
@@ -85,12 +86,11 @@ target_link_libraries(retrosuite PRIVATE
   m)
 
 rs_embed_assets(retrosuite
+  ${CMAKE_SOURCE_DIR}/assets/fonts/font_display.rsf
   ${CMAKE_SOURCE_DIR}/assets/fonts/font_title.rsf
+  ${CMAKE_SOURCE_DIR}/assets/fonts/font_body_strong.rsf
   ${CMAKE_SOURCE_DIR}/assets/fonts/font_body.rsf
   ${CMAKE_SOURCE_DIR}/assets/fonts/font_small.rsf
-  ${CMAKE_SOURCE_DIR}/assets/fonts/font_pixel.rsf
-  ${CMAKE_SOURCE_DIR}/assets/fonts/font_pixel_body.rsf
-  ${CMAKE_SOURCE_DIR}/assets/fonts/font_pixel_medium.rsf
   ${CMAKE_SOURCE_DIR}/assets/fonts/font_pixel_small.rsf
   ${CMAKE_SOURCE_DIR}/assets/fonts/font_pixel_tiny.rsf
   ${CMAKE_SOURCE_DIR}/assets/SPLASH.PNG

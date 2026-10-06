@@ -40,8 +40,7 @@ constexpr Step GAME_SCRIPT[] = {
     {264,  PSP_CTRL_DOWN,     nullptr},   /* Favorite */
     {268,  PSP_CTRL_CROSS,    nullptr},
     {272,  PSP_CTRL_CIRCLE,   nullptr},
-    {280,  PSP_CTRL_CROSS,    nullptr},   /* Library → Game Detail */
-    {290,  PSP_CTRL_CROSS,    nullptr},   /* Play: default core → launch */
+    {280,  PSP_CTRL_CROSS,    nullptr},   /* Library: X plays (default core) */
     {560,  0,                 "game_a"},
     {820,  0,                 "game_b"},
     {1080, 0,                 "game_c"},
@@ -80,8 +79,7 @@ constexpr Step GAME_SCRIPT[] = {
     {1472, 0,                 "accent_picker"},
     {1480, PSP_CTRL_CIRCLE,   nullptr},         /* return to Systems */
     {1500, PSP_CTRL_CROSS,    nullptr},         /* open Library */
-    {1516, PSP_CTRL_CROSS,    nullptr},         /* Library → Game Detail */
-    {1530, PSP_CTRL_CROSS,    nullptr},         /* Play: relaunch */
+    {1516, PSP_CTRL_CROSS,    nullptr},         /* Library: X relaunches */
     {1718, 0,                 "game_relaunch"},
 };
 #if defined(RS_AUTOPILOT_SETUP)
@@ -133,7 +131,10 @@ constexpr Step TOUR[] = {
     {350, PSP_CTRL_DOWN,     nullptr},
     {360, PSP_CTRL_DOWN,     nullptr},
     {410, 0,                 "t06_library_moved"},
-    {420, PSP_CTRL_CROSS,    nullptr},          /* X opens Game Detail */
+    {420, PSP_CTRL_TRIANGLE, nullptr},          /* Options ... */
+    {428, PSP_CTRL_DOWN,     nullptr},
+    {436, PSP_CTRL_DOWN,     nullptr},
+    {444, PSP_CTRL_CROSS,    nullptr},          /* ... Game Details */
     {465, 0,                 "t07_detail"},
     {470, PSP_CTRL_DOWN,     nullptr},
     {480, PSP_CTRL_DOWN,     nullptr},
@@ -169,8 +170,11 @@ constexpr Step TOUR[] = {
      * cursor, so Play reaches the "ROM file not found" state. */
     {990,  PSP_CTRL_CIRCLE,   nullptr},         /* Systems (GBC) */
     {1030, PSP_CTRL_CROSS,    nullptr},         /* Library */
-    {1060, PSP_CTRL_CROSS,    nullptr},         /* Detail */
-    {1090, 0,                 "t17_detail_clean"},
+    {1060, PSP_CTRL_TRIANGLE, nullptr},         /* Options -> Game Details */
+    {1066, PSP_CTRL_DOWN,     nullptr},
+    {1072, PSP_CTRL_DOWN,     nullptr},
+    {1078, PSP_CTRL_CROSS,    nullptr},
+    {1096, 0,                 "t17_detail_clean"},
     {1100, PSP_CTRL_CROSS,    nullptr},         /* Play -> missing ROM */
     {1140, 0,                 "t18_error_rom_missing"},
     {1150, PSP_CTRL_TRIANGLE, nullptr},         /* Rescan Library */
@@ -212,7 +216,10 @@ constexpr Step TOUR[] = {
     {1730, PSP_CTRL_DOWN,     nullptr},         /* Clear search */
     {1740, PSP_CTRL_CROSS,    nullptr},
     {1750, PSP_CTRL_CIRCLE,   nullptr},
-    {1760, PSP_CTRL_CROSS,    nullptr},         /* Detail of top game */
+    {1756, PSP_CTRL_TRIANGLE, nullptr},         /* Detail of top game */
+    {1762, PSP_CTRL_DOWN,     nullptr},
+    {1768, PSP_CTRL_DOWN,     nullptr},
+    {1774, PSP_CTRL_CROSS,    nullptr},
     {1790, PSP_CTRL_DOWN,     nullptr},
     {1800, PSP_CTRL_DOWN,     nullptr},
     {1810, PSP_CTRL_CROSS,    nullptr},         /* expand */
@@ -236,7 +243,10 @@ constexpr Step TOUR[] = {
     {1990, PSP_CTRL_UP,       nullptr},         /* K */
     {2000, PSP_CTRL_CROSS,    nullptr},
     {2060, 0,                 "t29_pokemon_list"},
-    {2070, PSP_CTRL_CROSS,    nullptr},         /* Detail */
+    {2064, PSP_CTRL_TRIANGLE, nullptr},         /* Detail */
+    {2070, PSP_CTRL_DOWN,     nullptr},
+    {2076, PSP_CTRL_DOWN,     nullptr},
+    {2082, PSP_CTRL_CROSS,    nullptr},
     {2110, 0,                 "t30_pokemon_detail"},
     {2120, PSP_CTRL_CIRCLE,   nullptr},
     {2130, PSP_CTRL_SELECT,   nullptr},
@@ -259,6 +269,40 @@ constexpr Step TOUR[] = {
     {2300, PSP_CTRL_RTRIGGER, nullptr},         /* T */
     {2310, PSP_CTRL_CROSS,    nullptr},
     {2380, 0,                 "t31_screenshot_fallback"},
+    /* Polish pass: Settings tabs, the Continue options popup, text-only. */
+    {2390, PSP_CTRL_CIRCLE,   nullptr},         /* Systems */
+    {2430, PSP_CTRL_TRIANGLE, nullptr},         /* Settings */
+    {2440, PSP_CTRL_RTRIGGER, nullptr},
+    {2480, 0,                 "t32_settings_performance"},
+    {2490, PSP_CTRL_RTRIGGER, nullptr},
+    {2530, 0,                 "t33_settings_system"},
+    {2540, PSP_CTRL_UP,       nullptr},
+    {2550, PSP_CTRL_UP,       nullptr},
+    {2560, PSP_CTRL_UP,       nullptr},         /* tab bar */
+    {2590, 0,                 "t34_settings_tabbar"},
+    {2600, PSP_CTRL_LEFT,     nullptr},
+    {2610, PSP_CTRL_LEFT,     nullptr},         /* Appearance */
+    {2620, PSP_CTRL_DOWN,     nullptr},         /* Theme */
+    {2630, PSP_CTRL_DOWN,     nullptr},
+    {2640, PSP_CTRL_DOWN,     nullptr},
+    {2650, PSP_CTRL_DOWN,     nullptr},         /* Artwork */
+    {2660, PSP_CTRL_RIGHT,    nullptr},         /* Text only */
+    {2690, 0,                 "t35_settings_textonly"},
+    {2700, PSP_CTRL_CIRCLE,   nullptr},         /* Systems */
+    {2740, PSP_CTRL_CROSS,    nullptr},         /* Library, text only */
+    {2780, 0,                 "t36_library_textonly"},
+    {2790, PSP_CTRL_CIRCLE,   nullptr},
+    {2800, PSP_CTRL_UP,       nullptr},         /* Continue */
+    {2840, PSP_CTRL_TRIANGLE, nullptr},
+    {2870, 0,                 "t37_continue_options"},
+    {2880, PSP_CTRL_CIRCLE,   nullptr},
+    {2890, PSP_CTRL_DOWN,     nullptr},         /* Systems */
+    {2900, PSP_CTRL_TRIANGLE, nullptr},         /* Settings: artwork back on */
+    {2930, PSP_CTRL_DOWN,     nullptr},
+    {2940, PSP_CTRL_DOWN,     nullptr},
+    {2950, PSP_CTRL_DOWN,     nullptr},
+    {2960, PSP_CTRL_RIGHT,    nullptr},
+    {2970, PSP_CTRL_CIRCLE,   nullptr},
 };
 constexpr const Step* SCRIPT = TOUR;
 constexpr int STEPS = int(sizeof(TOUR) / sizeof(TOUR[0]));

@@ -3,6 +3,7 @@
 #include "frontend/app.h"
 #include "frontend/scenes/home_scene.h"
 #include "frontend/scenes/settings_scene.h"
+#include "frontend/ui/chrome.h"
 #include "frontend/ui/state_panel.h"
 #include "frontend/ui/text_layout.h"
 #include "runtime/config.h"
@@ -16,9 +17,12 @@ namespace rs {
 namespace {
 constexpr float MIN_SCAN_SECONDS = 0.7f;   /* never flash past the first step */
 
-u32 fade(u32 color, u32 alpha) {
-    return rsWithAlpha(color, rsAlphaOf(color) * alpha / 255u);
-}
+namespace L = ui::layout;
+using ui::fade;
+
+/* Step heading under the shell header: progress overline, then a title. */
+constexpr float HEAD_Y = 36.f;
+constexpr float ROWS_Y = 72.f;
 }  // namespace
 
 void SetupScene::enter(App& app) {
@@ -180,66 +184,68 @@ void SetupScene::drawRows(App& app, u32 a, bool emulators) {
     auto& r = app.renderer();
     const auto& pal = app.pal();
     const auto& fonts = app.fonts();
-    constexpr float TOP = 54.f, ROW = 19.f, X = 12.f, W = 456.f;
     const int n = int(m_rows.size());
     for (int i = 0; i < n; i++) {
         const SystemRow& row = m_rows[size_t(i)];
-        const float y = TOP + float(i) * ROW;
+        const float y = ROWS_Y + float(i) * L::ROW_H;
         const bool sel = emulators && i == m_row;
-        const float textY = y + (ROW - fonts.pixelSmall.lineHeight()) * .5f;
-        if (sel) {
-            r.rect(X, y, W, ROW, fade(pal.selectBg, a));
-            ui::prim::chevron(r, ui::prim::Dir::Right, 24.f, y + ROW * .5f, 5.f,
-                              2.f, fade(pal.selectText, a));
-        }
-        const u32 ink = sel ? pal.selectText : pal.textPrimary;
-        const u32 sub = sel ? pal.selectText : pal.textSecondary;
-        fonts.pixelSmall.draw(r, 36.f, textY,
-                              db::systemInfo(db::System(row.system)).displayName,
-                              fade(ink, a));
+        char value[48];
+        const char* text = value;
+        bool missing = false;
         if (!emulators) {
-            char count[24];
-            std::snprintf(count, sizeof count, "%d game%s", row.games,
-                          row.games == 1 ? "" : "s");
-            fonts.pixelSmall.draw(r, X + W - 12.f, textY, count, fade(sub, a),
-                                  text::Align::Right);
-            continue;
+            std::snprintf(value, sizeof value, "%d GAME%s", row.games,
+                          row.games == 1 ? "" : "S");
+        } else if (row.cores.empty()) {
+            text = "NO EMULATOR INSTALLED";
+            missing = true;
+        } else {
+            std::snprintf(value, sizeof value, "%s",
+                          row.cores[size_t(row.choice)]->name.c_str());
+            for (char* p = value; *p; ++p)
+                if (*p >= 'a' && *p <= 'z') *p = char(*p - 32);
         }
-        if (row.cores.empty()) {
-            fonts.pixelSmall.draw(r, X + W - 12.f, textY, "No emulator installed",
-                                  fade(sel ? pal.selectText : rsHex(0xE05252), a),
-                                  text::Align::Right);
-            continue;
-        }
-        const std::string label = row.cores[size_t(row.choice)]->name;
-        float right = X + W - 12.f;
-        if (row.cores.size() > 1) {
-            ui::prim::chevron(r, ui::prim::Dir::Right, right - 3.f,
-                              y + ROW * .5f, 4.f, 2.f, fade(ink, a));
-            right -= 14.f;
-        }
-        fonts.pixelSmall.draw(r, right, textY, label.c_str(), fade(ink, a),
-                              text::Align::Right);
-        if (row.cores.size() > 1)
-            ui::prim::chevron(r, ui::prim::Dir::Left,
-                              right - fonts.pixelSmall.measure(label.c_str()) -
-                                  10.f, y + ROW * .5f, 4.f, 2.f, fade(ink, a));
+        ui::RowStyle style;
+        style.focused = sel;
+        style.adjustable = emulators && row.cores.size() > 1;
+        ui::menuRow(app, L::MARGIN, y, L::RIGHT - L::MARGIN, L::ROW_H,
+                    ui::systemName(row.system),
+                    missing ? nullptr : text, style, a);
+        if (missing)
+            fonts.mono.draw(r, L::RIGHT - 10.f, fonts.mono.centerY(y, L::ROW_H),
+                            text, fade(sel ? pal.onAccent : pal.danger, a),
+                            text::Align::Right);
     }
 }
 
 void SetupScene::draw(App& app) {
+    auto& r = app.renderer();
     const auto& pal = app.pal();
     const auto& fonts = app.fonts();
     app.drawBackground();
-    app.drawTopBar(false);
+    app.drawTopBar("SETUP");
 
     const float enter = ui::easeOutCubic(m_entrance.t);
     const u32 a = u32(enter * 255.f);
     using B = ui::prim::Button;
 
-    const char* titles[] = {"SETUP", "YOUR SYSTEMS", "EMULATORS", "ALL SET"};
-    fonts.pixelMedium.drawBold(app.renderer(), 21.f, 13.f,
-                               titles[int(m_step)], fade(pal.textPrimary, a));
+    /* Steps that list rows get a heading; the others are centred states. */
+    auto heading = [&](int step, const char* title, const char* hint) {
+        char over[24];
+        std::snprintf(over, sizeof over, "STEP %d", step);
+        ui::label(app, L::MARGIN, fonts.monoTiny.centerY(HEAD_Y, 6.f), over,
+                  fade(pal.textMuted, a));
+        fonts.title.draw(r, L::MARGIN,
+                         fonts.title.centerY(HEAD_Y + 14.f,
+                                             fonts.title.capHeight()),
+                         title, fade(pal.textPrimary, a));
+        if (hint)
+            fonts.small.draw(r, L::RIGHT,
+                             fonts.small.centerY(HEAD_Y + 14.f,
+                                                 fonts.title.capHeight()),
+                             hint, fade(pal.textMuted, a), text::Align::Right);
+        r.rect(L::MARGIN, ROWS_Y - 8.f, L::RIGHT - L::MARGIN, 1.f,
+               fade(pal.line, a));
+    };
 
     switch (m_step) {
         case Step::Scan: {
@@ -253,7 +259,7 @@ void SetupScene::draw(App& app) {
                           app.scanner().progress());
             panel.detail = progress;
             ui::drawStatePanel(app, panel, a);
-            const App::Hint hints[] = {{B::Start, "Skip setup"}};
+            const App::Hint hints[] = {{B::Start, "Skip Setup"}};
             app.drawHintBar(hints, 1);
             break;
         }
@@ -263,12 +269,12 @@ void SetupScene::draw(App& app) {
                 panel.kind = ui::StatePanel::Kind::Empty;
                 panel.title = "No games found";
                 panel.message = "Copy ROMs into ms0:/ROMS (sub-folders are "
-                                "fine), then scan again.";
-                panel.actionLabel = "Scan again";
+                                "fine), then rescan.";
+                panel.actionLabel = "Rescan Library";
                 panel.actionButton = B::Cross;
                 ui::drawStatePanel(app, panel, a);
-                const App::Hint hints[] = {{B::Cross, "Scan again"},
-                                           {B::Triangle, "Finish anyway"}};
+                const App::Hint hints[] = {{B::Cross, "Rescan Library"},
+                                           {B::Triangle, "Finish Anyway"}};
                 app.drawHintBar(hints, 2);
                 break;
             }
@@ -276,8 +282,7 @@ void SetupScene::draw(App& app) {
             std::snprintf(summary, sizeof summary, "%d games in %d system%s",
                           m_totalGames, int(m_rows.size()),
                           m_rows.size() == 1 ? "" : "s");
-            fonts.pixelTiny.draw(app.renderer(), 459.f, 34.f, summary,
-                                 fade(pal.textSecondary, a), text::Align::Right);
+            heading(1, "Your systems", summary);
             drawRows(app, a, false);
             const App::Hint hints[] = {{B::Cross, "Continue"},
                                        {B::Start, "Skip"}};
@@ -285,10 +290,7 @@ void SetupScene::draw(App& app) {
             break;
         }
         case Step::Emulators: {
-            fonts.pixelTiny.draw(app.renderer(), 459.f, 34.f,
-                                 "Left / right changes the default emulator",
-                                 fade(pal.textSecondary, a),
-                                 text::Align::Right);
+            heading(2, "Default emulators", "Left / right to change");
             drawRows(app, a, true);
             const App::Hint hints[] = {{B::DpadLeftRight, "Change"},
                                        {B::Cross, "Continue"},
@@ -306,7 +308,7 @@ void SetupScene::draw(App& app) {
                           "to the home screen.", m_totalGames,
                           m_totalGames == 1 ? "" : "s");
             panel.message = msg;
-            panel.actionLabel = "Start playing";
+            panel.actionLabel = "Start Playing";
             panel.actionButton = B::Cross;
             ui::drawStatePanel(app, panel, a);
             const App::Hint hints[] = {{B::Cross, "Done"}, {B::Circle, "Back"}};

@@ -4,33 +4,37 @@ namespace rs::theme {
 
 const AccentOption& accentOption(int index) {
     static const AccentOption OPTIONS[ACCENT_COUNT] = {
-        {"Cobalt", 0x2F63C8},
-        {"Teal",   0x2A8C8C},
-        {"Rust",   0xB5532D},
-        {"Gold",   0xC9962B},
-        {"Violet", 0x7B63C9},
-        {"Rose",   0xBE5C82},
-        {"Sage",   0x5E8A5E},
-        {"Slate",  0x5B6B82},
+        {"Blue",   0x2676E8},
+        {"Teal",   0x14A08F},
+        {"Violet", 0x7A5AE0},
+        {"Rose",   0xD9487A},
+        {"Amber",  0xD9861A},
     };
     return OPTIONS[rsClamp(index, 0, ACCENT_COUNT - 1)];
 }
 
+namespace {
+/* Mix two 0xRRGGBB colours, t in 0..255 toward `to`. */
+u32 mixRgb(u32 from, u32 to, u32 t) {
+    auto ch = [&](u32 shift) {
+        const u32 a = (from >> shift) & 0xFFu, b = (to >> shift) & 0xFFu;
+        return (a * (255u - t) + b * t) / 255u;
+    };
+    return (ch(16) << 16) | (ch(8) << 8) | ch(0);
+}
+}  // namespace
+
 Palette personalize(const Palette& base, int accentIndex) {
     Palette p = base;
     const u32 rgb = accentOption(accentIndex).rgb;
-    /* Dark fields need a lifted accent to keep the selection bar readable;
-     * the same hue family is used so the two themes stay one identity. */
-    const u32 lift = base.dark ? 0x10u : 0u;
-    auto channel = [&](u32 shift) {
-        const u32 c = ((rgb >> shift) & 0xFFu) + lift;
-        return c > 255u ? 255u : c;
-    };
-    const u32 tuned = (channel(16) << 16) | (channel(8) << 8) | channel(0);
-    p.accent = rsHex(tuned);
-    p.selectBg = rsHex(tuned);
-    p.waveA = rsHex(tuned, 0);
-    p.waveB = rsHex(tuned, 0);
+    p.accent = rsHex(rgb);
+    /* The focus edge is the accent pushed toward the field's opposite: a
+     * lighter tint on dark, a deeper shade on light, so a 2px underline or
+     * frame reads at a glance on either. */
+    p.focusEdge = base.dark ? rsHex(mixRgb(rgb, 0xFFFFFF, 92))
+                            : rsHex(mixRgb(rgb, 0x000000, 46));
+    p.waveA = rsHex(rgb, 0);
+    p.waveB = rsHex(rgb, 0);
     return p;
 }
 
@@ -38,27 +42,23 @@ Palette blend(const Palette& a, const Palette& b, float t) {
     if (t <= 0.f) return a;
     if (t >= 1.f) return b;
     Palette p;
-    p.bgTop         = rsLerpColor(a.bgTop, b.bgTop, t);
-    p.bgBottom      = rsLerpColor(a.bgBottom, b.bgBottom, t);
-    p.waveA         = rsLerpColor(a.waveA, b.waveA, t);
-    p.waveB         = rsLerpColor(a.waveB, b.waveB, t);
+    p.bg            = rsLerpColor(a.bg, b.bg, t);
+    p.surface       = rsLerpColor(a.surface, b.surface, t);
+    p.surface2      = rsLerpColor(a.surface2, b.surface2, t);
+    p.line          = rsLerpColor(a.line, b.line, t);
     p.textPrimary   = rsLerpColor(a.textPrimary, b.textPrimary, t);
     p.textSecondary = rsLerpColor(a.textSecondary, b.textSecondary, t);
-    p.textDim       = rsLerpColor(a.textDim, b.textDim, t);
+    p.textMuted     = rsLerpColor(a.textMuted, b.textMuted, t);
+    p.textDisabled  = rsLerpColor(a.textDisabled, b.textDisabled, t);
     p.accent        = rsLerpColor(a.accent, b.accent, t);
-    p.tileBg        = rsLerpColor(a.tileBg, b.tileBg, t);
-    p.tileFocusBg   = rsLerpColor(a.tileFocusBg, b.tileFocusBg, t);
-    p.panelBg       = rsLerpColor(a.panelBg, b.panelBg, t);
-    p.panelOutline  = rsLerpColor(a.panelOutline, b.panelOutline, t);
-    p.menuBg        = rsLerpColor(a.menuBg, b.menuBg, t);
-    p.shadow        = rsLerpColor(a.shadow, b.shadow, t);
+    p.onAccent      = rsLerpColor(a.onAccent, b.onAccent, t);
+    p.focusEdge     = rsLerpColor(a.focusEdge, b.focusEdge, t);
+    p.danger        = rsLerpColor(a.danger, b.danger, t);
     p.scrim         = rsLerpColor(a.scrim, b.scrim, t);
-    p.selectBg      = rsLerpColor(a.selectBg, b.selectBg, t);
-    p.selectText    = rsLerpColor(a.selectText, b.selectText, t);
-    p.divider       = rsLerpColor(a.divider, b.divider, t);
-    p.railOutline   = rsLerpColor(a.railOutline, b.railOutline, t);
     p.dim           = rsLerpColor(a.dim, b.dim, t);
-    p.fallbackDot   = rsLerpColor(a.fallbackDot, b.fallbackDot, t);
+    p.pattern       = rsLerpColor(a.pattern, b.pattern, t);
+    p.waveA         = rsLerpColor(a.waveA, b.waveA, t);
+    p.waveB         = rsLerpColor(a.waveB, b.waveB, t);
     p.dark          = t < 0.5f ? a.dark : b.dark;
     return p;
 }

@@ -4,7 +4,7 @@
 #include "frontend/scenes/setup_scene.h"
 #include "runtime/config.h"
 
-#include "rs_asset_retroshell_logo_light_2x_png.h"
+#include "rs_asset_splash_png.h"
 #include "stb_image.h"
 
 #include <pspgu.h>
@@ -76,19 +76,26 @@ BootScene::~BootScene() { gfx::Renderer::freeTexture(m_logo); }
 void BootScene::enter(App&) {
     /* App::init has already presented the exact pre-baked splash while the
      * remaining services load, so continue fully visible without flashing
-     * back through a second fade-in. */
+     * back through a second fade-in. Drawing that same plate (rather than
+     * re-typesetting it) keeps the hand-off pixel-identical and needs no
+     * display-size font atlas in the EBOOT. It is held as RGB565 — half the
+     * memory — for the second it is on screen. */
     m_t = FADE_IN;
     m_handedOff = false;
     gfx::Renderer::freeTexture(m_logo);
 
     int w = 0, h = 0, channels = 0;
     stbi_uc* pixels = stbi_load_from_memory(
-        rs_asset_retroshell_logo_light_2x_png,
-        int(rs_asset_retroshell_logo_light_2x_png_len),
-        &w, &h, &channels, 4);
-    if (pixels && w == 124 && h == 124)
-        gfx::Renderer::createTexture(
-            m_logo, w, h, GU_PSM_8888, pixels, /*dynamic=*/true);
+        rs_asset_splash_png, int(rs_asset_splash_png_len), &w, &h, &channels, 4);
+    if (pixels && w == RS_SCREEN_W && h == RS_SCREEN_H) {
+        u16* px565 = reinterpret_cast<u16*>(pixels);   /* in place, front to back */
+        for (int i = 0; i < w * h; i++) {
+            const stbi_uc* p = pixels + i * 4;
+            px565[i] = u16(((p[2] >> 3) << 11) | ((p[1] >> 2) << 5) | (p[0] >> 3));
+        }
+        gfx::Renderer::createTexture(m_logo, w, h, GU_PSM_5650, px565,
+                                     /*dynamic=*/true);
+    }
     if (pixels) stbi_image_free(pixels);
 }
 
@@ -112,23 +119,14 @@ void BootScene::update(App& app, float dt) {
 void BootScene::draw(App& app) {
     auto& r = app.renderer();
     r.rect(0, 0, RS_SCREEN_W, RS_SCREEN_H, rsHex(0xFAF5EE));
-
-    const float k = ui::easeOutQuint(rsClamp(m_t / FADE_IN, 0.f, 1.f));
-    const u32 alpha = u32(k * 255.f);
-    const float cx = RS_SCREEN_W / 2.f;
-
-    if (m_logo.valid()) {
-        const gfx::TexFilter previous = r.texFilter();
-        r.setTexFilter(gfx::TexFilter::Linear);
-        r.sprite(m_logo, 0, 0, 124, 124, 209.f, 77.f, 62.f, 62.f,
-                 rsHex(0xFFFFFF, alpha));
-        r.setTexFilter(previous);
-    }
-
-    drawTracked(r, app.fonts().title, cx, 143.f, "RetroShell", 2.6f,
-                rsHex(0x17140F), rsHex(0x17140F), alpha);
-    drawSubtitleShimmer(r, app.fonts().small, cx,
-                        rsClamp(m_t - FADE_IN, 0.f, 1000.f), alpha);
+    if (m_logo.valid())
+        r.sprite(m_logo, 0, 0, RS_SCREEN_W, RS_SCREEN_H, 0, 0, RS_SCREEN_W,
+                 RS_SCREEN_H, rsHex(0xFFFFFF));
+    /* Replace the baked subtitle with the live one, as the startup plate
+     * does, then let the shimmer run across it. */
+    r.rect(0.f, SUBTITLE_Y - 5.f, RS_SCREEN_W, 22.f, rsHex(0xFAF5EE));
+    drawSubtitleShimmer(r, app.fonts().small, RS_SCREEN_W / 2.f,
+                        rsClamp(m_t - FADE_IN, 0.f, 1000.f), 255u);
 }
 
 }  // namespace rs

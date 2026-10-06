@@ -240,31 +240,31 @@ int main(int argc, char** argv) {
     const char* out = argv[2];
     char ttf[1024], rsf[1024];
 
+    /* Two type roles (see docs/ARCHITECTURE.md, "Typography"):
+     *   Inter        content — game titles, system names, actions, labels
+     *   Geist Pixel  technical — wordmark, status, badges, counts, legend
+     * Every atlas is embedded in the EBOOT and so comes straight out of the
+     * core arena; add a size only when a role needs it. */
     snprintf(ttf, sizeof ttf, "%s/Inter-SemiBold.ttf", fdir);
+    snprintf(rsf, sizeof rsf, "%s/fonts/font_display.rsf", out);
+    bake_font(ttf, 18, rsf);          /* Home system name, Detail title */
     snprintf(rsf, sizeof rsf, "%s/fonts/font_title.rsf", out);
-    bake_font(ttf, 26, rsf);
+    bake_font(ttf, 15, rsf);          /* pane titles, state titles */
+    snprintf(rsf, sizeof rsf, "%s/fonts/font_body_strong.rsf", out);
+    bake_font(ttf, 13, rsf);          /* focused rows, Play, active tab */
 
     snprintf(ttf, sizeof ttf, "%s/Inter-Regular.ttf", fdir);
     snprintf(rsf, sizeof rsf, "%s/fonts/font_body.rsf", out);
-    bake_font(ttf, 15, rsf);
+    bake_font(ttf, 13, rsf);          /* list rows, actions, settings */
     snprintf(rsf, sizeof rsf, "%s/fonts/font_small.rsf", out);
-    bake_font(ttf, 12, rsf);
+    bake_font(ttf, 11, rsf);          /* metadata, descriptions */
 
-    /* Geist Pixel is deliberately a display face. Keeping it in a separate
-     * atlas lets the PSP UI use it for high-emphasis navigation without
-     * sacrificing Inter's legibility in dense metadata and hint bars. */
+    /* Geist Pixel, monospaced (fixed advance, glyph centred in its cell). */
     snprintf(ttf, sizeof ttf, "%s/GeistPixel-Square.ttf", fdir);
-    snprintf(rsf, sizeof rsf, "%s/fonts/font_pixel.rsf", out);
-    bake_font_ex(ttf, 19, 12, rsf);
-    /* Firmware-style list, legend and metadata sizes (480x272 layouts). */
-    snprintf(rsf, sizeof rsf, "%s/fonts/font_pixel_tiny.rsf", out);
-    bake_font_ex(ttf, 10, 6, rsf);
     snprintf(rsf, sizeof rsf, "%s/fonts/font_pixel_small.rsf", out);
-    bake_font_ex(ttf, 12, 7, rsf);
-    snprintf(rsf, sizeof rsf, "%s/fonts/font_pixel_body.rsf", out);
-    bake_font_ex(ttf, 14, 8, rsf);
-    snprintf(rsf, sizeof rsf, "%s/fonts/font_pixel_medium.rsf", out);
-    bake_font_ex(ttf, 16, 10, rsf);
+    bake_font_ex(ttf, 12, 7, rsf);    /* wordmark, status, counts */
+    snprintf(rsf, sizeof rsf, "%s/fonts/font_pixel_tiny.rsf", out);
+    bake_font_ex(ttf, 10, 6, rsf);    /* badges, section labels, legend */
 
     if (!fonts_only) make_pbp_art(out);
     return 0;

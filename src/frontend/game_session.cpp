@@ -1,7 +1,9 @@
 #include "frontend/game_session.h"
 #include "frontend/app.h"
 #include "frontend/scenes/home_scene.h"
+#include "frontend/ui/chrome.h"
 #include "frontend/ui/state_panel.h"
+#include "frontend/ui/text_layout.h"
 #include "platform/psp/audio_out.h"
 #include "platform/psp/fs_psp.h"
 #include "platform/psp/power.h"
@@ -26,6 +28,9 @@
 namespace rs {
 
 namespace {
+
+/* Pause rows on screen at once; the list scrolls past that. */
+constexpr int PAUSE_VISIBLE_ROWS = 8;
 constexpr u32 MENU_COMBO = PSP_CTRL_LTRIGGER | PSP_CTRL_RTRIGGER;
 constexpr float SRAM_FLUSH_SECONDS = 10.f;
 constexpr int MAX_WALL_CATCHUP = 3;
@@ -948,8 +953,9 @@ void GameSession::update(App& app, float dt) {
         case State::Menu:
             m_menuPos.to(float(m_menuRow));
             m_menuPos.update(dt, 14.f);
-            m_menuScroll.to(float(rsClamp(m_menuRow - 2, 0,
-                                          RS_PAUSE_ITEM_COUNT - 5)));
+            m_menuScroll.to(float(rsClamp(m_menuRow - PAUSE_VISIBLE_ROWS / 2,
+                                          0, RS_PAUSE_ITEM_COUNT -
+                                                 PAUSE_VISIBLE_ROWS)));
             m_menuScroll.update(dt, 14.f);
             m_menuFade.update(dt);
             updateMenu(app);
@@ -1079,75 +1085,69 @@ void GameSession::drawFrame(App& app) {
 }
 
 void GameSession::drawMenu(App& app) {
+    namespace L = ui::layout;
+    using ui::fade;
     auto& r = app.renderer();
     const auto& pal = app.pal();
     const auto& fonts = app.fonts();
     const float k = ui::easeOutCubic(m_menuFade.t);
     const u32 a = u32(k * 255.f);
 
-    r.rect(0, 0, RS_SCREEN_W, RS_SCREEN_H, rsHex(0x06080C, u32(k * 170.f)));
+    /* One dim over the frozen frame, then the shell's own chrome: the pause
+     * menu is part of RetroShell, not a separate overlay style. */
+    r.rect(0, 0, RS_SCREEN_W, RS_SCREEN_H, rsWithAlpha(pal.bg, u32(k * 200.f)));
+    app.drawTopBar("PAUSED", a);
 
-    constexpr int VISIBLE_ROWS = 5;
-    const float px = 16.f, pw = 264.f;
-    const float py = 24.f, rowH = 32.f;
-    const float ph = rowH * VISIBLE_ROWS + 48.f;
-    ui::prim::roundedRect(r, px, py, pw, ph, 8.f,
-                          rsWithAlpha(pal.menuBg, a));
-    ui::prim::roundedOutline(r, px, py, pw, ph, 8.f,
-                             rsWithAlpha(pal.panelOutline, a));
+    constexpr int VISIBLE = PAUSE_VISIBLE_ROWS;
+    constexpr float HEAD = 36.f;
+    const float px = L::MARGIN, pw = 232.f;
+    const float py = L::CONTENT_TOP + ui::snap((1.f - k) * 6.f);
+    const float ph = HEAD + L::ROW_H * float(VISIBLE) + 6.f;
+    ui::panel(app, px, py, pw, ph, a);
+    ui::label(app, px + 10.f, fonts.monoTiny.centerY(py + 9.f, 6.f), "PAUSED",
+              fade(pal.textMuted, a));
+    ui::label(app, px + pw - 10.f, fonts.monoTiny.centerY(py + 9.f, 6.f),
+              db::systemInfo(m_game.system).badge, fade(pal.textMuted, a),
+              text::Align::Right);
+    ui::drawEllipsized(fonts.bodyStrong, r, px + 10.f,
+                       fonts.bodyStrong.centerY(py + 20.f, 8.f), pw - 20.f,
+                       m_game.shown(), fade(pal.textPrimary, a));
 
-    /* A long ROM title must never escape the pause panel. */
-    r.setScissor(int(px + 16.f), int(py + 8.f), int(pw - 32.f), 12);
-    fonts.small.draw(r, px + 16.f, py + 8.f, m_game.shown().c_str(),
-                     rsWithAlpha(pal.textDim, a));
-    r.resetScissor();
-
-    const float listY = py + 40.f;
-    const float listH = rowH * VISIBLE_ROWS;
-    const float hy = listY + (m_menuPos.v - m_menuScroll.v) * rowH;
-
-    /* Keep both the animated focus surface and labels inside the list viewport.
-     * During rapid navigation the two smooth values can briefly be more than
-     * one row apart, so clipping only the labels allowed the focus surface to
-     * bleed onto the dimmed game behind the panel. */
-    r.setScissor(int(px + 16.f), int(listY), int(pw - 32.f), int(listH));
-    ui::prim::focusRow(r, px + 16.f, hy, pw - 32.f, rowH,
-                       rsWithAlpha(pal.tileFocusBg,
-                                   rsAlphaOf(pal.tileFocusBg) * a / 255u),
-                       rsWithAlpha(pal.accent, a),
-                       rsWithAlpha(pal.shadow,
-                                   rsAlphaOf(pal.shadow) * a / (255u * 2u)));
-
+    const float listY = py + HEAD;
+    const float listH = L::ROW_H * float(VISIBLE);
+    const float scroll = m_menuScroll.v;
+    r.setScissor(int(px), int(listY), int(pw), int(listH));
     for (int i = 0; i < RS_PAUSE_ITEM_COUNT; i++) {
-        const float rowY =
-            listY + (float(i) - m_menuScroll.v) * rowH;
-        if (rowY + rowH <= listY || rowY >= listY + listH) continue;
-        const bool sel = i == m_menuRow;
-        char label[48];
+        const float rowY = ui::snap(listY + (float(i) - scroll) * L::ROW_H);
+        if (rowY + L::ROW_H <= listY || rowY >= listY + listH) continue;
+        char value[32] = "";
+        bool adjustable = false;
         if (i == RS_PAUSE_SAVE_STATE || i == RS_PAUSE_LOAD_STATE) {
-            std::snprintf(label, sizeof label, "%s  < %d%s >",
-                          rs_pause_menu_label(RSPauseMenuItem(i)),
-                          m_slot + 1, m_slots[m_slot].exists ? "" : " ·");
+            std::snprintf(value, sizeof value, "SLOT %d%s", m_slot + 1,
+                          m_slots[m_slot].exists ? "" : " \xC2\xB7 EMPTY");
+            adjustable = true;
         } else if (i == RS_PAUSE_ASPECT_RATIO) {
-            std::snprintf(label, sizeof label, "%s  < %s >",
-                          rs_pause_menu_label(RSPauseMenuItem(i)),
+            std::snprintf(value, sizeof value, "%s",
                           scaleDisplayName(m_scaleMode));
+            for (char* c = value; *c; ++c)
+                if (*c >= 'a' && *c <= 'z') *c = char(*c - 32);
+            adjustable = true;
         } else if (i == RS_PAUSE_FILTER) {
-            std::snprintf(label, sizeof label, "%s  < %s >",
-                          rs_pause_menu_label(RSPauseMenuItem(i)),
-                          m_nearestFilter ? "Sharp" : "Smooth");
-        } else {
-            std::snprintf(label, sizeof label, "%s",
-                          rs_pause_menu_label(RSPauseMenuItem(i)));
+            std::snprintf(value, sizeof value, "%s",
+                          m_nearestFilter ? "SHARP" : "SMOOTH");
+            adjustable = true;
         }
-        fonts.body.draw(r, px + 32.f, rowY + 8.f, label,
-                        rsWithAlpha(sel ? pal.textPrimary
-                                            : pal.textSecondary,
-                                    a));
+        ui::RowStyle style;
+        style.focused = i == m_menuRow;
+        style.adjustable = adjustable;
+        style.disabled = i == RS_PAUSE_LOAD_STATE && !m_slots[m_slot].exists;
+        ui::menuRow(app, px + 3.f, rowY, pw - 6.f, L::ROW_H,
+                    rs_pause_menu_label(RSPauseMenuItem(i)),
+                    value[0] ? value : nullptr, style, a);
     }
     r.resetScissor();
 
-    /* Slot thumbnail preview beside the panel. */
+    /* Slot preview beside the panel, in the same surface. */
     if ((m_menuRow == RS_PAUSE_SAVE_STATE ||
          m_menuRow == RS_PAUSE_LOAD_STATE) &&
         m_slots[m_slot].exists) {
@@ -1164,29 +1164,24 @@ void GameSession::drawMenu(App& app) {
             }
         }
         if (m_thumbSlot == m_slot && m_thumbTex.valid()) {
-            const float tx = px + pw + 16.f, ty = py + 40.f;
-            ui::prim::roundedRect(r, tx - 8.f, ty - 8.f,
-                                  save::THUMB_W + 16.f,
-                                  save::THUMB_H + 36.f,
-                                  8.f, rsWithAlpha(pal.menuBg, a));
-            r.sprite(m_thumbTex, 0, 0, save::THUMB_W, save::THUMB_H, tx, ty,
-                     save::THUMB_W, save::THUMB_H, rsHex(0xFFFFFF, a));
+            constexpr float TW = save::THUMB_W * 1.5f, TH = save::THUMB_H * 1.5f;
+            const float tx = px + pw + 12.f, ty = py;
+            ui::panel(app, tx, ty, TW + 20.f, TH + 34.f, a);
             char cap[24];
-            std::snprintf(cap, sizeof cap, "Slot %d", m_slot + 1);
-            fonts.small.draw(r, tx + save::THUMB_W / 2.f,
-                             ty + save::THUMB_H + 8.f, cap,
-                             rsWithAlpha(pal.textDim, a),
-                             text::Align::Center);
+            std::snprintf(cap, sizeof cap, "SLOT %d", m_slot + 1);
+            ui::label(app, tx + 10.f, fonts.monoTiny.centerY(ty + 9.f, 6.f), cap,
+                      fade(pal.textMuted, a));
+            r.sprite(m_thumbTex, 0, 0, save::THUMB_W, save::THUMB_H, tx + 10.f,
+                     ty + 24.f, TW, TH, rsHex(0xFFFFFF, a));
         }
     }
 
     const App::Hint hints[] = {
         {ui::prim::Button::Cross, "Select"},
+        {ui::prim::Button::DpadLeftRight, "Change"},
         {ui::prim::Button::Circle, "Resume"},
     };
-    r.rect(0.f, 240.f, RS_SCREEN_W, 32.f,
-           rsWithAlpha(pal.menuBg, 232u * a / 255u));
-    app.drawHintBar(hints, 2);
+    app.drawHintBar(hints, 3, /*solid=*/true);
 }
 
 void GameSession::draw(App& app) {
@@ -1194,7 +1189,7 @@ void GameSession::draw(App& app) {
 
     if (m_state == State::Failed) {
         app.drawBackground();
-        app.drawTopBar(false);
+        app.drawTopBar("GAME");
         const launch::Notice notice = launch::classify(m_error);
         const launch::Action action = failureAction(app);
         ui::StatePanel panel;

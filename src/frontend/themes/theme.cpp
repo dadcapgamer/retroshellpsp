@@ -35,19 +35,26 @@ u32 parseColor(const char* s, u32 fallback) {
 
 void applyColors(Palette& p, const cJSON* colors) {
     if (!cJSON_IsObject(colors)) return;
+    /* Current role names first; the second block keeps theme.json files
+     * written for the older palette working by mapping each legacy key onto
+     * the role that replaced it. */
     struct { const char* key; u32* dst; } MAP[] = {
-        {"bgTop", &p.bgTop},           {"bgBottom", &p.bgBottom},
-        {"waveA", &p.waveA},           {"waveB", &p.waveB},
+        {"bg", &p.bg},                 {"surface", &p.surface},
+        {"surface2", &p.surface2},     {"line", &p.line},
         {"textPrimary", &p.textPrimary},
         {"textSecondary", &p.textSecondary},
-        {"textDim", &p.textDim},       {"accent", &p.accent},
-        {"tileBg", &p.tileBg},         {"tileFocusBg", &p.tileFocusBg},
-        {"panelBg", &p.panelBg},       {"panelOutline", &p.panelOutline},
-        {"menuBg", &p.menuBg},
-        {"shadow", &p.shadow},         {"scrim", &p.scrim},
-        {"selectBg", &p.selectBg},     {"selectText", &p.selectText},
-        {"divider", &p.divider},       {"railOutline", &p.railOutline},
-        {"dim", &p.dim},               {"fallbackDot", &p.fallbackDot},
+        {"textMuted", &p.textMuted},   {"textDisabled", &p.textDisabled},
+        {"accent", &p.accent},         {"onAccent", &p.onAccent},
+        {"focusEdge", &p.focusEdge},   {"danger", &p.danger},
+        {"scrim", &p.scrim},           {"dim", &p.dim},
+        {"pattern", &p.pattern},
+        {"waveA", &p.waveA},           {"waveB", &p.waveB},
+        /* legacy */
+        {"bgTop", &p.bg},              {"panelBg", &p.surface},
+        {"tileBg", &p.surface},        {"menuBg", &p.surface2},
+        {"divider", &p.line},          {"textDim", &p.textMuted},
+        {"selectBg", &p.accent},       {"selectText", &p.onAccent},
+        {"fallbackDot", &p.pattern},
     };
     for (auto& m : MAP) {
         const cJSON* v = cJSON_GetObjectItemCaseSensitive(colors, m.key);

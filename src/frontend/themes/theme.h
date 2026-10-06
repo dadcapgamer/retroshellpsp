@@ -6,7 +6,7 @@
  *   {
  *     "name": "Midnight",
  *     "dark": true,
- *     "colors": { "bgTop": "#0E1218", "accent": "#4C9AFF", ... },
+ *     "colors": { "bg": "#0E1218", "accent": "#4C9AFF", ... },
  *     "background": "bg.png",     // optional 480x272 image
  *     "waves": true               // optional legacy animated ribbons
  *   }

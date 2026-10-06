@@ -5,6 +5,7 @@
 #include "frontend/native_emulator_launcher.h"
 #include "frontend/launch_notice.h"
 #include "frontend/scenes/boot_scene.h"
+#include "frontend/ui/chrome.h"
 #include "platform/psp/audio_out.h"
 #include "platform/psp/fs_psp.h"
 #include "platform/psp/power.h"
@@ -26,12 +27,11 @@
 #include "stb_image.h"
 
 /* Baked font atlases embedded at build time (see cmake/rs_assets.cmake). */
+#include "rs_asset_font_display_rsf.h"
 #include "rs_asset_font_title_rsf.h"
+#include "rs_asset_font_body_strong_rsf.h"
 #include "rs_asset_font_body_rsf.h"
 #include "rs_asset_font_small_rsf.h"
-#include "rs_asset_font_pixel_rsf.h"
-#include "rs_asset_font_pixel_body_rsf.h"
-#include "rs_asset_font_pixel_medium_rsf.h"
 #include "rs_asset_font_pixel_small_rsf.h"
 #include "rs_asset_font_pixel_tiny_rsf.h"
 #include "rs_asset_splash_png.h"
@@ -134,18 +134,17 @@ bool App::init() {
     }
 
     struct { text::Font* font; const unsigned char* data; unsigned len; } fonts[] = {
+        {&m_fonts.display, rs_asset_font_display_rsf,
+                           rs_asset_font_display_rsf_len},
         {&m_fonts.title, rs_asset_font_title_rsf, rs_asset_font_title_rsf_len},
+        {&m_fonts.bodyStrong, rs_asset_font_body_strong_rsf,
+                              rs_asset_font_body_strong_rsf_len},
         {&m_fonts.body,  rs_asset_font_body_rsf,  rs_asset_font_body_rsf_len},
         {&m_fonts.small, rs_asset_font_small_rsf, rs_asset_font_small_rsf_len},
-        {&m_fonts.pixel, rs_asset_font_pixel_rsf, rs_asset_font_pixel_rsf_len},
-        {&m_fonts.pixelBody, rs_asset_font_pixel_body_rsf,
-                             rs_asset_font_pixel_body_rsf_len},
-        {&m_fonts.pixelMedium, rs_asset_font_pixel_medium_rsf,
-                               rs_asset_font_pixel_medium_rsf_len},
-        {&m_fonts.pixelSmall, rs_asset_font_pixel_small_rsf,
-                              rs_asset_font_pixel_small_rsf_len},
-        {&m_fonts.pixelTiny, rs_asset_font_pixel_tiny_rsf,
-                             rs_asset_font_pixel_tiny_rsf_len},
+        {&m_fonts.mono, rs_asset_font_pixel_small_rsf,
+                        rs_asset_font_pixel_small_rsf_len},
+        {&m_fonts.monoTiny, rs_asset_font_pixel_tiny_rsf,
+                            rs_asset_font_pixel_tiny_rsf_len},
     };
     for (auto& f : fonts) {
         if (!f.font->load(f.data, f.len)) {
@@ -307,14 +306,10 @@ void App::shutdown() {
     m_boxart.clear();
     m_theme.freeAssets();
     audio::shutdown();
-    m_fonts.title.unload();
-    m_fonts.body.unload();
-    m_fonts.small.unload();
-    m_fonts.pixel.unload();
-    m_fonts.pixelBody.unload();
-    m_fonts.pixelMedium.unload();
-    m_fonts.pixelSmall.unload();
-    m_fonts.pixelTiny.unload();
+    for (text::Font* f : {&m_fonts.display, &m_fonts.title, &m_fonts.bodyStrong,
+                          &m_fonts.body, &m_fonts.small, &m_fonts.mono,
+                          &m_fonts.monoTiny})
+        f->unload();
     m_renderer.shutdown();
 }
 
@@ -471,10 +466,9 @@ void App::update(float dt) {
 }
 
 void App::draw() {
-    m_renderer.beginFrame(m_pal.bgBottom);
+    m_renderer.beginFrame(m_pal.bg);
     if (m_scene) m_scene->draw(*this);
 
-    drawScanStatus();
     drawToast();
 
     /* Scene-transition scrim on top of everything. */
@@ -523,7 +517,7 @@ void App::drawBackground() {
         /* Built-in themes are one uninterrupted field. Gradients, ambient
          * washes and watermarks created visible blocks on original LCD and
          * replacement IPS panels. */
-        m_renderer.rect(0, 0, RS_SCREEN_W, RS_SCREEN_H, m_pal.bgTop);
+        m_renderer.rect(0, 0, RS_SCREEN_W, RS_SCREEN_H, m_pal.bg);
     }
     if (m_theme.waves) {
         /* Explicit custom-theme compatibility. Built-in themes use the
@@ -533,11 +527,28 @@ void App::drawBackground() {
     }
 }
 
-void App::drawTopBar(bool wordmark) {
+/* One header for every screen: mark + wordmark (+ context) on the left,
+ * clock and battery on the right, a hairline under both. Fixed positions and
+ * a fixed baseline — nothing here moves between screens. */
+void App::drawTopBar(const char* context, u32 alpha) {
+    using ui::fade;
+    namespace L = ui::layout;
     const auto& f = m_fonts;
-    if (wordmark)
-        f.pixelMedium.drawBold(m_renderer, 21.f, 13.f, "RETROSHELL",
-                               m_pal.textPrimary);
+    constexpr float BAND = L::HEADER_RULE_Y;           /* 0..26 */
+    const float textY = f.mono.centerY(0.f, BAND);
+
+    ui::brandMark(m_renderer, L::MARGIN, float(int((BAND - 10.f) * .5f)), 2,
+                  fade(m_pal.textPrimary, alpha));
+    const float wordX = L::MARGIN + ui::brandMarkSize(2) + 6.f;
+    f.mono.drawBold(m_renderer, wordX, textY, "RETROSHELL",
+                    fade(m_pal.textPrimary, alpha));
+    if (context && *context) {
+        const float cx = wordX + f.mono.measure("RETROSHELL") + 1.f + 9.f;
+        m_renderer.rect(cx, float(int(BAND * .5f)) - 4.f, 1.f, 9.f,
+                        fade(m_pal.line, alpha));
+        f.mono.draw(m_renderer, cx + 9.f, textY, context,
+                    fade(m_pal.textMuted, alpha));
+    }
 
     /* Status cluster, right to left: battery, percentage, clock. */
     int hh = 0, mm = 0;
@@ -551,62 +562,83 @@ void App::drawTopBar(bool wordmark) {
         std::snprintf(clock, sizeof clock, "%d:%02d %s",
                       displayHour, mm, suffix);
     }
-    constexpr float BATTERY_X = 440.f;
-    constexpr float STATUS_Y = 10.f;
+    constexpr float BATTERY_W = 20.f;                  /* body + nub */
+    const float batteryX = L::RIGHT - BATTERY_W;
     /* Low battery (not charging) turns the readout red; below 5% it blinks. */
     const bool low = m_batteryPct >= 0 && !m_batteryChg && m_batteryPct <= 15;
     const bool blinkOff = low && m_batteryPct <= 5 &&
                           std::fmod(m_time, 1.f) > .6f;
-    const u32 batteryInk = low ? rsHex(0xE05252) : m_pal.textPrimary;
+    const u32 batteryInk = fade(low ? m_pal.danger : m_pal.textSecondary,
+                                alpha);
     if (!blinkOff)
-        ui::prim::battery(m_renderer, BATTERY_X, STATUS_Y + 2.f,
+        ui::prim::battery(m_renderer, batteryX, float(int((BAND - 8.f) * .5f)),
                           m_batteryPct < 0 ? -1.f
                                            : float(m_batteryPct) / 100.f,
-                          m_batteryChg, batteryInk, m_pal.accent);
-    float right = BATTERY_X - 8.f;
+                          m_batteryChg, batteryInk,
+                          fade(low ? m_pal.danger : m_pal.textPrimary, alpha));
+    float right = batteryX - 7.f;
     if (m_batteryPct >= 0) {
         char pct[16];
         std::snprintf(pct, sizeof pct, "%d%%", m_batteryPct);
-        f.pixelSmall.draw(m_renderer, right, STATUS_Y, pct, batteryInk,
-                          text::Align::Right);
-        right -= f.pixelSmall.measure(pct) + 14.f;
+        f.mono.draw(m_renderer, right, textY, pct, batteryInk,
+                    text::Align::Right);
+        right -= f.mono.measure(pct) + 14.f;
     }
-    f.pixelSmall.draw(m_renderer, right, STATUS_Y, clock, m_pal.textPrimary,
-                      text::Align::Right);
+    f.mono.draw(m_renderer, right, textY, clock,
+                fade(m_pal.textSecondary, alpha), text::Align::Right);
+    right -= f.mono.measure(clock) + 14.f;
+
+    /* A background scan announces itself in the same quiet cluster. */
+    if (m_scanner.running()) {
+        char buf[32];
+        std::snprintf(buf, sizeof buf, "SCANNING %d", m_scanner.progress());
+        f.monoTiny.draw(m_renderer, right, f.monoTiny.centerY(0.f, BAND), buf,
+                        fade(m_pal.textMuted, alpha), text::Align::Right);
+        const float dotX = right - f.monoTiny.measure(buf) - 8.f;
+        const int phase = int(m_time * 3.f) % 3;
+        for (int i = 0; i < 3; i++)
+            m_renderer.rect(dotX - float(2 - i) * 4.f, float(int(BAND * .5f)),
+                            2.f, 2.f,
+                            fade(i == phase ? m_pal.focusEdge : m_pal.textMuted,
+                                 alpha));
+    }
+
+    m_renderer.rect(L::MARGIN, L::HEADER_RULE_Y, L::RIGHT - L::MARGIN, 1.f,
+                    fade(m_pal.line, alpha));
 }
 
-void App::drawHintBar(const Hint* hints, int count) {
-    constexpr float LEFT = 21.f, RIGHT = RS_SCREEN_W - 21.f;
-    constexpr float RULE_Y = RS_SCREEN_H - 34.f;
-    constexpr float GLYPH_R = 6.f;
-    constexpr float GLYPH_GAP = 8.f;    /* glyph to label */
-    const float textY = RS_SCREEN_H - 23.f;
-    const float glyphY = textY + 5.f;
-    const auto& font = m_fonts.pixelTiny;
+/* Compact, low-contrast, one line: groups flow left to right at a fixed gap
+ * so the same action sits in the same place on every screen. */
+void App::drawHintBar(const Hint* hints, int count, bool solid) {
+    namespace L = ui::layout;
+    constexpr float GLYPH_GAP = 6.f;    /* glyph to label */
+    constexpr float GROUP_GAP = 18.f;   /* label to next glyph */
+    const float bandTop = L::FOOTER_RULE_Y + 1.f;
+    const float bandH = RS_SCREEN_H - bandTop;
+    const float cy = float(int(bandTop + bandH * .5f));
+    const auto& font = m_fonts.monoTiny;
+    const float textY = font.centerY(bandTop, bandH);
 
-    m_renderer.rect(LEFT, RULE_Y, RIGHT - LEFT, 1.f, m_pal.divider);
+    if (solid)
+        m_renderer.rect(0.f, L::FOOTER_RULE_Y, RS_SCREEN_W,
+                        RS_SCREEN_H - L::FOOTER_RULE_Y,
+                        rsWithAlpha(m_pal.bg, 236));
+    m_renderer.rect(L::MARGIN, L::FOOTER_RULE_Y, L::RIGHT - L::MARGIN, 1.f,
+                    m_pal.line);
 
-    float widths[8];
-    float total = 0.f;
     if (count > 8) count = 8;
+    float x = L::MARGIN;
     for (int i = 0; i < count; i++) {
         const float lead = ui::prim::buttonGlyphWidth(hints[i].button);
-        widths[i] = lead + GLYPH_GAP + font.measure(hints[i].label);
-        total += widths[i];
-    }
-    const float gap = count > 1
-        ? rsClamp((RIGHT - LEFT - total) / float(count - 1), 10.f, 64.f)
-        : 0.f;
-
-    float x = LEFT;
-    for (int i = 0; i < count; i++) {
-        const float lead = ui::prim::buttonGlyphWidth(hints[i].button);
-        ui::prim::buttonGlyph(m_renderer, hints[i].button, x + lead * .5f,
-                              glyphY, GLYPH_R, m_pal.textPrimary);
+        ui::prim::buttonGlyph(m_renderer, hints[i].button, x + lead * .5f, cy,
+                              6.f, m_pal.textSecondary);
         const float labelX = x + lead + GLYPH_GAP;
         font.draw(m_renderer, labelX, textY, hints[i].label,
-                  m_pal.textPrimary);
-        x += widths[i] + gap;
+                  m_pal.textSecondary);
+        /* An empty label pairs a glyph with the next one ("L1 R1 Tab"). */
+        x = hints[i].label[0]
+            ? labelX + font.measure(hints[i].label) + GROUP_GAP
+            : x + lead + 4.f;
     }
 }
 
@@ -615,39 +647,28 @@ void App::drawToast() {
     const float t = m_toastTween.t;
     /* Quick fade in, hold, fade out. */
     float a = 1.f;
-    if (t < 0.1f) a = t / 0.1f;
-    else if (t > 0.8f) a = (1.f - t) / 0.2f;
-    const u32 alpha = u32(a * 235.f);
+    if (t < 0.06f) a = t / 0.06f;
+    else if (t > 0.85f) a = (1.f - t) / 0.15f;
+    const u32 alpha = u32(a * 255.f);
 
-    /* Flat notice in the firmware style: solid panel, hard outline. */
-    const auto& font = m_fonts.pixelSmall;
-    const float w = rsClamp(font.measure(m_toastMsg) + 32.f, 64.f, 438.f);
-    const float x = float(int((RS_SCREEN_W - w) / 2.f));
-    const float y = RS_SCREEN_H - 72.f;
-    m_renderer.rect(x, y, w, 24.f, rsWithAlpha(m_pal.menuBg, alpha));
-    ui::prim::outlineRect(m_renderer, x, y, w, 24.f, 2.f,
-                          rsWithAlpha(m_pal.railOutline, alpha));
-    m_renderer.setScissor(int(x + 8.f), int(y), int(w - 16.f), 24);
-    font.draw(m_renderer, RS_SCREEN_W / 2.f,
-              y + (24.f - font.lineHeight()) * .5f, m_toastMsg,
-              rsWithAlpha(m_pal.textPrimary, alpha), text::Align::Center);
+    /* A compact pill parked above the legend, right-aligned to the margin,
+     * so it never lands on list text or covers a focused row. */
+    namespace L = ui::layout;
+    const auto& font = m_fonts.small;
+    constexpr float H = 20.f;
+    const float w = rsClamp(float(int(font.measure(m_toastMsg))) + 24.f, 64.f,
+                            L::RIGHT - L::MARGIN);
+    const float x = L::RIGHT - w;
+    const float y = L::FOOTER_RULE_Y - 6.f - H;
+    ui::pixelRect(m_renderer, x, y, w, H, 3,
+                  ui::fade(m_pal.surface2, alpha));
+    ui::pixelFrame(m_renderer, x, y, w, H, 1, 3, ui::fade(m_pal.line, alpha));
+    m_renderer.rect(x + 9.f, y + 9.f, 2.f, 2.f,
+                    ui::fade(m_pal.focusEdge, alpha));
+    m_renderer.setScissor(int(x + 4.f), int(y), int(w - 8.f), int(H));
+    font.draw(m_renderer, x + 16.f, font.centerY(y, H), m_toastMsg,
+              ui::fade(m_pal.textPrimary, alpha));
     m_renderer.resetScissor();
-}
-
-void App::drawScanStatus() {
-    if (!m_scanner.running()) return;
-    /* Spinner: orbiting dot. */
-    /* Parked in the quiet middle of the status row so it never collides
-     * with the control legend. */
-    const float cx = 176.f, cy = 17.f;
-    ui::prim::ring(m_renderer, cx, cy, 7.f, rsWithAlpha(m_pal.textDim, 120));
-    const float a = m_time * 5.f;
-    ui::prim::circle(m_renderer, cx + std::cos(a) * 7.f,
-                     cy + std::sin(a) * 7.f, 2.2f, m_pal.accent);
-    char buf[40];
-    std::snprintf(buf, sizeof buf, "Scanning... %d", m_scanner.progress());
-    m_fonts.pixelTiny.draw(m_renderer, cx + 14.f, cy - 5.f, buf,
-                           m_pal.textDim);
 }
 
 #ifdef RS_DEBUG_OVERLAY

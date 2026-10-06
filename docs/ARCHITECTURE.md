@@ -66,12 +66,35 @@ See `CoreManager::loadCore` and `cores/dummy/dummy_core.c`.
 `src/platform/psp/gu_renderer.*` is the only file touching sceGu. 480×272,
 GU_PSM_5650 double buffer, vblank-synced, GU_TRANSFORM_2D vertices.
 Text and UI chrome are T8 textures with a shared alpha-ramp CLUT, tinted
-by vertex color; rounded rectangles / circles are anti-aliased masks baked
-at boot and 9-sliced. Fonts are pre-baked `.rsf` atlases (see
-`tools/assetgen.c` for the format); the Astra shell uses Geist Pixel baked with
-a fixed advance (`bake_font_ex`) at 10/12/14/16/19 px for its monospaced
-firmware look, `Font::drawBold` double-strikes titles, and `ui::prim` supplies
-the flat shapes (outline rect, chevrons, dot field) the layouts are built from.
+by vertex color; circles are anti-aliased masks baked at boot, while shell
+surfaces are integer-aligned rects with stepped (pixel-rounded) corners so
+edges stay crisp on the LCD. Fonts are pre-baked `.rsf` atlases (see
+`tools/assetgen.c` for the format).
+
+### Typography
+
+Two roles, never more:
+
+| Role | Face | Sizes | Used for |
+|---|---|---|---|
+| Content | Inter SemiBold / Regular | 18, 15, 13 (both weights), 11 | game titles, system names, actions, settings labels, metadata |
+| Technical | Geist Pixel, fixed advance | 12, 10 | wordmark, clock/battery, badges, counts, section labels, legend |
+
+`Font::centerY` centres a label on its cap height (measured from 'H' at
+load), which is how every row, chip and button places text on whole pixels.
+Every atlas is embedded in the EBOOT and therefore comes out of the core
+arena (startup gate: 17,000 KB), so a size exists only when a role needs it.
+
+### Shared chrome (`ui/chrome.*`)
+
+One grid — 16px margins, header 0–27 (hairline at 27), content 36–238,
+footer hairline at 246 — and one focus language in the accent colour:
+`focusFill` (rows, menus, settings), `focusUnderline` (rail, tabs) and
+`focusFrame` (cards, artwork). `App::drawTopBar` (mark, wordmark, optional
+context, clock, battery, scan status) and `App::drawHintBar` (left-flowing
+glyph+label groups) are the only header and footer. Panels, chips, menu
+rows, the RetroShell mark and the artwork well/fallback live in the same
+module, so a screen composes them rather than drawing its own.
 
 Emulator frames are dynamic (unswizzled) textures updated per frame and
 drawn scaled: fit / stretch / 1:1, linear or nearest, per game.
@@ -111,14 +134,15 @@ for cores and (eventually) UI sounds.
    Systems  <  >  rail, L/R change system                  (home)
               v Down / X
         Library            vertical list, L/R switch system in place
-              v X on a game / Options > Game Details
+              v Options > Game Details (X on a game plays it)
         Game Detail        art, metadata, Play / Favorite / ...
 ```
 
 Horizontal always changes system, vertical moves within or between layers,
-X selects, O goes back, Square favorites, Triangle opens Options (Systems:
-Settings) and Start returns Home. X on a Library game opens its Game Detail
-rather than launching. The rail lists only systems that have games. The last game
+X plays (Library, Continue) or enters (Systems), O goes back, Square
+favorites, Triangle opens Options (Systems: Settings) and Start returns Home.
+Game Detail is the second row of Options. Continue Playing shows exactly three
+cards at a time. The rail lists only systems that have games. The last game
 highlighted in each system is remembered per system and persisted in
 `library.json` (`lastSelected`, memory-only while browsing and flushed when
 Home is left). Layer changes are vertical shifts and system changes
@@ -126,16 +150,21 @@ horizontal slides driven by `ui::Smooth`.
 
 Anything that touches the Memory Stick (core resolution, artwork decode,
 optional metadata JSON) runs once after the highlight settles
-(`hydrateSelection`), never per frame. Missing artwork is replaced by the
-designed placeholder (`drawPlaceholder`): dot field, faded system icon and
-abbreviation.
+(`hydrateSelection`), never per frame. Artwork is contain-fit into a well
+(`ui::artWell`); missing artwork is replaced by the branded fallback
+(`ui::artFallback`): dot pattern, RetroShell mark and wordmark, system icon
+and abbreviation — never an empty frame or a broken-image glyph.
 
 ## Themes
 
-Two flat built-in themes: warm ivory (light) and navy-charcoal (dark), one
-accent family (cobalt by default; Settings offers eight). Tokens: `bg*`,
-`text*`, `accent`, `selectBg/selectText` (selection bar), `divider`,
-`railOutline`, `dim` (popup backdrop), `fallbackDot`.
+Two flat built-in themes with the same roles and contrast steps: deep navy
+(Dark, the default) and warm paper (Light). One accent, which means focus and
+nothing else (blue by default; Settings offers five). Tokens: `bg`, `surface`,
+`surface2`, `line`, `textPrimary/Secondary/Muted/Disabled`, `accent`,
+`onAccent`, `focusEdge` (derived from the accent), `danger`, `scrim`, `dim`,
+`pattern`. Older theme.json keys (`bgTop`, `menuBg`, `selectBg`, `divider`,
+`textDim`, `fallbackDot`, ...) still load, mapped onto the role that replaced
+them.
 
 `theme.json` overrides any subset of the palette (colors as `#RRGGBB` or
 `#RRGGBBAA`), can supply a 480×272 background image, and can enable the
