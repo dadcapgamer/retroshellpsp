@@ -26,6 +26,13 @@ public:
     /* (x,y) is the TOP-left of the line box. */
     void draw(gfx::Renderer& r, float x, float y, const char* text, u32 color,
               Align align = Align::Left) const;
+    /* One-pixel faux bold: the pixel face has a single weight, so titles and
+     * selected rows double-strike one pixel to the right. */
+    void drawBold(gfx::Renderer& r, float x, float y, const char* text,
+                  u32 color, Align align = Align::Left) const {
+        draw(r, x, y, text, color, align);
+        draw(r, x + 1.f, y, text, color, align);
+    }
     /* Soft drop shadow first, then the text — for text over imagery. */
     void drawShadow(gfx::Renderer& r, float x, float y, const char* text,
                     u32 color, u32 shadowColor,

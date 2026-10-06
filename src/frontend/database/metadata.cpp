@@ -46,6 +46,41 @@ GameMeta loadMeta(const GameEntry& g) {
     return m;
 }
 
+void BoxartCache::loadShots() {
+    m_shotsLoaded = true;
+    m_shots.clear();
+    char dir[64];
+    std::snprintf(dir, sizeof dir, "%s/screenshots", fs::ROOT);
+    std::vector<fs::DirEntry> entries;
+    if (!fs::listDir(dir, entries)) return;
+    std::vector<unsigned> newest;
+    for (const auto& e : entries) {
+        unsigned hash = 0, serial = 0;
+        char tail[8] = {};
+        if (e.isDir ||
+            std::sscanf(e.name.c_str(), "%8x_%u.%7s", &hash, &serial, tail) != 3 ||
+            std::strcmp(tail, "png") != 0)
+            continue;
+        size_t slot = m_shots.size();
+        for (size_t i = 0; i < m_shots.size(); i++)
+            if (m_shots[i].first == hash) slot = i;
+        if (slot == m_shots.size()) {
+            m_shots.push_back({hash, std::string()});
+            newest.push_back(0);
+        } else if (serial < newest[slot]) {
+            continue;
+        }
+        newest[slot] = serial;
+        m_shots[slot].second = std::string(dir) + "/" + e.name;
+    }
+}
+
+const std::string* BoxartCache::shotFor(u32 hash) const {
+    for (const auto& s : m_shots)
+        if (s.first == hash) return &s.second;
+    return nullptr;
+}
+
 const gfx::Texture* BoxartCache::get(const GameEntry& g) {
     for (auto& s : m_slots) {
         if (s.hash == g.pathHash) {
@@ -75,6 +110,17 @@ const gfx::Texture* BoxartCache::get(const GameEntry& g) {
         found = fs::readFile(path, file, MAX_BOXART_FILE);
     }
 
+    /* No cover: use the player's own latest screenshot of this game. */
+    bool screenshot = false;
+    if (!found) {
+        if (!m_shotsLoaded) loadShots();
+        if (const std::string* shot = shotFor(g.pathHash)) {
+            std::snprintf(path, sizeof path, "%s", shot->c_str());
+            found = fs::readFile(path, file, MAX_BOXART_FILE);
+            screenshot = found;
+        }
+    }
+
     /* Coverless entries stop here without touching the Memory Stick. The
      * scanner records beside-ROM artwork, avoiding repeated failed opens. */
     if (!found) {
@@ -83,7 +129,7 @@ const gfx::Texture* BoxartCache::get(const GameEntry& g) {
         return nullptr;
     }
     RS_LOGI("boxart: loaded %s %s",
-            sibling ? "beside ROM" : "from library", path);
+            screenshot ? "screenshot" : "beside ROM", path);
 
     int w = 0, h = 0, comp = 0;
     stbi_uc* px = stbi_load_from_memory(file.data(), int(file.size()), &w, &h,
@@ -133,6 +179,8 @@ void BoxartCache::clear() {
         s = Slot{};
     }
     std::memset(m_missing, 0, sizeof m_missing);
+    m_shots.clear();
+    m_shotsLoaded = false;
     m_clock = 0;
     m_missingClock = 0;
 }

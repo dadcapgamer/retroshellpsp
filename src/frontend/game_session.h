@@ -13,6 +13,7 @@
 #pragma once
 
 #include "frontend/core_manager.h"
+#include "frontend/launch_notice.h"
 #include "core_api/rs_pause_menu.h"
 #include "frontend/database/game_index.h"
 #include "frontend/scenes/scene.h"
@@ -55,6 +56,7 @@ private:
     void makeThumb(u16* out) const;
     u32  mapButtons(const input::Pad& pad) const;
     bool injectFailure(const char* stage) const;
+    launch::Action failureAction(App& app) const;
 
     db::GameEntry m_game;
     std::string m_coreName;
@@ -90,6 +92,7 @@ private:
     bool m_romLoaded = false;   /* true once the ROM+SRAM are in the core */
     bool m_teardownComplete = false;
     bool m_systemSuspended = false;
+    float m_playSeconds = 0.f;   /* running time only; menu and sleep excluded */
     float m_sramTimer = 0.f;
     int m_sramThread = -1;
     void* m_sramSnapshot = nullptr;

@@ -1,9 +1,11 @@
 #include "frontend/database/game_index.h"
 #include "frontend/database/natural_order.h"
+#include "frontend/database/title_clean.h"
 #include "platform/psp/fs_psp.h"
 #include "runtime/log.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cstring>
 
 namespace rs::db {
@@ -71,14 +73,86 @@ const GameEntry* GameIndex::byHash(u32 pathHash) const {
     return nullptr;
 }
 
+namespace {
+
+std::string parentFolder(const std::string& path) {
+    const size_t last = path.rfind('/');
+    if (last == std::string::npos || last == 0) return {};
+    const size_t prev = path.rfind('/', last - 1);
+    return path.substr(prev == std::string::npos ? 0 : prev + 1,
+                       last - (prev == std::string::npos ? 0 : prev + 1));
+}
+
+std::string fold(const std::string& s) {
+    std::string out = s;
+    for (char& c : out) c = char(std::tolower(static_cast<unsigned char>(c)));
+    return out;
+}
+
+/* Duplicate ROMs, region variants and revisions all clean down to the same
+ * title. Where that happens inside one system, append what tells them apart —
+ * the dump tags first, then the folder, then the whole file name — so the
+ * list never shows two identical rows. Unique titles stay clean. */
+void disambiguate(std::vector<GameEntry>& games) {
+    /* A unique game's label stays empty and shown() falls back to the title,
+     * so a 2,000-game library does not store every title twice. */
+    for (auto& g : games) g.label.clear();
+    size_t i = 0;
+    while (i < games.size()) {
+        size_t j = i + 1;
+        const std::string key = fold(games[i].title);
+        while (j < games.size() && fold(games[j].title) == key) j++;
+        if (j - i > 1) {
+            for (size_t k = i; k < j; k++) {
+                GameEntry& g = games[k];
+                g.label = g.variant.empty()
+                              ? g.title
+                              : g.title + " (" + g.variant + ")";
+            }
+            for (int pass = 0; pass < 2; pass++) {
+                bool collision = false;
+                for (size_t a = i; a < j && !collision; a++)
+                    for (size_t b = a + 1; b < j; b++)
+                        if (fold(games[a].label) == fold(games[b].label)) {
+                            collision = true;
+                            break;
+                        }
+                if (!collision) break;
+                for (size_t k = i; k < j; k++) {
+                    GameEntry& g = games[k];
+                    if (pass == 0) {
+                        const std::string folder = parentFolder(g.path);
+                        if (!folder.empty())
+                            g.label = g.label + " [" + folder + "]";
+                    } else {
+                        g.label = g.name;
+                    }
+                }
+            }
+        }
+        i = j;
+    }
+}
+
+}  // namespace
+
 void GameIndex::replaceAll(std::vector<GameEntry> all) {
     for (auto& v : m_bySystem) v.clear();
-    for (auto& g : all) m_bySystem[u8(g.system)].push_back(std::move(g));
-    for (auto& v : m_bySystem)
+    for (auto& g : all) {
+        CleanTitle clean = cleanTitle(g.name);
+        g.title = std::move(clean.title);
+        g.variant = std::move(clean.variant);
+        m_bySystem[u8(g.system)].push_back(std::move(g));
+    }
+    for (auto& v : m_bySystem) {
         std::sort(v.begin(), v.end(),
                   [](const GameEntry& a, const GameEntry& b) {
+                      if (naturalNameLess(a.title, b.title)) return true;
+                      if (naturalNameLess(b.title, a.title)) return false;
                       return naturalNameLess(a.name, b.name);
                   });
+        disambiguate(v);
+    }
     m_generation++;   /* every prior GameEntry* is now dangling */
 }
 

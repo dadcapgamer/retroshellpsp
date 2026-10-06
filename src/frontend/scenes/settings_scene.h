@@ -22,14 +22,15 @@ private:
     enum Row {
         ROW_THEME = 0,
         ROW_ACCENT,
-        ROW_HOME_LAYOUT,
         ROW_TIME_FORMAT,
+        ROW_ARTWORK,
         ROW_CPU_MENU,
         ROW_CPU_GAME,
         ROW_UI_SOUNDS,
         ROW_SHOW_FPS,
         ROW_AUTOSAVE,
         ROW_RESCAN,
+        ROW_SETUP,
         ROW_COUNT
     };
 
@@ -38,8 +39,6 @@ private:
     const char* valueText(App& app, int row, char* buf, size_t n) const;
 
     int m_row = 0;
-    ui::Smooth m_rowPos;
-    ui::Smooth m_scroll;
     ui::Tween m_entrance;
     std::vector<std::string> m_themes;
     int m_themeIdx = 0;

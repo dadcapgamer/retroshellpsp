@@ -1,14 +1,25 @@
-/** Home: console-first two-level navigation.
+/** Home: one coherent shell with four spatial layers.
  *
- * Level 1 — horizontal console selector plus a recent-games list.
- * Level 2 — compact game list with a persistent metadata/box-art preview.
- * Triangle opens quick actions for the selected game without launching it.
+ *   Continue Playing   (above)   recent games across systems
+ *   Systems            (home)    horizontal rail, change system with L/R
+ *   Library            (below)   vertical game list for the selected system
+ *   Game Detail        (deeper)  focused single-game view
+ *
+ * Horizontal always changes system, vertical moves within or between
+ * layers, X selects, O goes back, Square favorites, Triangle opens options
+ * and Start returns Home. Select, in the Library only, opens the secondary
+ * View menu (filter, sort, search) — kept off the primary path on purpose.
+ * The navigation rules live in home_nav.h so they are unit-testable; this
+ * class owns input, data and painting.
  */
 #pragma once
 
 #include "frontend/core_registry.h"
 #include "frontend/database/game_index.h"
+#include "frontend/database/library_view.h"
 #include "frontend/database/metadata.h"
+#include "frontend/launch_notice.h"
+#include "frontend/scenes/home_nav.h"
 #include "frontend/scenes/scene.h"
 #include "frontend/ui/anim.h"
 #include "rs_common.h"
@@ -22,76 +33,149 @@ public:
     void enter(App& app) override;
     void update(App& app, float dt) override;
     void draw(App& app) override;
+    void shutdown(App& app) override;
 
 private:
-    static constexpr int NUM_CATS = 11;  /* 9 systems + favorites + settings */
+    enum class Overlay : u8 { None, Options, CorePicker, ViewMenu, Search,
+                              Error };
 
+    /* View menu rows; Clear only exists while a search is active. */
+    enum ViewRow : int { VR_SHOW, VR_SORT, VR_SEARCH, VR_CLEAR, VR_BACK };
+
+    /* Options menu rows, in mockup order. */
+    enum Option : int {
+        OPT_PLAY, OPT_FAVORITE, OPT_DETAILS, OPT_CHEATS, OPT_MANUAL,
+        OPT_DELETE_SAVE, OPT_REMOVE_RECENT, OPT_BACK, OPT_COUNT
+    };
+    /* Game Detail action rows. */
+    enum DetailRow : int {
+        DET_PLAY, DET_FAVORITE, DET_DETAILS, DET_CHEATS, DET_MANUAL,
+        DET_RETURN, DET_COUNT
+    };
+
+    /* --- data ------------------------------------------------------------ */
+    void rebuildSystems(App& app);
     void rebuildList(App& app);
     void rebuildRecents(App& app);
-    void refreshSelection(App& app);   /* schedules deferred stick-backed data */
-    void hydrateSelection(App& app);   /* runs only after navigation settles */
-    void updateCats(App& app);
-    void updateList(App& app);
-    void openActions(App& app, const db::GameEntry& game);
-    void updateActions(App& app);
-    void drawHome(App& app, float alpha, float slide);
-    /* Two presentations of level 1, selected by cfg::homeLayout. They differ
-     * in recents navigation as well as painting — classic uses a horizontal
-     * shelf, modern a vertical list — so updateCats branches too. */
-    void drawHomeModern(App& app, float alpha, float slide);
-    void drawHomeClassic(App& app, float alpha, float slide);
-    void drawBrowser(App& app, float alpha);
-    void drawActions(App& app);
+    void applyView(App& app, db::ViewState view, const std::string& query);
+    void refreshListKeepingPosition(App& app);
+    void syncActiveSystem();
+    const db::GameEntry* focusedGame() const;
+    int  currentSystemId() const;
+    int  gamesInCurrent() const { return int(m_visible.size()); }
+    void noteSelection(App& app);
+    void hydrateSelection(App& app);
+    const db::GameMeta* cachedMeta(u32 hash) const;
 
-    /* Core picker — opens before launch when a remembered core disappeared,
-     * or through Options -> Per-game Settings. */
-    void openCorePicker(App& app, const db::GameEntry& game);
+    /* --- input ----------------------------------------------------------- */
+    void updateSystems(App& app);
+    void updateContinue(App& app);
+    void updateLibrary(App& app);
+    void updateDetail(App& app);
+    void updateOptions(App& app);
     void updatePicker(App& app);
-    void drawPicker(App& app);
+    void switchSystem(App& app, int dir);
+    void launch(App& app, const db::GameEntry& game);
+    void toggleFavorite(App& app, const db::GameEntry& game);
+    void openOptions(App& app, const db::GameEntry& game);
+    void openDetail(App& app, const db::GameEntry& game);
+    void activateOption(App& app, int row);
+    void activateDetail(App& app, int row);
+    void openCorePicker(App& app, const db::GameEntry& game);
+    void openSettings(App& app);
+    void checkLaunchError(App& app, const db::GameEntry& game);
+    void openError(App& app, const db::GameEntry& game, const char* raw);
+    void updateError(App& app);
+    void openViewMenu(App& app);
+    void updateViewMenu(App& app);
+    int  viewRows(int out[5]) const;
+    void openSearch(App& app);
+    void updateSearch(App& app);
+    void recountSearch(App& app);
 
-    int        m_catIdx = 0;
-    ui::Smooth m_catPos;
+    /* --- drawing --------------------------------------------------------- */
+    void drawSystems(App& app, u32 alpha, float dy);
+    void drawContinue(App& app, u32 alpha, float dy);
+    void drawLibrary(App& app, u32 alpha, float dy);
+    void drawDetail(App& app, u32 alpha, float dy);
+    void drawOptions(App& app);
+    void drawPicker(App& app);
+    void drawViewMenu(App& app);
+    void drawSearch(App& app);
+    void drawError(App& app);
+    void drawLegend(App& app);
+    void drawBackdrop(App& app, u32 alpha);
+
+    /* --- state ----------------------------------------------------------- */
+    nav::HomeNav m_nav;
+    Overlay      m_overlay = Overlay::None;
+
+    std::vector<int> m_systems;                       /* db::System ids on the rail */
+    std::vector<const db::GameEntry*> m_visible;      /* current system's games */
+    std::vector<const db::GameEntry*> m_recents;      /* Continue Playing */
+    db::ViewState m_view;                  /* filter + sort of the current system */
+    std::string   m_query;                 /* active search, Library only */
+    int  m_systemTotal = 0;                /* all games in the system, unfiltered */
+    bool m_empty = false;                  /* no games anywhere: show setup help */
+    bool m_romRootMissing = false;
+    bool m_listDirty = false;              /* favorites changed under a filter */
+    u32 m_lastIndexGen = 0;   /* index generation, not count — a count-preserving
+                               * rescan still frees the GameEntry* held above */
+    u32 m_recentsRevision = 0;
+    u64 m_now = 0;            /* local timestamp, refreshed about once a second */
+    float m_nowTimer = 0.f;
+
+    /* Motion. layerPos: Continue = -1, Systems = 0, Library = 1, Detail = 2. */
+    ui::Smooth m_layerPos;
+    ui::Smooth m_railPos;       /* selected rail slot, fractional */
+    ui::Smooth m_railFirst;     /* first visible rail slot, fractional */
+    ui::Smooth m_contScroll;
+    ui::Smooth m_scroll;        /* Library list scroll, in rows */
+    ui::Smooth m_slideX;        /* horizontal slide-in after a system switch */
     ui::Tween  m_entrance;
 
-    /* Game-list state. */
-    ui::Smooth m_listFocus;                     /* 0 = cats, 1 = list */
-    bool       m_inList = false;
-    int        m_listIdx = 0;
-    ui::Smooth m_scroll;
-    std::vector<const db::GameEntry*> m_visible;
-    bool       m_recentFocus = false;
-    int        m_recentIdx = 0;
-    ui::Smooth m_recentReveal;                  /* collapsed banner → list */
-    std::vector<const db::GameEntry*> m_recentVisible;
-    u32        m_lastIndexGen = 0;    /* index generation, not count — a
-                                       * count-preserving rescan still frees
-                                       * the GameEntry* held in m_visible */
-
-    /* Core info for the focused game, cached because resolving reads the
-     * per-game config file — too costly for the 60fps draw path. */
+    /* Deferred, stick-backed data for the focused game. */
     const CoreInfo* m_selCore = nullptr;
     bool            m_selMultiCore = false;
-    db::GameMeta    m_selMeta;      /* cached; loadMeta reads the stick */
-    float           m_selectionSettle = 0.f;
+    db::GameMeta    m_selMeta;
+    u32             m_trackedHash = 0;
     u32             m_hydratedHash = 0;
+    float           m_selectionSettle = 0.f;
+    struct MetaEntry { u32 hash = 0; db::GameMeta meta; };
+    MetaEntry       m_metaCache[8];
+    int             m_metaNext = 0;
 
-    /* Selected-game quick actions. Save-state headers are queried once when
-     * the panel opens, never in the 60 fps draw path. */
-    bool      m_actionsOpen = false;
-    int       m_actionIdx = 0;
-    int       m_saveCount = 0;
-    db::GameEntry m_actionGame;
-    ui::Tween m_actionsFade;
+    /* Detail layer. The game is copied so a background scan can't free it
+     * while the layer is open. */
+    db::GameEntry m_detailGame;
+    bool          m_detailHasSave = false;
+    int           m_detailRow = 0;
+    bool          m_detailExpanded = false;
 
-    /* Core picker state. The game is copied so a background scan can't
-     * invalidate it while the modal is up; m_pickerCurrent marks the row
-     * a plain launch would use. */
-    bool          m_pickerOpen = false;
+    /* Options overlay. */
+    db::GameEntry m_optionsGame;
+    int           m_optionsRow = 0;
+    bool          m_confirmDelete = false;
+    bool          m_optionsHasSave = false;
+    ui::Tween     m_overlayFade;
+
+    /* View menu and search entry. */
+    int           m_viewRow = 0;
+    std::string   m_searchBuf;
+    int           m_searchChar = 0;        /* index into the search alphabet */
+    bool          m_searchTouched = false; /* pending letter chosen but not locked */
+    int           m_searchCount = 0;       /* live match count for the preview */
+
+    /* Launch failure shown as an actionable error state. */
+    launch::Notice m_notice;
+    std::string    m_noticeMessage;
+    db::GameEntry  m_noticeGame;
+
+    /* Core picker (Game Details -> Core). */
     int           m_pickerIdx = 0;
     db::GameEntry m_pickerGame;
     std::vector<const CoreInfo*> m_pickerCores;
     const CoreInfo* m_pickerCurrent = nullptr;
-    ui::Tween     m_pickerFade;
 };
 
 }  // namespace rs

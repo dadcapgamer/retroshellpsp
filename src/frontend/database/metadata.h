@@ -6,6 +6,11 @@
  * artwork is indexed beside ROMs so coverless entries require no failed
  * filesystem probes during browsing.
  *
+ * Fallback order when a game has no cover beside its ROM: the newest in-game
+ * screenshot the player captured (ms0:/RETROSHELL/screenshots/<hash>_<n>.png),
+ * then the shell's designed system placeholder. The screenshot folder is read
+ * once and indexed, so highlighting a coverless game still costs no probing.
+ *
  * Box art decoding happens synchronously but is throttled to one image per
  * frame and cached; textures are dropped wholesale when the launch protocol
  * evicts frontend assets.
@@ -16,6 +21,8 @@
 #include "platform/psp/gu_renderer.h"
 
 #include <string>
+#include <utility>
+#include <vector>
 
 namespace rs::db {
 
@@ -45,12 +52,18 @@ private:
         bool missing = false;   /* negative cache: no file on disk */
         gfx::Texture tex;
     };
+    void loadShots();
+    const std::string* shotFor(u32 hash) const;
+
     static constexpr int SLOTS = 12;
     static constexpr int MISSING_SLOTS = 192;
     Slot m_slots[SLOTS];
     u32 m_missing[MISSING_SLOTS] = {};
     int m_clock = 0;
     int m_missingClock = 0;
+    /* Newest screenshot per game, indexed lazily and rebuilt after clear(). */
+    std::vector<std::pair<u32, std::string>> m_shots;
+    bool m_shotsLoaded = false;
 };
 
 }  // namespace rs::db

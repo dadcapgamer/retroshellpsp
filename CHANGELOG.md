@@ -1,5 +1,65 @@
 # Changelog
 
+## Unreleased — Maturity pass
+
+Closes the gaps found auditing the shell against
+`RetroShell_Mature_Frontend_Foundations.md` (see `docs/MATURITY_AUDIT.md`).
+
+- **Clean titles.** File names are cleaned for display
+  (`Pokemon - Crystal Version (USA, Europe) (Rev 1)` -> `Pokémon Crystal`);
+  dump tags become a variant, shown only to tell duplicates apart and in
+  Game Details, which also keeps the real file name. Missing metadata fields
+  are omitted instead of printed as "Unknown".
+- **View menu (Select, in a Library):** Show All / Favorites / Recently Added,
+  sort A-Z / Z-A / Recently Played / Most Played, and D-pad letter search.
+  Filter and sort are remembered per system.
+- **Resume anywhere.** The rail system, layer and Continue slot persist across
+  process restarts (native emulators replace the process). Play time is
+  tracked and shown in Game Details.
+- **Actionable errors** for missing ROM, emulator, BIOS, storage, long path,
+  memory limit and rejected ROM, each with one fix action; plus explicit
+  empty, scanning and "ROM folder not found" screens.
+- **First-run setup** (scan, confirm systems, confirm emulators, done);
+  re-runnable from Settings. Per-system default emulator is now configurable.
+- **Artwork fallback** now includes your latest in-game screenshot before the
+  system placeholder.
+- Low-battery colour and toasts; Select glyph; shared state-panel and
+  text-layout primitives.
+- Removed the unused 69 KB Inter 19 atlas to pay for the new code; startup
+  arena is 17,016 KB (gate: 17,000).
+
+## Unreleased — Astra shell redesign
+
+Home is rebuilt around a spatial, PSP-native model instead of the card
+dashboard: **horizontal changes system, vertical moves within a layer, X
+selects, O goes back, Square favorites, Triangle opens options, Start goes
+Home.**
+
+- **Systems** is a five-slot rail with a boxed selection, system name and game
+  count. It lists only systems that have games.
+- **Continue Playing** (Up from Systems) shows up to five recent games across
+  systems with art, title, system and relative last-played time ("2h ago").
+  X resumes, Square favorites, Triangle opens options. A single recent game
+  collapses to one compact item; with none, the layer is omitted.
+- **Library** is a flat text list with a selection bar and stars. Left/Right
+  and L/R switch system without leaving the Library, and each system
+  remembers its selected game, also across restarts.
+- New **Game Detail** screen (X on a game in the Library, or Options -> Game
+  Details; Play is its first action, so launching is X, X) and a new **Options** popup: Play, Add/Remove Favorite, Game
+  Details, Cheats, View Manual, Delete Save Data (confirms), Remove from
+  Recent, Back. Cheats and manuals show "not available" until data exists.
+- Designed artwork fallback (dot field, system icon, abbreviation); no blank
+  or broken image slots. Metadata line reads "Publisher · Year".
+- Console icons and the face-button / START glyphs now come from the latest
+  Figma library ("console icons v2", "system icons").
+- Flat ivory/navy themes with a cobalt accent, monospaced pixel typography,
+  compact status bar (clock, battery %), and a space-between control legend.
+- Settings adopts the same look. The Home layout option is retired.
+- Library Memory Stick writes stay off the browsing path: selection memory is
+  flushed when leaving Home.
+- Tooling: `RS_AUTOPILOT_TOUR` walks every Home layer for visual review;
+  new host tests cover relative time and the navigation model.
+
 ## v1.0.0-beta.4
 
 Beta 4 completes the native adapter pipeline, adds a home-layout choice, and

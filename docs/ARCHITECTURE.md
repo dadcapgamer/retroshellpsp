@@ -33,7 +33,8 @@ browse → pick game
   atomically save persistent SRAM + RTC → unloadROM
   mem::shutdown → unloadCore → mem::init
   App::restoreAfterCore()    reload theme assets
-  HomeScene restored from FrontendSnapshot (category/list/cursor intact)
+  HomeScene restored from FrontendSnapshot (layer/system/Continue cursor);
+  per-system game selection comes back from library.json `lastSelected`
 ```
 
 The user perceives one seamless application; in reality the frontend
@@ -67,7 +68,10 @@ GU_PSM_5650 double buffer, vblank-synced, GU_TRANSFORM_2D vertices.
 Text and UI chrome are T8 textures with a shared alpha-ramp CLUT, tinted
 by vertex color; rounded rectangles / circles are anti-aliased masks baked
 at boot and 9-sliced. Fonts are pre-baked `.rsf` atlases (see
-`tools/assetgen.c` for the format).
+`tools/assetgen.c` for the format); the Astra shell uses Geist Pixel baked with
+a fixed advance (`bake_font_ex`) at 10/12/14/16/19 px for its monospaced
+firmware look, `Font::drawBold` double-strikes titles, and `ui::prim` supplies
+the flat shapes (outline rect, chevrons, dot field) the layouts are built from.
 
 Emulator frames are dynamic (unswizzled) textures updated per frame and
 drawn scaled: fit / stretch / 1:1, linear or nearest, per game.
@@ -96,13 +100,48 @@ for cores and (eventually) UI sounds.
   under `RETROSHELL/metadata/<System>/` and is not read during normal grid
   navigation.
 
+## Home shell
+
+`HomeScene` is one scene with four spatial layers driven by the pure
+`nav::HomeNav` model (`scenes/home_nav.h`, unit-tested):
+
+```
+        Continue Playing   recent games across systems     (above)
+              ^ Up
+   Systems  <  >  rail, L/R change system                  (home)
+              v Down / X
+        Library            vertical list, L/R switch system in place
+              v X on a game / Options > Game Details
+        Game Detail        art, metadata, Play / Favorite / ...
+```
+
+Horizontal always changes system, vertical moves within or between layers,
+X selects, O goes back, Square favorites, Triangle opens Options (Systems:
+Settings) and Start returns Home. X on a Library game opens its Game Detail
+rather than launching. The rail lists only systems that have games. The last game
+highlighted in each system is remembered per system and persisted in
+`library.json` (`lastSelected`, memory-only while browsing and flushed when
+Home is left). Layer changes are vertical shifts and system changes
+horizontal slides driven by `ui::Smooth`.
+
+Anything that touches the Memory Stick (core resolution, artwork decode,
+optional metadata JSON) runs once after the highlight settles
+(`hydrateSelection`), never per frame. Missing artwork is replaced by the
+designed placeholder (`drawPlaceholder`): dot field, faded system icon and
+abbreviation.
+
 ## Themes
 
+Two flat built-in themes: warm ivory (light) and navy-charcoal (dark), one
+accent family (cobalt by default; Settings offers eight). Tokens: `bg*`,
+`text*`, `accent`, `selectBg/selectText` (selection bar), `divider`,
+`railOutline`, `dim` (popup backdrop), `fallbackDot`.
+
 `theme.json` overrides any subset of the palette (colors as `#RRGGBB` or
-`#RRGGBBAA`), can supply a 480×272 background image, and can disable the
-wave animation. Unset values inherit from the built-in Light or Dark
-palette (`"dark": true|false`). Built-ins need no files. Palette changes
-crossfade live.
+`#RRGGBBAA`), can supply a 480×272 background image, and can enable the
+legacy wave animation (off by default; the built-ins are flat). Unset values
+inherit from the built-in Light or Dark palette (`"dark": true|false`).
+Built-ins need no files. Palette changes crossfade live.
 
 ## Save data
 

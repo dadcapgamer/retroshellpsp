@@ -1,121 +1,84 @@
 #include "frontend/scenes/home_scene.h"
 #include "frontend/app.h"
 #include "frontend/scenes/settings_scene.h"
+#include "frontend/ui/grid_window.h"
+#include "frontend/ui/relative_time.h"
+#include "frontend/ui/state_panel.h"
+#include "frontend/ui/text_layout.h"
+#include "platform/psp/fs_psp.h"
+#include "platform/psp/power.h"
 #include "runtime/config.h"
 #include "runtime/save_manager.h"
 
 #include <pspctrl.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cctype>
 #include <cstring>
+#include <string>
 
 namespace rs {
 
 namespace {
 
-struct Category {
-    int systemIdx;     /* >= 0: index into db::System */
-};
+/* --- layout (480x272, measured from the redesign mockups) ---------------- */
+constexpr float MARGIN = 21.f;
 
-constexpr int CATEGORY_FAVORITES = -2;
-constexpr int CATEGORY_SETTINGS  = -1;
-constexpr int CAT_SETTINGS  = 10;
-constexpr int SETTINGS_ICON = 9;
+constexpr int   RAIL_VISIBLE = 5;
+constexpr float RAIL_PITCH = 84.f;
+constexpr float RAIL_X0 = 78.f;           /* centre of the first slot */
+constexpr float BOX_W = 72.f, BOX_H = 88.f, BOX_TOP = 62.f;
+constexpr float RAIL_LABEL_Y = 132.f;
 
-const Category& cat(int i) {
-    static const Category CATS[] = {
-        /* Keep PC Engine in the first eight visible cards. Game Gear remains
-         * one step to the right alongside Favorites and Settings. */
-        { 0}, { 1}, { 2}, { 3}, { 4}, { 5}, { 6}, { 8}, { 7},
-        {CATEGORY_FAVORITES}, {CATEGORY_SETTINGS},
-    };
-    return CATS[i];
-}
+constexpr float CARD_W = 92.f, CARD_H = 80.f, CARD_PITCH = 107.f;
+constexpr float CARD_X0 = 31.f, CARD_Y = 84.f;
+constexpr int   RECENT_MAX = 5;
 
-constexpr float LIST_TOP = 72.f;
-constexpr float LIST_ROW = 28.f;
-constexpr int   LIST_VISIBLE = 6;
-constexpr int   RECENT_VISIBLE = 4;
-constexpr float SELECTION_SETTLE_SECONDS = 0.18f;
+constexpr float LIST_X = 12.f, LIST_W = 256.f;
+constexpr float LIST_TOP = 63.f, LIST_ROW = 19.f;
+constexpr int   LIST_VISIBLE = 9;
+constexpr float PREVIEW_X = 305.f, PREVIEW_Y = 67.f;
+constexpr float PREVIEW_W = 145.f, PREVIEW_H = 109.f;
 
-const char* categoryRailLabel(int categoryIdx) {
-    const int systemIdx = cat(categoryIdx).systemIdx;
-    if (systemIdx == CATEGORY_FAVORITES) return "FAVORITES";
-    if (systemIdx == CATEGORY_SETTINGS) return "SETTINGS";
-    static const char* LABELS[] = {
+constexpr float SHIFT = 34.f;             /* vertical layer travel */
+constexpr float SLIDE = 44.f;             /* horizontal system-switch travel */
+constexpr float SETTLE_SECONDS = 0.18f;
+
+using ui::drawEllipsized;
+using ui::drawWrapped;
+
+const char* systemTitle(int systemId) {
+    static const char* NAMES[] = {
         "GAME BOY", "GAME BOY COLOR", "GAME BOY ADVANCE", "NES",
         "SUPER NINTENDO", "GENESIS", "MASTER SYSTEM", "GAME GEAR",
         "PC ENGINE",
     };
-    return LABELS[rsClamp(systemIdx, 0, db::SYSTEM_COUNT - 1)];
+    return NAMES[rsClamp(systemId, 0, db::SYSTEM_COUNT - 1)];
 }
 
-int listStart(int index, int count) {
-    if (count <= 0) return 0;
-    return rsClamp(rsClamp(index, 0, count - 1) - 1, 0,
+const char* badge(int systemId) {
+    return db::systemInfo(db::System(rsClamp(systemId, 0,
+                                             db::SYSTEM_COUNT - 1))).badge;
+}
+
+u32 fade(u32 color, u32 alpha) {
+    return rsWithAlpha(color, rsAlphaOf(color) * alpha / 255u);
+}
+
+float layerAlpha(float pos, float index) {
+    return rsClamp(1.f - std::fabs(pos - index), 0.f, 1.f);
+}
+
+int listStart(int selected, int count) {
+    return rsClamp(selected - LIST_VISIBLE / 2, 0,
                    rsClamp(count - LIST_VISIBLE, 0, count));
 }
 
-u32 opaqueOver(u32 foreground, u32 background) {
-    const u32 alpha = rsAlphaOf(foreground);
-    u32 result = 0xFF000000u;
-    for (int shift = 0; shift < 24; shift += 8) {
-        const u32 fg = (foreground >> shift) & 0xFFu;
-        const u32 bg = (background >> shift) & 0xFFu;
-        result |= ((fg * alpha + bg * (255u - alpha) + 127u) / 255u)
-                  << shift;
-    }
-    return result;
-}
-
-u32 backgroundAt(const theme::Palette& pal, float y) {
-    return rsWithAlpha(
-        rsLerpColor(pal.bgTop, pal.bgBottom,
-                    rsClamp(y / float(RS_SCREEN_H), 0.f, 1.f)),
-        255u);
-}
-
-/* Flatten a translucent surface against the gradient backdrop at height y.
- * Used by the classic layout's recent shelf so box-art corner fills match the
- * card they sit on rather than showing the gradient through them. */
-/* Classic layout's recent-game caption. The modern list shows play counts
- * instead, so this was dropped in beta.3 and is restored alongside it. */
-void formatLastPlayedDate(u64 stamp, char* out, size_t n) {
-    if (!stamp) {
-        std::snprintf(out, n, "Last Played: Never");
-        return;
-    }
-    const int day = int((stamp / 10000u) % 100u);
-    const int month = int((stamp / 1000000u) % 100u);
-    const int year = int((stamp / 100000000u) % 100u);
-    if (month < 1 || month > 12 || day < 1 || day > 31) {
-        std::snprintf(out, n, "Last Played: Unknown");
-        return;
-    }
-    std::snprintf(out, n, "Last Played %02d/%02d/%02d", month, day, year);
-}
-
-u32 surfaceAt(const theme::Palette& pal, u32 surface, float y) {
-    return opaqueOver(surface, backgroundAt(pal, y));
-}
-
-void maskArtCorners(gfx::Renderer& r, float x, float y, float w, float h,
-                    u32 color) {
-    /* Pixel-aligned approximation of a 4px CSS radius. */
-    r.rect(x,         y,         2.f, 1.f, color);
-    r.rect(x,         y + 1.f,   1.f, 1.f, color);
-    r.rect(x + w - 2.f, y,       2.f, 1.f, color);
-    r.rect(x + w - 1.f, y + 1.f, 1.f, 1.f, color);
-    r.rect(x,         y + h - 1.f, 2.f, 1.f, color);
-    r.rect(x,         y + h - 2.f, 1.f, 1.f, color);
-    r.rect(x + w - 2.f, y + h - 1.f, 2.f, 1.f, color);
-    r.rect(x + w - 1.f, y + h - 2.f, 1.f, 1.f, color);
-}
-
-void drawArtCover(gfx::Renderer& r, const gfx::Texture& art,
-                  float x, float y, float w, float h, u32 color,
-                  u32 cornerFill) {
+/* Cover-fit art into a rect, cropping to the destination aspect. */
+void drawArtCover(gfx::Renderer& r, const gfx::Texture& art, float x, float y,
+                  float w, float h, u32 color) {
     const float srcAspect = float(art.width) / float(art.height);
     const float dstAspect = w / h;
     float sx = 0.f, sy = 0.f;
@@ -128,398 +91,575 @@ void drawArtCover(gfx::Renderer& r, const gfx::Texture& art,
         sy = (float(art.height) - sh) * .5f;
     }
     r.sprite(art, sx, sy, sw, sh, x, y, w, h, color);
-    maskArtCorners(r, x, y, w, h, cornerFill);
 }
 
-void drawWrapped(const text::Font& font, gfx::Renderer& r,
-                 float x, float y, float maxWidth, int maxLines,
-                 const std::string& value, u32 color) {
-    if (value.empty() || maxLines <= 0) return;
-    const char* p = value.c_str();
-    char line[128] = {};
-    int len = 0;
-    int lines = 0;
-
-    while (*p && lines < maxLines) {
-        while (*p == ' ') ++p;
-        const char* word = p;
-        while (*p && *p != ' ') ++p;
-        const int wordLen = int(p - word);
-        if (wordLen <= 0) break;
-
-        char candidate[128];
-        const int addSpace = len > 0 ? 1 : 0;
-        const int nextLen = rsClamp(len + addSpace + wordLen, 0, 127);
-        std::memcpy(candidate, line, size_t(len));
-        if (addSpace) candidate[len] = ' ';
-        std::memcpy(candidate + len + addSpace, word,
-                    size_t(nextLen - len - addSpace));
-        candidate[nextLen] = '\0';
-
-        if (len > 0 && font.measure(candidate) > maxWidth) {
-            font.draw(r, x, y + lines * font.lineHeight(), line, color);
-            lines++;
-            len = 0;
-            line[0] = '\0';
-            if (lines >= maxLines) break;
-        }
-        if (len > 0) line[len++] = ' ';
-        const int copy = rsClamp(wordLen, 0, 127 - len);
-        std::memcpy(line + len, word, size_t(copy));
-        len += copy;
-        line[len] = '\0';
-    }
-    if (len > 0 && lines < maxLines)
-        font.draw(r, x, y + lines * font.lineHeight(), line, color);
+/* The designed fallback: flat field, dot lattice, faded system icon and the
+ * system abbreviation. Used whenever artwork is absent or not yet decoded,
+ * so the slot is never blank and never shows a broken-image glyph. */
+void drawPlaceholder(App& app, int systemId, float x, float y, float w,
+                     float h, u32 a, bool withBadge) {
+    auto& r = app.renderer();
+    const auto& pal = app.pal();
+    x = float(int(x)); y = float(int(y));
+    w = float(int(w)); h = float(int(h));
+    r.rect(x, y, w, h, fade(pal.tileBg, a));
+    ui::prim::dotField(r, x, y, w, h, fade(pal.fallbackDot, a));
+    ui::prim::outlineRect(r, x, y, w, h, 1.f, fade(pal.divider, a));
+    const float icon = h >= 96.f ? 64.f : 48.f;
+    const float iconY = y + (h - icon) * .5f - (withBadge ? 6.f : 0.f);
+    ui::prim::iconSystem(r, systemId, x + (w - icon) * .5f, iconY, icon,
+                         rsWithAlpha(pal.textSecondary, a * 150u / 255u),
+                         pal.accent);
+    if (withBadge)
+        app.fonts().pixelTiny.draw(r, x + w * .5f, y + h - 16.f,
+                                   badge(systemId),
+                                   fade(pal.textSecondary, a),
+                                   text::Align::Center);
 }
 
-void drawEllipsized(const text::Font& font, gfx::Renderer& r,
-                    float x, float y, float maxWidth,
-                    const std::string& value, u32 color,
-                    text::Align align) {
-    if (font.measure(value.c_str()) <= maxWidth) {
-        font.draw(r, x, y, value.c_str(), color, align);
-        return;
-    }
-
-    char source[96];
-    std::snprintf(source, sizeof source, "%s", value.c_str());
-    int len = int(std::strlen(source));
-    char output[100];
-    while (len > 0) {
-        do {
-            --len;
-        } while (len > 0 &&
-                 (static_cast<unsigned char>(source[len]) & 0xC0u) == 0x80u);
-        std::snprintf(output, sizeof output, "%.*s...", len, source);
-        if (font.measure(output) <= maxWidth) {
-            font.draw(r, x, y, output, color, align);
-            return;
-        }
-    }
-    font.draw(r, x, y, "...", color, align);
+std::string upper(std::string s) {
+    for (char& c : s) c = char(std::toupper(static_cast<unsigned char>(c)));
+    return s;
 }
 
-void drawCoverPlaceholder(gfx::Renderer& r, const App::Fonts& fonts,
-                          const theme::Palette& pal,
-                          const db::GameEntry& game, float x, float y,
-                          float w, float h, u32 alpha) {
-    x = float(int(x));
-    y = float(int(y));
-    w = float(int(w));
-    h = float(int(h));
-    ui::prim::roundedRect(
-        r, x, y, w, h, 4.f,
-        rsWithAlpha(pal.tileBg, rsAlphaOf(pal.tileBg) * alpha / 255u));
-    (void)fonts;
-    ui::prim::roundedOutline(
-        r, x + 4.f, y + 4.f, w - 8.f, h - 8.f, 4.f,
-        rsWithAlpha(pal.panelOutline,
-                    rsAlphaOf(pal.panelOutline) * alpha / 255u));
-    const float iconSize = (w >= 100.f && h >= 64.f) ? 64.f : 32.f;
-    ui::prim::iconSystem(
-        r, int(game.system),
-        x + float(int((w - iconSize) * .5f)),
-        y + float(int((h - iconSize) * .5f)),
-        iconSize,
-        rsWithAlpha(pal.textSecondary, alpha),
-        rsWithAlpha(pal.accent, alpha));
+/* "FAVORITES · MOST PLAYED · 12 GAMES": only what differs from the plain
+ * A-Z list is mentioned, so the default header stays "42 GAMES". */
+std::string librarySubtitle(const db::ViewState& view, const std::string& query,
+                            int shown) {
+    std::string out;
+    auto add = [&](const std::string& part) {
+        if (!out.empty()) out += " \xC2\xB7 ";
+        out += part;
+    };
+    if (view.filter != db::ViewFilter::All) add(upper(db::filterName(view.filter)));
+    if (!query.empty()) add("\"" + query + "\"");
+    if (view.sort != db::ViewSort::NameAZ &&
+        view.filter != db::ViewFilter::RecentlyAdded)
+        add(upper(db::sortName(view.sort)));
+    char count[24];
+    std::snprintf(count, sizeof count, "%d GAME%s", shown, shown == 1 ? "" : "S");
+    add(count);
+    return out;
 }
 
-void formatLastPlayed(u64 stamp, bool clock24Hour, char* out, size_t n) {
-    if (!stamp) {
-        std::snprintf(out, n, "Last played: Never");
-        return;
+/* Publisher (else developer, else genre) and year, whichever exist, joined —
+ * nothing is printed for a field the metadata does not have. */
+std::string metaLine(const db::GameMeta& m) {
+    std::string out = !m.publisher.empty() ? m.publisher
+                    : !m.developer.empty() ? m.developer : m.genre;
+    if (m.year > 0) {
+        if (!out.empty()) out += " \xC2\xB7 ";
+        out += std::to_string(m.year);
     }
-    const int minute = int(stamp % 100u);
-    const int hour = int((stamp / 100u) % 100u);
-    const int day = int((stamp / 10000u) % 100u);
-    const int month = int((stamp / 1000000u) % 100u);
-    const int year = int((stamp / 100000000u) % 100u);
-    if (month < 1 || month > 12 || day < 1 || day > 31 ||
-        hour < 0 || hour > 23 || minute < 0 || minute > 59) {
-        std::snprintf(out, n, "Last played: Unknown");
-        return;
-    }
-    if (clock24Hour) {
-        std::snprintf(out, n, "Last played %02d/%02d/%02d %02d:%02d",
-                      month, day, year, hour, minute);
-    } else {
-        const char* suffix = hour < 12 ? "AM" : "PM";
-        const int displayHour = (hour % 12) == 0 ? 12 : hour % 12;
-        std::snprintf(out, n, "Last played %02d/%02d/%02d %d:%02d %s",
-                      month, day, year, displayHour, minute, suffix);
-    }
+    return out;
+}
+
+constexpr const char SEARCH_CHARS[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 -':.";
+constexpr int SEARCH_CHAR_COUNT = int(sizeof SEARCH_CHARS) - 1;
+constexpr size_t SEARCH_MAX = 16;
+
+void drawStar(gfx::Renderer& r, float cx, float cy, float radius, u32 color) {
+    ui::prim::iconStar(r, float(int(cx)), float(int(cy)), radius, color);
 }
 
 }  // namespace
 
+/* ---------------------------------------------------------------------- */
+/* Data                                                                    */
+/* ---------------------------------------------------------------------- */
+
 void HomeScene::enter(App& app) {
-    m_catIdx  = rsClamp(app.snapshot().catIdx, 0, NUM_CATS - 1);
-    m_listIdx = app.snapshot().listIdx;
-    m_inList  = app.snapshot().inList;
-    m_recentIdx = app.snapshot().recentIdx;
-    m_recentFocus = app.snapshot().recentFocus && !m_inList;
-    m_catPos.snap(float(m_catIdx));
-    m_listFocus.snap(m_inList ? 1.f : 0.f);
-    m_entrance.start(0.4f);
-    m_actionsOpen = false;
-    m_actionIdx = 0;
-    m_saveCount = 0;
+    m_nav = nav::HomeNav{};
+    m_overlay = Overlay::None;
+    m_query.clear();
+    m_listDirty = false;
+    rebuildSystems(app);
+
+    const auto& snap = app.snapshot();
+    for (size_t i = 0; i < m_systems.size(); i++)
+        if (m_systems[i] == snap.systemId) m_nav.systemPos = int(i);
+    m_nav.continueIdx = snap.continueIdx;
+    /* Detail and overlays never survive a trip into a game. */
+    m_nav.layer = snap.layer == nav::Layer::Detail ? nav::Layer::Library
+                                                   : snap.layer;
+
+    syncActiveSystem();
     rebuildList(app);
     rebuildRecents(app);
-    if (m_visible.empty()) m_inList = false;
-    if (m_recentVisible.empty()) m_recentFocus = false;
-    m_recentReveal.snap(m_recentFocus ? 1.f : 0.f);
-    m_listIdx = rsClamp(m_listIdx, 0, int(m_visible.size()) - 1);
-    if (m_listIdx < 0) m_listIdx = 0;
-    m_scroll.snap(float(listStart(m_listIdx, int(m_visible.size()))));
+    m_nav.clamp(int(m_systems.size()), gamesInCurrent(), int(m_recents.size()),
+                m_systemTotal);
+
+    m_now = power::localTimestamp();
+    m_entrance.start(0.35f);
+    m_layerPos.snap(m_nav.layer == nav::Layer::Continue ? -1.f
+                    : m_nav.layer == nav::Layer::Library ? 1.f : 0.f);
+    m_railPos.snap(float(m_nav.systemPos));
+    m_railFirst.snap(float(nav::railFirst(m_nav.systemPos,
+                                          int(m_systems.size()),
+                                          RAIL_VISIBLE)));
+    m_contScroll.snap(float(rsClamp(m_nav.continueIdx - 2, 0,
+                                    rsClamp(int(m_recents.size()) - 4, 0, 8))));
+    m_scroll.snap(float(listStart(m_nav.currentGame(), gamesInCurrent())));
+    m_slideX.snap(0.f);
+    m_trackedHash = 0;
+    m_selectionSettle = 0.f;
+
+    /* Follow-ups requested by a failed launch on the way back here. */
+    auto& after = app.snapshot();
+    if (after.rescanOnHome) {
+        after.rescanOnHome = false;
+        if (!app.scanner().running()) {
+            app.scanner().start();
+            app.toast("Rescanning library...");
+        }
+    }
+    if (after.pickerHash) {
+        const u32 hash = after.pickerHash;
+        after.pickerHash = 0;
+        if (const db::GameEntry* game = app.index().byHash(hash))
+            openCorePicker(app, *game);
+    }
 }
 
+void HomeScene::shutdown(App& app) { app.library().flush(); }
+
+void HomeScene::rebuildSystems(App& app) {
+    m_systems.clear();
+    for (int s = 0; s < db::SYSTEM_COUNT; s++)
+        if (!app.index().games(db::System(s)).empty()) m_systems.push_back(s);
+    /* No games at all is a real state with its own screen (scanning / ROM
+     * folder missing / nothing found), not a rail of empty systems. */
+    m_empty = m_systems.empty();
+    m_romRootMissing = m_empty && !fs::exists(fs::ROM_ROOT) &&
+                       !fs::exists("ms0:/roms");
+}
+
+void HomeScene::syncActiveSystem() {
+    if (m_systems.empty()) return;
+    m_nav.systemPos = rsClamp(m_nav.systemPos, 0, int(m_systems.size()) - 1);
+    m_nav.activeSystem = m_systems[size_t(m_nav.systemPos)];
+}
+
+int HomeScene::currentSystemId() const { return m_nav.activeSystem; }
+
+/* Builds the current system's list for its filter/sort/search and puts the
+ * highlight back on the game the user last had selected there, wherever that
+ * game now sits. Selection is remembered by game, not by row, so changing the
+ * view (or a rescan reshuffling the list) never moves the user off their
+ * game when it is still visible. */
 void HomeScene::rebuildList(App& app) {
-    m_visible.clear();
-    const Category& c = cat(m_catIdx);
-    if (c.systemIdx >= 0) {
-        for (const auto& g : app.index().games(db::System(c.systemIdx)))
-            m_visible.push_back(&g);
-    } else if (c.systemIdx == CATEGORY_FAVORITES) {
-        for (u32 hash : app.library().favorites())
-            if (const db::GameEntry* game = app.index().byHash(hash))
-                m_visible.push_back(game);
-    }
+    const int system = currentSystemId();
+    const auto& all = app.index().games(db::System(system));
+    m_view = app.library().view(system);
+    m_visible = db::buildView(all, m_view, m_query, app.library());
+    m_systemTotal = int(all.size());
     m_lastIndexGen = app.index().generation();
-    refreshSelection(app);
+    const int found =
+        db::indexOfHash(m_visible, app.library().lastSelected(system));
+    m_nav.currentGame() = found >= 0 ? found : 0;
+}
+
+void HomeScene::applyView(App& app, db::ViewState view,
+                          const std::string& query) {
+    app.library().setView(currentSystemId(), view);
+    m_query = query;
+    rebuildList(app);
+    m_nav.clamp(int(m_systems.size()), gamesInCurrent(), int(m_recents.size()),
+                m_systemTotal);
+    m_scroll.snap(float(listStart(m_nav.currentGame(), gamesInCurrent())));
+    m_trackedHash = 0;
+    noteSelection(app);
+}
+
+/* The list is stale after a favorite changed under the Favorites filter.
+ * Rebuild but stay at the same row, so unfavoriting several in a row works. */
+void HomeScene::refreshListKeepingPosition(App& app) {
+    const int keep = m_nav.currentGame();
+    rebuildList(app);
+    m_nav.currentGame() = rsClamp(keep, 0, std::max(gamesInCurrent() - 1, 0));
+    m_nav.clamp(int(m_systems.size()), gamesInCurrent(), int(m_recents.size()),
+                m_systemTotal);
+    m_trackedHash = 0;
+    noteSelection(app);
 }
 
 void HomeScene::rebuildRecents(App& app) {
-    m_recentVisible.clear();
+    m_recents.clear();
+    m_recentsRevision = app.library().recentsRevision();
     for (u32 hash : app.library().recents()) {
         if (const db::GameEntry* game = app.index().byHash(hash))
-            m_recentVisible.push_back(game);
-        if (int(m_recentVisible.size()) == RECENT_VISIBLE) break;
+            m_recents.push_back(game);
+        if (int(m_recents.size()) == RECENT_MAX) break;
     }
-    m_recentIdx =
-        rsClamp(m_recentIdx, 0, int(m_recentVisible.size()) - 1);
-    if (m_recentIdx < 0) m_recentIdx = 0;
 }
 
-void HomeScene::refreshSelection(App& app) {
-    (void)app;
-    m_selCore = nullptr;
-    m_selMultiCore = false;
-    m_selMeta = db::GameMeta{};
-    m_hydratedHash = 0;
-    m_selectionSettle = m_visible.empty() ? 0.f : SELECTION_SETTLE_SECONDS;
+const db::GameEntry* HomeScene::focusedGame() const {
+    switch (m_nav.layer) {
+        case nav::Layer::Continue:
+            return m_nav.continueIdx < int(m_recents.size())
+                       ? m_recents[size_t(m_nav.continueIdx)] : nullptr;
+        case nav::Layer::Library:
+            return m_nav.currentGame() < int(m_visible.size())
+                       ? m_visible[size_t(m_nav.currentGame())] : nullptr;
+        case nav::Layer::Detail:
+            return &m_detailGame;
+        case nav::Layer::Systems:
+            break;
+    }
+    return nullptr;
 }
 
+void HomeScene::noteSelection(App& app) {
+    if (m_nav.currentGame() < int(m_visible.size()))
+        app.library().setLastSelected(
+            currentSystemId(),
+            m_visible[size_t(m_nav.currentGame())]->pathHash);
+}
+
+const db::GameMeta* HomeScene::cachedMeta(u32 hash) const {
+    for (const auto& e : m_metaCache)
+        if (e.hash == hash) return &e.meta;
+    return nullptr;
+}
+
+/* Runs only after the highlight settles: it resolves the core (reads the
+ * per-game config), decodes artwork and parses the optional metadata file,
+ * all Memory Stick work that must never sit on the scrolling path. */
 void HomeScene::hydrateSelection(App& app) {
-    if (m_visible.empty()) return;
-    const auto& g =
-        *m_visible[size_t(rsClamp(m_listIdx, 0, int(m_visible.size()) - 1))];
-    if (m_hydratedHash == g.pathHash) return;
-    m_selCore = app.cores().defaultFor(g.system);
-    m_selMultiCore = app.cores().hasChoice(g.system);
-    /* The browsing panel is deliberately memory-backed. Optional metadata
-     * files remain available to explicit detail/settings flows, but moving
-     * the highlight must not parse JSON from the Memory Stick. */
-    app.boxart().get(g);
-    m_hydratedHash = g.pathHash;
+    const db::GameEntry* g = focusedGame();
+    if (!g || m_hydratedHash == g->pathHash) return;
+    m_selCore = app.cores().defaultFor(g->system);
+    m_selMultiCore = app.cores().hasChoice(g->system);
+    if (cfg::get().showArt) app.boxart().get(*g);
+    if (const db::GameMeta* cached = cachedMeta(g->pathHash)) {
+        m_selMeta = *cached;
+    } else {
+        m_selMeta = db::loadMeta(*g);
+        MetaEntry& slot = m_metaCache[m_metaNext];
+        m_metaNext = (m_metaNext + 1) % 8;
+        slot.hash = g->pathHash;
+        slot.meta = m_selMeta;
+    }
+    m_hydratedHash = g->pathHash;
 }
 
-void HomeScene::updateCats(App& app) {
-    const auto& pad = app.pad();
-    if (m_recentFocus) {
-        const int count = int(m_recentVisible.size());
-        /* The two layouts arrange recents differently, so they are navigated
-         * differently: the classic shelf runs left-to-right with UP leaving
-         * it, the modern list runs top-to-bottom with UP walking out through
-         * the first row. Painting and input must agree or the focus ring
-         * moves in a direction the user cannot see. */
-        if (cfg::get().homeLayout == cfg::HOME_LAYOUT_CLASSIC) {
-            if (pad.navPressed(PSP_CTRL_LEFT) && m_recentIdx > 0)
-                m_recentIdx--;
-            if (pad.navPressed(PSP_CTRL_RIGHT) && m_recentIdx + 1 < count)
-                m_recentIdx++;
-            if (pad.navPressed(PSP_CTRL_UP)) {
-                m_recentFocus = false;
-                return;
-            }
-        } else {
-            if (pad.navPressed(PSP_CTRL_UP)) {
-                if (m_recentIdx > 0) m_recentIdx--;
-                else {
-                    m_recentFocus = false;
-                    return;
-                }
-            }
-            if (pad.navPressed(PSP_CTRL_DOWN) && m_recentIdx + 1 < count)
-                m_recentIdx++;
-        }
-        if (pad.isPressed(PSP_CTRL_CIRCLE)) {
-            m_recentFocus = false;
-            return;
-        }
-        if (count <= 0) {
-            m_recentFocus = false;
-            return;
-        }
-        const db::GameEntry& game =
-            *m_recentVisible[size_t(m_recentIdx)];
-        if (pad.isPressed(PSP_CTRL_TRIANGLE)) {
-            openActions(app, game);
-            return;
-        }
-        if (pad.isPressed(PSP_CTRL_CROSS)) {
-            if (app.cores().needsChoice(game))
-                openCorePicker(app, game);
-            else
-                app.launchGame(game);
-        }
-        return;
-    }
+/* ---------------------------------------------------------------------- */
+/* Input                                                                   */
+/* ---------------------------------------------------------------------- */
 
-    const int prev = m_catIdx;
-    if (pad.navPressed(PSP_CTRL_LEFT) && m_catIdx > 0) m_catIdx--;
-    if (pad.navPressed(PSP_CTRL_RIGHT) && m_catIdx < NUM_CATS - 1) m_catIdx++;
-    if (m_catIdx != prev) {
-        m_listIdx = 0;
-        m_scroll.snap(0.f);
-        rebuildList(app);
+void HomeScene::switchSystem(App& app, int dir) {
+    if (!m_nav.moveSystem(dir, int(m_systems.size()))) return;
+    syncActiveSystem();
+    m_query.clear();   /* a search belongs to the system it was typed in */
+    rebuildList(app);
+    m_nav.clamp(int(m_systems.size()), gamesInCurrent(), int(m_recents.size()),
+                m_systemTotal);
+    m_scroll.snap(float(listStart(m_nav.currentGame(), gamesInCurrent())));
+    if (m_nav.layer == nav::Layer::Library) {
+        m_slideX.snap(float(dir) * SLIDE);
+        m_slideX.to(0.f);
     }
+    noteSelection(app);
+}
 
-    if (pad.isPressed(PSP_CTRL_CROSS)) {
-        if (m_catIdx == CAT_SETTINGS) {
-            app.snapshot().catIdx = m_catIdx;
-            app.switchScene(std::make_unique<SettingsScene>());
-            return;
-        }
-        if (!m_visible.empty()) {
-            m_inList = true;
-        } else {
-            app.toast("No games in this category yet");
-        }
-    }
-    if (pad.navPressed(PSP_CTRL_DOWN) && !m_recentVisible.empty())
-        m_recentFocus = true;
-    if (pad.isPressed(PSP_CTRL_TRIANGLE)) {
-        app.snapshot().catIdx = m_catIdx;
-        app.switchScene(std::make_unique<SettingsScene>());
-        return;
+void HomeScene::launch(App& app, const db::GameEntry& game) {
+    app.library().flush();
+    app.snapshot().layer = m_nav.layer;
+    app.snapshot().systemId = currentSystemId();
+    app.snapshot().continueIdx = m_nav.continueIdx;
+    if (app.cores().needsChoice(game)) {
+        openCorePicker(app, game);
+    } else {
+        app.launchGame(game);
+        checkLaunchError(app, game);
     }
 }
 
-void HomeScene::updateList(App& app) {
+/* A launch that was refused before any scene change leaves its reason on the
+ * App; show it as an error state with the one action that can fix it. */
+void HomeScene::checkLaunchError(App& app, const db::GameEntry& game) {
+    char raw[96];
+    if (app.takeLaunchError(raw, sizeof raw)) openError(app, game, raw);
+}
+
+void HomeScene::openError(App& app, const db::GameEntry& game,
+                          const char* raw) {
+    m_notice = launch::classify(raw);
+    m_noticeMessage = m_notice.message;
+    m_noticeGame = game;
+    const size_t cores = app.cores().coresFor(game.system).size();
+    if (m_notice.kind == launch::Kind::CoreMissing && cores == 0) {
+        m_noticeMessage = std::string("No emulator is installed for ") +
+            db::systemInfo(game.system).displayName +
+            ". Copy a core package into ms0:/RETROSHELL/cores and restart.";
+        m_notice.action = launch::Action::None;
+    } else if (m_notice.action == launch::Action::ChooseCore) {
+        const size_t needed = m_notice.kind == launch::Kind::CoreMissing ? 1 : 2;
+        if (cores < needed) m_notice.action = launch::Action::None;
+    }
+    m_overlay = Overlay::Error;
+    m_overlayFade.start(0.16f);
+}
+
+void HomeScene::updateError(App& app) {
     const auto& pad = app.pad();
-    const int prevIdx = m_listIdx;
-    const int count = int(m_visible.size());
-    if (pad.navPressed(PSP_CTRL_UP)) {
-        if (m_listIdx > 0) m_listIdx--;
-        else m_inList = false;
-    }
-    if (pad.navPressed(PSP_CTRL_DOWN) && m_listIdx + 1 < count)
-        m_listIdx++;
-    if (m_listIdx != prevIdx) refreshSelection(app);
-    if (pad.isPressed(PSP_CTRL_CIRCLE)) m_inList = false;
-
-    if (pad.isPressed(PSP_CTRL_TRIANGLE) && !m_visible.empty())
-        openActions(app, *m_visible[size_t(m_listIdx)]);
-
-    if (pad.isPressed(PSP_CTRL_SQUARE) && !m_visible.empty()) {
-        openActions(app, *m_visible[size_t(m_listIdx)]);
-        m_actionIdx = 2;  /* Save States */
-    }
-
-    if (pad.isPressed(PSP_CTRL_CROSS) && !m_visible.empty()) {
-        const auto& game = *m_visible[size_t(m_listIdx)];
-        if (app.cores().needsChoice(game))
+    if (pad.isPressed(PSP_CTRL_TRIANGLE) &&
+        m_notice.action != launch::Action::None) {
+        const launch::Action action = m_notice.action;
+        const db::GameEntry game = m_noticeGame;
+        m_overlay = Overlay::None;
+        if (action == launch::Action::Rescan) {
+            if (!app.scanner().running()) app.scanner().start();
+            app.toast("Rescanning library...");
+        } else {
             openCorePicker(app, game);
-        else
-            app.launchGame(game);
+        }
+        return;
     }
+    if (pad.isPressed(PSP_CTRL_CIRCLE) || pad.isPressed(PSP_CTRL_CROSS))
+        m_overlay = Overlay::None;
 }
 
-void HomeScene::openActions(App& app, const db::GameEntry& game) {
+void HomeScene::toggleFavorite(App& app, const db::GameEntry& game) {
+    app.library().toggleFavorite(game.pathHash);
+    if (m_view.filter == db::ViewFilter::Favorites) m_listDirty = true;
+    /* The Options row and the star already show the new state; a toast would
+     * also cover the bottom of the popup. */
+    if (m_overlay == Overlay::None)
+        app.toast(app.library().isFavorite(game.pathHash)
+                      ? "Added to Favorites" : "Removed from Favorites");
+}
+
+void HomeScene::openSettings(App& app) {
+    app.library().flush();
+    app.snapshot().layer = m_nav.layer;
+    app.snapshot().systemId = currentSystemId();
+    app.snapshot().continueIdx = m_nav.continueIdx;
+    app.switchScene(std::make_unique<SettingsScene>());
+}
+
+void HomeScene::openOptions(App& app, const db::GameEntry& game) {
     (void)app;
-    m_actionsOpen = true;
-    m_actionIdx = 0;
-    m_saveCount = 0;
-    m_actionGame = game;
-    save::SlotInfo slots[save::SLOTS];
-    save::querySlots(m_actionGame, slots);
-    for (const auto& slot : slots)
-        if (slot.exists) m_saveCount++;
-    m_actionsFade.start(.18f);
+    m_optionsGame = game;
+    m_optionsRow = 0;
+    m_confirmDelete = false;
+    m_optionsHasSave = save::hasAnySave(game);
+    m_overlay = Overlay::Options;
+    m_overlayFade.start(0.16f);
 }
 
-void HomeScene::updateActions(App& app) {
-    const auto& pad = app.pad();
-    constexpr int ACTION_COUNT = 4;
-    if (pad.navPressed(PSP_CTRL_UP) && m_actionIdx > 0) m_actionIdx--;
-    if (pad.navPressed(PSP_CTRL_DOWN) && m_actionIdx < ACTION_COUNT - 1)
-        m_actionIdx++;
-    if (pad.isPressed(PSP_CTRL_CIRCLE) ||
-        pad.isPressed(PSP_CTRL_TRIANGLE)) {
-        m_actionsOpen = false;
-        return;
-    }
-    if (!pad.isPressed(PSP_CTRL_CROSS)) return;
+void HomeScene::openDetail(App& app, const db::GameEntry& game) {
+    m_detailGame = game;
+    m_detailRow = 0;
+    m_detailExpanded = false;
+    m_detailHasSave = save::hasAnySave(game);
+    if (!m_nav.openDetail()) return;
+    m_trackedHash = game.pathHash;
+    m_hydratedHash = 0;
+    hydrateSelection(app);       /* explicit action: no settle delay */
+}
 
-    const db::GameEntry& game = m_actionGame;
-    switch (m_actionIdx) {
-        case 0:
-            m_actionsOpen = false;
-            if (app.cores().needsChoice(game))
-                openCorePicker(app, game);
-            else
-                app.launchGame(game);
+void HomeScene::activateOption(App& app, int row) {
+    const db::GameEntry game = m_optionsGame;
+    if (row != OPT_DELETE_SAVE) m_confirmDelete = false;
+    switch (row) {
+        case OPT_PLAY:
+            m_overlay = Overlay::None;
+            launch(app, game);
             break;
-        case 1:
-            app.library().toggleFavorite(game.pathHash);
-            app.toast(app.library().isFavorite(game.pathHash)
-                          ? "Added to Favorites"
-                          : "Removed from Favorites");
-            if (cat(m_catIdx).systemIdx == CATEGORY_FAVORITES) {
-                m_actionsOpen = false;
-                rebuildList(app);
-                m_listIdx =
-                    rsClamp(m_listIdx, 0, int(m_visible.size()) - 1);
-                if (m_listIdx < 0) m_listIdx = 0;
-                if (m_visible.empty()) m_inList = false;
+        case OPT_FAVORITE:
+            toggleFavorite(app, game);
+            break;
+        case OPT_DETAILS:
+            m_overlay = Overlay::None;
+            openDetail(app, game);
+            break;
+        case OPT_CHEATS:
+            app.toast("No cheats available for this game");
+            break;
+        case OPT_MANUAL:
+            app.toast("No manual available for this game");
+            break;
+        case OPT_DELETE_SAVE:
+            if (!m_optionsHasSave) {
+                app.toast("No save data to delete");
+            } else if (!m_confirmDelete) {
+                m_confirmDelete = true;      /* second X confirms */
+            } else {
+                const int removed = save::deleteAll(game);
+                m_confirmDelete = false;
+                m_optionsHasSave = false;
+                m_detailHasSave = false;
+                char msg[48];
+                std::snprintf(msg, sizeof msg, "Deleted %d save file%s",
+                              removed, removed == 1 ? "" : "s");
+                app.toast(msg);
             }
             break;
-        case 2: {
-            char msg[64];
-            if (m_saveCount > 0)
-                std::snprintf(msg, sizeof msg, "%d save state%s · load in game",
-                              m_saveCount, m_saveCount == 1 ? "" : "s");
-            else
-                std::snprintf(msg, sizeof msg, "No save states yet");
-            app.toast(msg);
+        case OPT_REMOVE_RECENT: {
+            if (!app.library().removeRecent(game.pathHash)) {
+                app.toast("Not in Continue Playing");
+                break;
+            }
+            rebuildRecents(app);
+            m_nav.clamp(int(m_systems.size()), gamesInCurrent(),
+                        int(m_recents.size()));
+            app.toast("Removed from Continue Playing");
+            m_overlay = Overlay::None;
             break;
         }
-        case 3:
-            m_actionsOpen = false;
-            openCorePicker(app, game);
+        case OPT_BACK:
+        default:
+            m_overlay = Overlay::None;
             break;
     }
 }
 
-/* ---------------------------------------------------------------------- */
-/* Core picker                                                             */
-/* ---------------------------------------------------------------------- */
+void HomeScene::activateDetail(App& app, int row) {
+    const db::GameEntry& game = m_detailGame;
+    switch (row) {
+        case DET_PLAY:     launch(app, game); break;
+        case DET_FAVORITE: toggleFavorite(app, game); break;
+        case DET_DETAILS:  m_detailExpanded = !m_detailExpanded; break;
+        case DET_CHEATS:   app.toast("No cheats available for this game"); break;
+        case DET_MANUAL:   app.toast("No manual available for this game"); break;
+        case DET_RETURN:   m_nav.back(); break;
+    }
+}
+
+void HomeScene::updateSystems(App& app) {
+    const auto& pad = app.pad();
+    if (pad.navPressed(PSP_CTRL_LEFT) || pad.isPressed(PSP_CTRL_LTRIGGER))
+        switchSystem(app, -1);
+    if (pad.navPressed(PSP_CTRL_RIGHT) || pad.isPressed(PSP_CTRL_RTRIGGER))
+        switchSystem(app, 1);
+    if (m_empty) {
+        /* Nothing to browse yet: X scans, triangle opens Settings. */
+        if (pad.isPressed(PSP_CTRL_CROSS) && !app.scanner().running()) {
+            app.scanner().start();
+            app.toast("Scanning for games...");
+        }
+        if (pad.isPressed(PSP_CTRL_TRIANGLE)) openSettings(app);
+        return;
+    }
+    if (pad.isPressed(PSP_CTRL_UP))
+        m_nav.openContinue(int(m_recents.size()));
+    if (pad.isPressed(PSP_CTRL_DOWN) || pad.isPressed(PSP_CTRL_CROSS)) {
+        if (m_nav.openLibrary(m_systemTotal)) {
+            m_scroll.snap(float(listStart(m_nav.currentGame(),
+                                          gamesInCurrent())));
+            m_slideX.snap(0.f);
+        } else {
+            app.toast("No games for this system yet");
+        }
+    }
+    if (pad.isPressed(PSP_CTRL_TRIANGLE)) openSettings(app);
+}
+
+void HomeScene::updateContinue(App& app) {
+    const auto& pad = app.pad();
+    const int count = int(m_recents.size());
+    if (pad.navPressed(PSP_CTRL_LEFT) || pad.isPressed(PSP_CTRL_LTRIGGER))
+        m_nav.moveContinue(-1, count);
+    if (pad.navPressed(PSP_CTRL_RIGHT) || pad.isPressed(PSP_CTRL_RTRIGGER))
+        m_nav.moveContinue(1, count);
+    if (pad.isPressed(PSP_CTRL_DOWN) || pad.isPressed(PSP_CTRL_CIRCLE)) {
+        m_nav.back();
+        return;
+    }
+    if (pad.isPressed(PSP_CTRL_START)) {
+        m_nav.home();
+        return;
+    }
+    const db::GameEntry* game = focusedGame();
+    if (!game) return;
+    if (pad.isPressed(PSP_CTRL_CROSS)) launch(app, *game);
+    else if (pad.isPressed(PSP_CTRL_TRIANGLE)) openOptions(app, *game);
+    else if (pad.isPressed(PSP_CTRL_SQUARE)) toggleFavorite(app, *game);
+}
+
+void HomeScene::updateLibrary(App& app) {
+    const auto& pad = app.pad();
+    const int count = gamesInCurrent();
+    bool moved = false;
+    if (pad.navPressed(PSP_CTRL_UP)) moved |= m_nav.moveGame(-1, count);
+    if (pad.navPressed(PSP_CTRL_DOWN)) moved |= m_nav.moveGame(1, count);
+    if (moved) noteSelection(app);
+
+    /* Horizontal input changes system without leaving the Library. */
+    if (pad.navPressed(PSP_CTRL_LEFT) || pad.isPressed(PSP_CTRL_LTRIGGER))
+        switchSystem(app, -1);
+    if (pad.navPressed(PSP_CTRL_RIGHT) || pad.isPressed(PSP_CTRL_RTRIGGER))
+        switchSystem(app, 1);
+
+    if (pad.isPressed(PSP_CTRL_CIRCLE)) {
+        m_query.clear();
+        if (m_nav.back()) rebuildList(app);
+        return;
+    }
+    if (pad.isPressed(PSP_CTRL_SELECT)) {
+        openViewMenu(app);
+        return;
+    }
+    if (pad.isPressed(PSP_CTRL_START)) {
+        m_query.clear();
+        if (m_nav.home()) rebuildList(app);
+        return;
+    }
+    const db::GameEntry* game = focusedGame();
+    if (!game) return;
+    /* X opens the game's detail view; Play is its first action, so launching
+     * is X, X — never an accident from scrolling a list. */
+    if (pad.isPressed(PSP_CTRL_CROSS)) openDetail(app, *game);
+    else if (pad.isPressed(PSP_CTRL_SQUARE)) toggleFavorite(app, *game);
+    else if (pad.isPressed(PSP_CTRL_TRIANGLE)) openOptions(app, *game);
+}
+
+void HomeScene::updateDetail(App& app) {
+    const auto& pad = app.pad();
+    if (pad.navPressed(PSP_CTRL_UP) && m_detailRow > 0) m_detailRow--;
+    if (pad.navPressed(PSP_CTRL_DOWN) && m_detailRow < DET_COUNT - 1)
+        m_detailRow++;
+    if (pad.isPressed(PSP_CTRL_CIRCLE)) {
+        if (m_detailExpanded) m_detailExpanded = false;
+        else m_nav.back();
+        return;
+    }
+    if (pad.isPressed(PSP_CTRL_START)) {
+        m_nav.home();
+        return;
+    }
+    if (pad.isPressed(PSP_CTRL_SQUARE)) toggleFavorite(app, m_detailGame);
+    if (pad.isPressed(PSP_CTRL_TRIANGLE) && m_detailExpanded && m_selMultiCore)
+        openCorePicker(app, m_detailGame);
+    if (pad.isPressed(PSP_CTRL_CROSS)) activateDetail(app, m_detailRow);
+}
+
+void HomeScene::updateOptions(App& app) {
+    const auto& pad = app.pad();
+    const int prev = m_optionsRow;
+    if (pad.navPressed(PSP_CTRL_UP) && m_optionsRow > 0) m_optionsRow--;
+    if (pad.navPressed(PSP_CTRL_DOWN) && m_optionsRow < OPT_COUNT - 1)
+        m_optionsRow++;
+    if (m_optionsRow != prev) m_confirmDelete = false;
+    if (pad.isPressed(PSP_CTRL_CIRCLE) || pad.isPressed(PSP_CTRL_TRIANGLE)) {
+        m_overlay = Overlay::None;
+        return;
+    }
+    if (pad.isPressed(PSP_CTRL_CROSS)) activateOption(app, m_optionsRow);
+}
 
 void HomeScene::openCorePicker(App& app, const db::GameEntry& game) {
     m_pickerCores = app.cores().coresFor(game.system);
     if (m_pickerCores.empty()) {
-        app.launchGame(game);   /* reuses its "no core installed" toast */
+        app.launchGame(game);   /* reports "no emulator installed" */
+        checkLaunchError(app, game);
         return;
     }
     m_pickerGame = game;
     m_pickerCurrent = app.cores().resolve(game);
-    m_pickerOpen = true;
-    m_pickerFade.start(0.18f);
-
-    /* Preselect what a plain launch would use. */
+    m_overlay = Overlay::CorePicker;
+    m_overlayFade.start(0.16f);
     m_pickerIdx = 0;
     for (size_t i = 0; i < m_pickerCores.size(); i++)
         if (m_pickerCores[i] == m_pickerCurrent) m_pickerIdx = int(i);
@@ -531,13 +671,696 @@ void HomeScene::updatePicker(App& app) {
     if (pad.navPressed(PSP_CTRL_DOWN) &&
         m_pickerIdx < int(m_pickerCores.size()) - 1)
         m_pickerIdx++;
-
-    if (pad.isPressed(PSP_CTRL_CIRCLE)) m_pickerOpen = false;
-
+    if (pad.isPressed(PSP_CTRL_CIRCLE)) m_overlay = Overlay::None;
     if (pad.isPressed(PSP_CTRL_CROSS)) {
-        m_pickerOpen = false;
+        m_overlay = Overlay::None;
         /* GameSession persists the pick once the core actually boots. */
-        app.launchGame(m_pickerGame, m_pickerCores[size_t(m_pickerIdx)]);
+        app.library().flush();
+        const db::GameEntry game = m_pickerGame;
+        app.launchGame(game, m_pickerCores[size_t(m_pickerIdx)]);
+        checkLaunchError(app, game);
+    }
+}
+
+/* --- View menu: filter / sort / search ------------------------------------ */
+
+int HomeScene::viewRows(int out[5]) const {
+    int n = 0;
+    out[n++] = VR_SHOW;
+    out[n++] = VR_SORT;
+    out[n++] = VR_SEARCH;
+    if (!m_query.empty()) out[n++] = VR_CLEAR;
+    out[n++] = VR_BACK;
+    return n;
+}
+
+void HomeScene::openViewMenu(App&) {
+    m_viewRow = 0;
+    m_overlay = Overlay::ViewMenu;
+    m_overlayFade.start(0.16f);
+}
+
+void HomeScene::updateViewMenu(App& app) {
+    const auto& pad = app.pad();
+    int rows[5];
+    const int n = viewRows(rows);
+    m_viewRow = rsClamp(m_viewRow, 0, n - 1);
+    if (pad.navPressed(PSP_CTRL_UP) && m_viewRow > 0) m_viewRow--;
+    if (pad.navPressed(PSP_CTRL_DOWN) && m_viewRow < n - 1) m_viewRow++;
+    if (pad.isPressed(PSP_CTRL_CIRCLE) || pad.isPressed(PSP_CTRL_SELECT) ||
+        pad.isPressed(PSP_CTRL_START)) {
+        m_overlay = Overlay::None;
+        return;
+    }
+
+    const int row = rows[rsClamp(m_viewRow, 0, n - 1)];
+    int dir = 0;
+    if (pad.navPressed(PSP_CTRL_LEFT)) dir = -1;
+    if (pad.navPressed(PSP_CTRL_RIGHT)) dir = 1;
+    const bool confirm = pad.isPressed(PSP_CTRL_CROSS);
+    if (confirm && (row == VR_SHOW || row == VR_SORT)) dir = 1;
+
+    if (row == VR_SHOW && dir) {
+        db::ViewState v = m_view;
+        const int count = int(db::ViewFilter::Count);
+        v.filter = db::ViewFilter((int(v.filter) + dir + count) % count);
+        applyView(app, v, m_query);
+    } else if (row == VR_SORT && dir &&
+               m_view.filter != db::ViewFilter::RecentlyAdded) {
+        db::ViewState v = m_view;
+        const int count = int(db::ViewSort::Count);
+        v.sort = db::ViewSort((int(v.sort) + dir + count) % count);
+        applyView(app, v, m_query);
+    } else if (confirm) {
+        if (row == VR_SEARCH) {
+            openSearch(app);
+        } else if (row == VR_CLEAR) {
+            applyView(app, m_view, std::string());
+            m_viewRow = 0;
+        } else if (row == VR_BACK) {
+            m_overlay = Overlay::None;
+        }
+    }
+}
+
+void HomeScene::openSearch(App& app) {
+    m_searchBuf = m_query;
+    m_searchChar = 0;
+    m_searchTouched = false;
+    m_overlay = Overlay::Search;
+    m_overlayFade.start(0.16f);
+    recountSearch(app);
+}
+
+static std::string searchPreview(const std::string& buf, bool touched, int ch) {
+    std::string q = buf;
+    if (touched) q.push_back(SEARCH_CHARS[ch]);
+    while (!q.empty() && q.back() == ' ') q.pop_back();
+    return q;
+}
+
+void HomeScene::recountSearch(App& app) {
+    const std::string q = searchPreview(m_searchBuf, m_searchTouched,
+                                        m_searchChar);
+    m_searchCount = int(db::buildView(
+        app.index().games(db::System(currentSystemId())), m_view, q,
+        app.library()).size());
+}
+
+/* Initials-style entry: up/down pick a letter, right locks it in, left
+ * deletes. L/R shoulders jump five letters. There is no on-screen keyboard
+ * because the D-pad is the whole input device. */
+void HomeScene::updateSearch(App& app) {
+    const auto& pad = app.pad();
+    bool changed = false;
+    auto step = [&](int delta) {
+        m_searchChar = (m_searchChar + delta + SEARCH_CHAR_COUNT * 8) %
+                       SEARCH_CHAR_COUNT;
+        m_searchTouched = true;
+        changed = true;
+    };
+    if (pad.navPressed(PSP_CTRL_UP)) step(1);
+    if (pad.navPressed(PSP_CTRL_DOWN)) step(-1);
+    if (pad.navPressed(PSP_CTRL_RTRIGGER)) step(5);
+    if (pad.navPressed(PSP_CTRL_LTRIGGER)) step(-5);
+    if (pad.navPressed(PSP_CTRL_RIGHT) && m_searchBuf.size() < SEARCH_MAX) {
+        m_searchBuf.push_back(SEARCH_CHARS[m_searchChar]);
+        m_searchTouched = false;
+        changed = true;
+    }
+    if (pad.navPressed(PSP_CTRL_LEFT)) {
+        if (m_searchTouched) m_searchTouched = false;
+        else if (!m_searchBuf.empty()) m_searchBuf.pop_back();
+        changed = true;
+    }
+    if (pad.isPressed(PSP_CTRL_SQUARE)) {
+        m_searchBuf.clear();
+        m_searchTouched = false;
+        changed = true;
+    }
+    if (changed) recountSearch(app);
+    if (pad.isPressed(PSP_CTRL_CIRCLE)) {
+        m_overlay = Overlay::ViewMenu;
+        return;
+    }
+    if (pad.isPressed(PSP_CTRL_CROSS)) {
+        const std::string q =
+            searchPreview(m_searchBuf, m_searchTouched, m_searchChar);
+        m_overlay = Overlay::None;
+        applyView(app, m_view, q);
+    }
+}
+
+void HomeScene::update(App& app, float dt) {
+    /* A finished background scan invalidates every held GameEntry*. */
+    if (app.index().generation() != m_lastIndexGen) {
+        const int previousSystem = currentSystemId();
+        rebuildSystems(app);
+        for (size_t i = 0; i < m_systems.size(); i++)
+            if (m_systems[i] == previousSystem) m_nav.systemPos = int(i);
+        syncActiveSystem();
+        rebuildList(app);
+        rebuildRecents(app);
+        m_nav.clamp(int(m_systems.size()), gamesInCurrent(),
+                    int(m_recents.size()), m_systemTotal);
+        m_trackedHash = 0;
+    }
+    if (app.library().recentsRevision() != m_recentsRevision) {
+        rebuildRecents(app);
+        m_nav.clamp(int(m_systems.size()), gamesInCurrent(),
+                    int(m_recents.size()), m_systemTotal);
+    }
+    if (m_listDirty && m_nav.layer == nav::Layer::Library &&
+        m_overlay == Overlay::None) {
+        m_listDirty = false;
+        refreshListKeepingPosition(app);
+    }
+
+    m_nowTimer -= dt;
+    if (m_nowTimer <= 0.f) {
+        m_nowTimer = 1.f;
+        m_now = power::localTimestamp();
+    }
+
+    if (m_overlay == Overlay::CorePicker) updatePicker(app);
+    else if (m_overlay == Overlay::Options) updateOptions(app);
+    else if (m_overlay == Overlay::ViewMenu) updateViewMenu(app);
+    else if (m_overlay == Overlay::Search) updateSearch(app);
+    else if (m_overlay == Overlay::Error) updateError(app);
+    else switch (m_nav.layer) {
+        case nav::Layer::Systems:  updateSystems(app); break;
+        case nav::Layer::Continue: updateContinue(app); break;
+        case nav::Layer::Library:  updateLibrary(app); break;
+        case nav::Layer::Detail:   updateDetail(app); break;
+    }
+
+    app.snapshot().layer = m_nav.layer;
+    app.snapshot().systemId = currentSystemId();
+    app.snapshot().continueIdx = m_nav.continueIdx;
+    app.library().setLocation(currentSystemId(), int(m_nav.layer),
+                              m_nav.continueIdx);
+
+    /* Focused-game tracking: cached metadata applies instantly, everything
+     * stick-backed waits for the highlight to stop moving. */
+    const db::GameEntry* focus = focusedGame();
+    const u32 hash = focus ? focus->pathHash : 0;
+    if (hash != m_trackedHash) {
+        m_trackedHash = hash;
+        m_hydratedHash = 0;
+        m_selCore = nullptr;
+        m_selMeta = db::GameMeta{};
+        if (const db::GameMeta* cached = cachedMeta(hash)) m_selMeta = *cached;
+        m_selectionSettle = hash ? SETTLE_SECONDS : 0.f;
+    }
+    if (m_selectionSettle > 0.f) {
+        m_selectionSettle -= dt;
+        if (m_selectionSettle <= 0.f) hydrateSelection(app);
+    }
+    /* Warm Continue artwork one image per frame while that layer is near. */
+    if (cfg::get().showArt && !m_recents.empty() &&
+        std::fabs(m_layerPos.v + 1.f) < .6f) {
+        const int warm = int(app.time() * 18.f) % int(m_recents.size());
+        app.boxart().get(*m_recents[size_t(warm)]);
+    }
+
+    /* Motion targets. */
+    const float layerTarget = m_nav.layer == nav::Layer::Continue ? -1.f
+                            : m_nav.layer == nav::Layer::Library  ? 1.f
+                            : m_nav.layer == nav::Layer::Detail   ? 2.f : 0.f;
+    m_layerPos.to(layerTarget);
+    m_layerPos.update(dt, 14.f);
+    m_railPos.to(float(m_nav.systemPos));
+    m_railPos.update(dt, 14.f);
+    m_railFirst.to(float(nav::railFirst(m_nav.systemPos,
+                                        int(m_systems.size()), RAIL_VISIBLE)));
+    m_railFirst.update(dt, 14.f);
+    m_contScroll.to(float(rsClamp(m_nav.continueIdx - 2, 0,
+                                  rsClamp(int(m_recents.size()) - 4, 0, 8))));
+    m_contScroll.update(dt, 14.f);
+    m_scroll.to(float(listStart(m_nav.currentGame(), gamesInCurrent())));
+    if (std::fabs(m_scroll.target - m_scroll.v) > 12.f)
+        m_scroll.snap(m_scroll.target);
+    m_scroll.update(dt, 16.f);
+    m_slideX.update(dt, 16.f);
+    m_entrance.update(dt);
+    m_overlayFade.update(dt);
+}
+
+/* ---------------------------------------------------------------------- */
+/* Drawing                                                                 */
+/* ---------------------------------------------------------------------- */
+
+void HomeScene::drawSystems(App& app, u32 a, float dy) {
+    if (a <= 2u) return;
+    auto& r = app.renderer();
+    const auto& pal = app.pal();
+    const auto& fonts = app.fonts();
+    const int n = int(m_systems.size());
+    if (m_empty) {
+        ui::StatePanel panel;
+        char progress[40];
+        if (app.scanner().running()) {
+            panel.kind = ui::StatePanel::Kind::Loading;
+            panel.title = "Scanning for games";
+            panel.message = "Looking through ms0:/ROMS. This only happens "
+                            "when the library changes.";
+            std::snprintf(progress, sizeof progress, "%d files checked",
+                          app.scanner().progress());
+            panel.detail = progress;
+        } else if (m_romRootMissing) {
+            panel.kind = ui::StatePanel::Kind::Empty;
+            panel.title = "ROM folder not found";
+            panel.message = "Create ms0:/ROMS on the Memory Stick, copy your "
+                            "games into it, then scan.";
+            panel.actionLabel = "Scan for games";
+            panel.actionButton = ui::prim::Button::Cross;
+        } else {
+            panel.kind = ui::StatePanel::Kind::Empty;
+            panel.title = "No games found";
+            panel.message = "Copy ROMs into ms0:/ROMS (sub-folders are fine), "
+                            "then scan. GB, GBC, GBA, NES, SNES, Genesis, "
+                            "SMS, Game Gear and PC Engine are supported.";
+            panel.actionLabel = "Scan for games";
+            panel.actionButton = ui::prim::Button::Cross;
+        }
+        ui::drawStatePanel(app, panel, a, dy);
+        return;
+    }
+
+    const float pad = n < RAIL_VISIBLE
+        ? float(RAIL_VISIBLE - n) * RAIL_PITCH * .5f : 0.f;
+    auto slotX = [&](float index) {
+        return RAIL_X0 + pad + (index - m_railFirst.v) * RAIL_PITCH;
+    };
+    const float selX = slotX(m_railPos.v);
+
+    r.setScissor(36, 0, RS_SCREEN_W - 72, RS_SCREEN_H);
+    for (int i = 0; i < n; i++) {
+        const float x = slotX(float(i));
+        if (x < 12.f || x > RS_SCREEN_W - 12.f) continue;
+        const int system = m_systems[size_t(i)];
+        const float strength =
+            1.f - rsClamp(std::fabs(float(i) - m_railPos.v), 0.f, 1.f);
+        const bool active = strength > .5f;
+        const float size = active ? 64.f : 48.f;
+        const float iconY = (active ? 66.f : 74.f) + dy;
+        ui::prim::iconSystem(r, system, x - size * .5f, iconY, size,
+                             rsWithAlpha(rsHex(0xFFFFFF), a), pal.accent);
+        fonts.pixelSmall.draw(r, x, RAIL_LABEL_Y + dy, badge(system),
+                              fade(pal.textPrimary, a), text::Align::Center);
+    }
+    r.resetScissor();
+
+    /* Selection: a flat outlined box that glides to the active slot, with a
+     * dot beneath it — no card, no fill. */
+    ui::prim::outlineRect(r, selX - BOX_W * .5f, BOX_TOP + dy, BOX_W, BOX_H,
+                          2.f, fade(pal.railOutline, a));
+    ui::prim::circle(r, float(int(selX)), 160.f + dy, 2.5f,
+                     fade(pal.textPrimary, a));
+
+    const u32 leftA = m_nav.systemPos > 0 ? a : a * 70u / 255u;
+    const u32 rightA = m_nav.systemPos + 1 < n ? a : a * 70u / 255u;
+    ui::prim::chevron(r, ui::prim::Dir::Left, 19.f, 106.f + dy, 6.f, 2.f,
+                      fade(pal.textPrimary, leftA));
+    ui::prim::chevron(r, ui::prim::Dir::Right, 461.f, 106.f + dy, 6.f, 2.f,
+                      fade(pal.textPrimary, rightA));
+
+    const int sys = currentSystemId();
+    fonts.pixel.drawBold(r, RS_SCREEN_W * .5f, 176.f + dy, systemTitle(sys),
+                     fade(pal.textPrimary, a), text::Align::Center);
+    char count[32];
+    std::snprintf(count, sizeof count, "%d GAME%s", m_systemTotal,
+                  m_systemTotal == 1 ? "" : "S");
+    fonts.pixelSmall.draw(r, RS_SCREEN_W * .5f, 204.f + dy, count,
+                          fade(pal.textSecondary, a), text::Align::Center);
+}
+
+void HomeScene::drawContinue(App& app, u32 a, float dy) {
+    if (a <= 2u || m_recents.empty()) return;
+    auto& r = app.renderer();
+    const auto& pal = app.pal();
+    const auto& fonts = app.fonts();
+    const int n = int(m_recents.size());
+
+    fonts.pixelMedium.drawBold(r, MARGIN, 53.f + dy, "CONTINUE PLAYING",
+                           fade(pal.textPrimary, a));
+
+    /* A single recent game collapses to one compact, centred resume item. */
+    auto cardX = [&](int i) {
+        if (n == 1) return (RS_SCREEN_W - CARD_W) * .5f;
+        return CARD_X0 + (float(i) - m_contScroll.v) * CARD_PITCH;
+    };
+
+    r.setScissor(0, 0, RS_SCREEN_W, RS_SCREEN_H);
+    for (int i = 0; i < n; i++) {
+        const float x = float(int(cardX(i)));
+        if (x + CARD_W < 28.f || x > RS_SCREEN_W) continue;
+        const db::GameEntry& g = *m_recents[size_t(i)];
+        const bool selected = i == m_nav.continueIdx;
+        const float y = CARD_Y + dy;
+        if (const gfx::Texture* art = app.boxart().peek(g))
+            drawArtCover(r, *art, x, y, CARD_W, CARD_H,
+                         rsWithAlpha(rsHex(0xFFFFFF), a));
+        else
+            drawPlaceholder(app, int(g.system), x, y, CARD_W, CARD_H, a, true);
+        if (selected)
+            ui::prim::outlineRect(r, x - 3.f, y - 3.f, CARD_W + 6.f,
+                                  CARD_H + 6.f, 3.f,
+                                  fade(pal.accent, a));
+        const float cx = x + CARD_W * .5f;
+        const float textW = CARD_PITCH - 8.f;
+        r.setScissor(int(cx - textW * .5f), int(y + CARD_H), int(textW), 40);
+        drawEllipsized(fonts.pixelTiny, r, cx, y + CARD_H + 6.f, textW,
+                       g.shown(), fade(pal.textPrimary, a), text::Align::Center);
+        char when[24], meta[48];
+        ui::formatRelative(app.library().lastPlayed(g.pathHash), m_now, when,
+                           sizeof when);
+        std::snprintf(meta, sizeof meta, "%s \xC2\xB7 %s",
+                      db::systemInfo(g.system).badge, when);
+        fonts.pixelTiny.draw(r, cx, y + CARD_H + 26.f, meta,
+                             fade(pal.textSecondary, a), text::Align::Center);
+        r.setScissor(0, 0, RS_SCREEN_W, RS_SCREEN_H);
+    }
+    r.resetScissor();
+
+    if (n > 1) {
+        ui::prim::chevron(r, ui::prim::Dir::Left, 14.f, 128.f + dy, 6.f, 2.f,
+                          fade(pal.textPrimary,
+                               m_nav.continueIdx > 0 ? a : a * 70u / 255u));
+        ui::prim::chevron(r, ui::prim::Dir::Right, 466.f, 128.f + dy, 6.f, 2.f,
+                          fade(pal.textPrimary,
+                               m_nav.continueIdx + 1 < n ? a
+                                                         : a * 70u / 255u));
+    }
+}
+
+void HomeScene::drawLibrary(App& app, u32 a, float dy) {
+    if (a <= 2u) return;
+    auto& r = app.renderer();
+    const auto& pal = app.pal();
+    const auto& fonts = app.fonts();
+    const int sys = currentSystemId();
+    const int count = gamesInCurrent();
+
+    /* Slide the whole body with the system switch; fade as it travels. */
+    const float dx = m_slideX.v;
+    const u32 body = u32(float(a) * (1.f - rsClamp(std::fabs(dx) / SLIDE,
+                                                   0.f, 1.f) * .6f));
+
+    /* Header: system icon, name, count and the L/R neighbour hints. */
+    ui::prim::iconSystem(r, sys, 13.f + dx, 3.f + dy, 48.f,
+                         rsWithAlpha(rsHex(0xFFFFFF), body), pal.accent);
+    fonts.pixelMedium.drawBold(r, 64.f + dx, 14.f + dy, systemTitle(sys),
+                           fade(pal.textPrimary, body));
+    const std::string header = librarySubtitle(m_view, m_query, count);
+    drawEllipsized(fonts.pixelSmall, r, 64.f + dx, 34.f + dy, 252.f, header,
+                   fade(pal.textSecondary, body));
+
+    const int n = int(m_systems.size());
+    if (m_nav.systemPos > 0) {
+        ui::prim::buttonGlyph(r, ui::prim::Button::L1, 326.f, 41.f + dy, 6.f,
+                              fade(pal.textPrimary, a));
+        fonts.pixelTiny.draw(
+            r, 340.f, 36.f + dy,
+            badge(m_systems[size_t(m_nav.systemPos - 1)]),
+            fade(pal.textSecondary, a));
+    }
+    if (m_nav.systemPos + 1 < n) {
+        ui::prim::buttonGlyph(r, ui::prim::Button::R1, 456.f, 41.f + dy, 6.f,
+                              fade(pal.textPrimary, a));
+        fonts.pixelTiny.draw(
+            r, 441.f, 36.f + dy,
+            badge(m_systems[size_t(m_nav.systemPos + 1)]),
+            fade(pal.textSecondary, a), text::Align::Right);
+    }
+
+    if (count == 0) {
+        /* The system has games, but this view of them is empty: say why and
+         * how to change it. */
+        ui::StatePanel panel;
+        panel.kind = ui::StatePanel::Kind::Empty;
+        panel.actionButton = ui::prim::Button::Select;
+        panel.actionLabel = "Change view";
+        std::string message;
+        if (!m_query.empty()) {
+            panel.title = "No matches";
+            message = "Nothing in this system matches \"" + m_query + "\".";
+        } else if (m_view.filter == db::ViewFilter::Favorites) {
+            panel.title = "No favorites yet";
+            message = "Press the square button on any game to add it here.";
+        } else {
+            panel.title = "No games to show";
+            message = "Rescan the library from Settings.";
+            panel.actionLabel = nullptr;
+        }
+        panel.message = message;
+        ui::drawStatePanel(app, panel, body, dy + 14.f);
+        return;
+    }
+
+    /* List: flat text rows, one blue selection bar, star for favorites. */
+    const bool textOnly = !cfg::get().showArt;
+    /* Text-only collapses the preview column entirely: rows widen to the
+     * safe area and no empty image slot is left behind. */
+    const float listW = textOnly ? RS_SCREEN_W - 2.f * LIST_X : LIST_W;
+    const float listH = LIST_ROW * float(LIST_VISIBLE);
+    const float scroll = rsClamp(m_scroll.v, 0.f,
+                                 float(rsClamp(count - LIST_VISIBLE, 0, count)));
+    const ui::GridWindow win =
+        ui::visibleGridWindow(count, 1, LIST_VISIBLE, scroll);
+    r.setScissor(0, int(LIST_TOP + dy), int(LIST_X + listW + 6.f),
+                 int(listH));
+    for (int i = win.first; i < win.pastLast; i++) {
+        const float y = float(int(LIST_TOP + (float(i) - scroll) * LIST_ROW)) + dy;
+        const db::GameEntry& g = *m_visible[size_t(i)];
+        const bool selected = i == m_nav.currentGame();
+        const float textY = y + (LIST_ROW - fonts.pixelSmall.lineHeight()) * .5f;
+        if (selected) {
+            r.rect(LIST_X + dx, y, listW, LIST_ROW, fade(pal.selectBg, body));
+            ui::prim::chevron(r, ui::prim::Dir::Right, 24.f + dx,
+                              y + LIST_ROW * .5f, 5.f, 2.f,
+                              fade(pal.selectText, body));
+        }
+        const u32 ink = fade(selected ? pal.selectText : pal.textPrimary, body);
+        drawEllipsized(fonts.pixelSmall, r, 36.f + dx, textY, listW - 64.f,
+                       g.shown(), ink);
+        if (app.library().isFavorite(g.pathHash))
+            drawStar(r, LIST_X + listW - 14.f + dx, y + LIST_ROW * .5f, 6.5f,
+                     ink);
+    }
+    r.resetScissor();
+
+    /* Divider and, for long libraries, a position marker. */
+    if (!textOnly)
+        r.rect(LIST_X + listW + 6.f, LIST_TOP + dy, 1.f, listH,
+               fade(pal.divider, a));
+    if (count > LIST_VISIBLE) {
+        const float track = listH;
+        const float thumb = rsClamp(track * float(LIST_VISIBLE) / float(count),
+                                    10.f, track);
+        const float t = rsClamp(float(m_nav.currentGame()) /
+                                    float(count - 1), 0.f, 1.f);
+        r.rect(LIST_X + listW + 5.f, LIST_TOP + dy + (track - thumb) * t, 3.f,
+               thumb, fade(pal.textSecondary, a));
+    }
+    if (textOnly) return;
+
+    /* Preview column: artwork or the designed fallback, title, one meta line. */
+    const db::GameEntry& sel = *m_visible[size_t(m_nav.currentGame())];
+    const float px = PREVIEW_X + dx, py = PREVIEW_Y + dy;
+    if (const gfx::Texture* art = app.boxart().peek(sel)) {
+        drawArtCover(r, *art, px, py, PREVIEW_W, PREVIEW_H,
+                     rsWithAlpha(rsHex(0xFFFFFF), body));
+        ui::prim::outlineRect(r, px, py, PREVIEW_W, PREVIEW_H, 1.f,
+                              fade(pal.divider, body));
+    } else {
+        drawPlaceholder(app, int(sel.system), px, py, PREVIEW_W, PREVIEW_H,
+                        body, false);
+    }
+    r.setScissor(int(px), int(py + PREVIEW_H), int(PREVIEW_W), 48);
+    drawEllipsized(fonts.pixelBody, r, px, py + PREVIEW_H + 9.f, PREVIEW_W,
+                   sel.shown(), fade(pal.textPrimary, body), text::Align::Left,
+                   true);
+    /* Whatever metadata exists, nothing for what does not: a game with no
+     * sidecar file just shows its system. */
+    const std::string meta = metaLine(m_selMeta);
+    drawEllipsized(fonts.pixelSmall, r, px, py + PREVIEW_H + 30.f, PREVIEW_W,
+                   meta.empty() ? std::string(db::systemInfo(sel.system).displayName)
+                                : meta,
+                   fade(pal.textSecondary, body));
+    r.resetScissor();
+}
+
+void HomeScene::drawDetail(App& app, u32 a, float dy) {
+    if (a <= 2u) return;
+    auto& r = app.renderer();
+    const auto& pal = app.pal();
+    const auto& fonts = app.fonts();
+    const db::GameEntry& g = m_detailGame;
+    const bool favorite = app.library().isFavorite(g.pathHash);
+
+    /* Artwork block (flat, 116x80) and title block. */
+    constexpr float AX = 18.f, AY = 13.f, AW = 116.f, AH = 80.f;
+    if (const gfx::Texture* art = app.boxart().peek(g)) {
+        drawArtCover(r, *art, AX, AY + dy, AW, AH,
+                     rsWithAlpha(rsHex(0xFFFFFF), a));
+        ui::prim::outlineRect(r, AX, AY + dy, AW, AH, 1.f, fade(pal.divider, a));
+    } else {
+        drawPlaceholder(app, int(g.system), AX, AY + dy, AW, AH, a, true);
+    }
+
+    const float tx = 152.f;
+    const std::string& title = g.shown();
+    r.setScissor(int(tx), int(AY + dy), int(RS_SCREEN_W - tx - MARGIN), 90);
+    drawEllipsized(fonts.pixelBody, r, tx, 18.f + dy,
+                   RS_SCREEN_W - tx - MARGIN - (favorite ? 18.f : 0.f), title,
+                   fade(pal.textPrimary, a), text::Align::Left, true);
+    if (favorite) {
+        const float w = std::fmin(fonts.pixelBody.measure(title.c_str()),
+                                  RS_SCREEN_W - tx - MARGIN - 18.f);
+        drawStar(r, tx + w + 12.f, 25.f + dy, 6.f, fade(pal.accent, a));
+    }
+    /* Facts only: every line exists because the data does. */
+    std::string lines[4];
+    int lineCount = 0;
+    lines[lineCount++] = db::systemInfo(g.system).displayName;
+    if (const std::string meta = metaLine(m_selMeta); !meta.empty())
+        lines[lineCount++] = meta;
+    if (!m_selMeta.genre.empty() && !m_selMeta.publisher.empty())
+        lines[lineCount++] = m_selMeta.genre;
+    if (const u32 seconds = app.library().playSeconds(g.pathHash)) {
+        char played[32];
+        ui::formatPlaytime(seconds, played, sizeof played);
+        lines[lineCount++] = std::string("Played ") + played;
+    }
+    for (int i = 0; i < lineCount; i++)
+        drawEllipsized(fonts.pixelSmall, r, tx, 41.f + float(i) * 15.f + dy,
+                       RS_SCREEN_W - tx - MARGIN, lines[i],
+                       fade(pal.textSecondary, a));
+    r.resetScissor();
+
+    /* Action list. */
+    const char* labels[DET_COUNT] = {
+        "Play",
+        favorite ? "Remove from Favorites" : "Add to Favorites",
+        "Game Details", "Cheats", "View Manual",
+        m_nav.detailFrom == nav::Layer::Continue ? "Return" : "Return to Library",
+    };
+    constexpr float ROW_X = 11.f, ROW_W = 224.f, ROW_TOP = 99.f, ROW_STEP = 21.f;
+    for (int i = 0; i < DET_COUNT; i++) {
+        const float y = ROW_TOP + float(i) * ROW_STEP + dy;
+        const bool selected = i == m_detailRow;
+        const float textY = y + (20.f - fonts.pixelSmall.lineHeight()) * .5f;
+        if (selected) {
+            r.rect(ROW_X, y, ROW_W, 20.f, fade(pal.selectBg, a));
+            ui::prim::chevron(r, ui::prim::Dir::Right, 23.f, y + 10.f, 5.f, 2.f,
+                              fade(pal.selectText, a));
+        }
+        fonts.pixelSmall.draw(r, selected ? 40.f : 28.f, textY, labels[i],
+                              fade(selected ? pal.selectText : pal.textPrimary,
+                                   a));
+    }
+    r.rect(254.f, ROW_TOP + dy, 1.f, ROW_STEP * float(DET_COUNT) - 1.f,
+           fade(pal.divider, a));
+
+    /* Description, or the expanded stats for "Game Details". */
+    constexpr float DX = 269.f, DW = 190.f, DY = 104.f, STEP = 15.f;
+    if (m_detailExpanded) {
+        char buf[64];
+        float y = DY + dy;
+        auto stat = [&](const char* key, const char* value) {
+            fonts.pixelTiny.draw(r, DX, y, key, fade(pal.textSecondary, a));
+            drawEllipsized(fonts.pixelTiny, r, DX + 76.f, y, DW - 76.f, value,
+                           fade(pal.textPrimary, a));
+            y += STEP;
+        };
+        ui::formatRelative(app.library().lastPlayed(g.pathHash), m_now, buf,
+                           sizeof buf);
+        stat("Last played", buf);
+        if (const u32 seconds = app.library().playSeconds(g.pathHash)) {
+            ui::formatPlaytime(seconds, buf, sizeof buf);
+            stat("Play time", buf);
+        }
+        std::snprintf(buf, sizeof buf, "%d", app.library().playCount(g.pathHash));
+        stat("Play count", buf);
+        stat("Core", m_selCore ? m_selCore->name.c_str() : "Auto");
+        if (g.size >= 1024u * 1024u)
+            std::snprintf(buf, sizeof buf, "%.1f MB", double(g.size) / 1048576.0);
+        else
+            std::snprintf(buf, sizeof buf, "%u KB", unsigned(g.size / 1024u));
+        stat("ROM size", buf);
+        stat("Save data", m_detailHasSave ? "Present" : "None");
+        if (!g.variant.empty()) stat("Version", g.variant.c_str());
+        /* The cleaned title hides the file's real name; keep it findable. */
+        stat("File", g.name.c_str());
+    } else {
+        drawWrapped(fonts.pixelTiny, r, DX, DY + dy, DW, STEP, 8,
+                    m_selMeta.description.empty()
+                        ? std::string("No description available.")
+                        : m_selMeta.description,
+                    fade(pal.textSecondary, a));
+    }
+}
+
+void HomeScene::drawBackdrop(App& app, u32 alpha) {
+    app.renderer().rect(0, 0, RS_SCREEN_W, RS_SCREEN_H,
+                        rsWithAlpha(app.pal().dim, alpha * 150u / 255u));
+}
+
+void HomeScene::drawOptions(App& app) {
+    auto& r = app.renderer();
+    const auto& pal = app.pal();
+    const auto& fonts = app.fonts();
+    const float t = ui::easeOutCubic(m_overlayFade.t);
+    const u32 a = u32(t * 255.f);
+    drawBackdrop(app, a);
+
+    constexpr float PX = 218.f, PW = 192.f, ROW = 22.f, PAD = 6.f;
+    constexpr float PY = 33.f;
+    const float ph = PAD * 2.f + ROW * float(OPT_COUNT) + 6.f;
+    const float py = PY + (1.f - t) * 8.f;
+    r.rect(PX, py, PW, ph, fade(pal.menuBg, a));
+    ui::prim::outlineRect(r, PX, py, PW, ph, 2.f, fade(pal.railOutline, a));
+
+    const db::GameEntry& game = m_optionsGame;
+    const bool favorite = app.library().isFavorite(game.pathHash);
+    bool inRecents = false;
+    for (u32 h : app.library().recents())
+        if (h == game.pathHash) inRecents = true;
+
+    const char* labels[OPT_COUNT] = {
+        "Play",
+        favorite ? "Remove from Favorites" : "Add to Favorites",
+        "Game Details", "Cheats", "View Manual",
+        m_confirmDelete ? "Press X to confirm" : "Delete Save Data",
+        "Remove from Recent", "Back",
+    };
+    for (int i = 0; i < OPT_COUNT; i++) {
+        /* A divider separates Back from the game actions. */
+        const float y = py + PAD + float(i) * ROW + (i == OPT_BACK ? 6.f : 0.f);
+        if (i == OPT_BACK)
+            r.rect(PX + 8.f, y - 4.f, PW - 16.f, 1.f, fade(pal.divider, a));
+        const bool selected = i == m_optionsRow;
+        const bool disabled = (i == OPT_DELETE_SAVE && !m_optionsHasSave) ||
+                              (i == OPT_REMOVE_RECENT && !inRecents);
+        const float textY = y + (ROW - 2.f - fonts.pixelSmall.lineHeight()) * .5f
+                            + 1.f;
+        if (selected) {
+            r.rect(PX + 6.f, y, PW - 12.f, ROW - 2.f, fade(pal.selectBg, a));
+            ui::prim::chevron(r, ui::prim::Dir::Right, PX + 17.f, y + (ROW - 2.f) * .5f,
+                              5.f, 2.f, fade(pal.selectText, a));
+        }
+        u32 ink = selected ? pal.selectText : pal.textPrimary;
+        if (disabled) ink = pal.textSecondary;
+        if (i == OPT_BACK) {
+            ui::prim::buttonGlyph(r, ui::prim::Button::Circle, PX + 32.f,
+                                  y + (ROW - 2.f) * .5f, 6.f, fade(ink, a));
+            fonts.pixelSmall.draw(r, PX + 50.f, textY, labels[i], fade(ink, a));
+        } else {
+            fonts.pixelSmall.draw(r, selected ? PX + 30.f : PX + 14.f, textY,
+                                  labels[i],
+                                  fade(ink, disabled ? a * 160u / 255u : a));
+        }
     }
 }
 
@@ -545,710 +1368,311 @@ void HomeScene::drawPicker(App& app) {
     auto& r = app.renderer();
     const auto& pal = app.pal();
     const auto& fonts = app.fonts();
-    const float t = ui::easeOutCubic(m_pickerFade.t);
+    const float t = ui::easeOutCubic(m_overlayFade.t);
     const u32 a = u32(t * 255.f);
+    drawBackdrop(app, a);
 
-    r.rect(0, 0, RS_SCREEN_W, RS_SCREEN_H,
-           rsWithAlpha(pal.scrim, a * 130u / 255u));
-
-    constexpr int VISIBLE = 5;
+    constexpr int VISIBLE = 6;
+    constexpr float ROW = 22.f, PAD = 6.f, PW = 288.f;
     const int visible = rsClamp(int(m_pickerCores.size()), 1, VISIBLE);
     const int first = rsClamp(m_pickerIdx - 2, 0,
                               int(m_pickerCores.size()) - visible);
-    const float rowH = 32.f;
-    const float pw = 288.f;
-    const float ph = 64.f + rowH * float(visible);
-    const float px = (RS_SCREEN_W - pw) / 2.f;
-    const float py = (RS_SCREEN_H - ph) / 2.f - (1.f - t) * 10.f;
+    const float ph = PAD * 2.f + 40.f + ROW * float(visible);
+    const float px = (RS_SCREEN_W - PW) * .5f;
+    const float py = (RS_SCREEN_H - ph) * .5f - (1.f - t) * 8.f;
+    r.rect(px, py, PW, ph, fade(pal.menuBg, a));
+    ui::prim::outlineRect(r, px, py, PW, ph, 2.f, fade(pal.railOutline, a));
 
-    ui::prim::roundedRect(r, px, py, pw, ph, 8.f,
-                          rsWithAlpha(pal.menuBg, a));
-    ui::prim::roundedOutline(r, px, py, pw, ph, 8.f,
-                             rsWithAlpha(pal.panelOutline, a));
-
-    fonts.small.draw(r, px + 16.f, py + 8.f, "RUN WITH",
-                     rsWithAlpha(pal.accent, a), text::Align::Left);
-    r.setScissor(int(px + 16.f), int(py + 24.f), int(pw - 32.f), 12);
-    fonts.small.draw(r, px + 16.f, py + 24.f, m_pickerGame.name.c_str(),
-                     rsWithAlpha(pal.textDim, a), text::Align::Left);
+    fonts.pixelTiny.draw(r, px + 14.f, py + PAD + 4.f, "RUN WITH",
+                         fade(pal.accent, a));
+    r.setScissor(int(px + 14.f), int(py + PAD + 18.f), int(PW - 28.f), 14);
+    fonts.pixelSmall.draw(r, px + 14.f, py + PAD + 18.f,
+                          m_pickerGame.shown().c_str(),
+                          fade(pal.textSecondary, a));
     r.resetScissor();
 
-    r.setScissor(int(px + 16.f), int(py + 48.f), int(pw - 32.f),
-                 int(rowH * visible));
-    float ry = py + 48.f;
-    for (int i = first; i < first + visible; i++, ry += rowH) {
+    float y = py + PAD + 40.f;
+    for (int i = first; i < first + visible; i++, y += ROW) {
         const CoreInfo& c = *m_pickerCores[size_t(i)];
-        const bool focused = i == m_pickerIdx;
-        const bool current = &c == m_pickerCurrent;
-        if (focused)
-            ui::prim::focusRow(
-                r, px + 16.f, ry, pw - 32.f, 32.f,
-                rsWithAlpha(pal.tileFocusBg,
-                            rsAlphaOf(pal.tileFocusBg) * a / 255u),
-                rsWithAlpha(pal.accent, a),
-                rsWithAlpha(pal.shadow,
-                            rsAlphaOf(pal.shadow) * a / (255u * 2u)));
-        if (current)
-            r.rect(px + 20.f, ry + 10.f, 2.f, 12.f,
-                   rsWithAlpha(pal.accent, a));
-        const u32 statusColor = c.psp1000Safe
-                                    ? rsHex(0x5C9E47)
-                                    : rsHex(0xD68A2E);
-        ui::prim::circle(r, px + 30.f, ry + 16.f, 3.f,
-                         rsWithAlpha(statusColor, a));
-        fonts.body.draw(r, px + 40.f, ry + 8.f, c.name.c_str(),
-                        rsWithAlpha(focused ? pal.textPrimary : pal.textDim, a),
-                        text::Align::Left);
-        /* Native means the proven standalone PSP application takes over the
-         * process. The status dot still carries PSP-1000 qualification. */
-        const char* right = c.isNative()
+        const bool selected = i == m_pickerIdx;
+        const u32 ink = selected ? pal.selectText : pal.textPrimary;
+        if (selected)
+            r.rect(px + 6.f, y, PW - 12.f, ROW - 2.f, fade(pal.selectBg, a));
+        const float textY = y + (ROW - 2.f - fonts.pixelSmall.lineHeight()) * .5f
+                            + 1.f;
+        const char* status = c.isNative()
             ? "NATIVE" : (c.psp1000Safe ? "ANY PSP" : "TESTING");
-        fonts.small.draw(r, px + pw - 32.f, ry + 10.f, right,
-                         rsWithAlpha(pal.textDim, a * 3u / 4u),
-                         text::Align::Right);
+        fonts.pixelSmall.draw(r, px + 16.f, textY,
+                              (std::string(&c == m_pickerCurrent ? "* " : "") +
+                               c.name).c_str(), fade(ink, a));
+        fonts.pixelTiny.draw(r, px + PW - 14.f, textY + 1.f, status,
+                             fade(selected ? pal.selectText : pal.textSecondary,
+                                  a),
+                             text::Align::Right);
     }
-    r.resetScissor();
 }
 
-void HomeScene::update(App& app, float dt) {
-    /* A finished background scan invalidates the visible list. */
-    if (app.index().generation() != m_lastIndexGen) {
-        rebuildList(app);
-        rebuildRecents(app);
-        m_listIdx = rsClamp(m_listIdx, 0, int(m_visible.size()) - 1);
-        if (m_listIdx < 0) m_listIdx = 0;
-        if (m_visible.empty()) m_inList = false;
-    }
-
-    if (m_pickerOpen) updatePicker(app);
-    else if (m_actionsOpen) updateActions(app);
-    else if (m_inList) updateList(app);
-    else updateCats(app);
-
-    app.snapshot().catIdx  = m_catIdx;
-    app.snapshot().listIdx = m_listIdx;
-    app.snapshot().recentIdx = m_recentIdx;
-    app.snapshot().inList  = m_inList;
-    app.snapshot().recentFocus = m_recentFocus;
-
-    m_catPos.to(float(m_catIdx));
-    m_catPos.update(dt, 13.f);
-    m_listFocus.to(m_inList ? 1.f : 0.f);
-    m_listFocus.update(dt, 11.f);
-    m_recentReveal.to(m_recentFocus ? 1.f : 0.f);
-    m_recentReveal.update(dt, 15.f);
-    m_scroll.to(float(listStart(m_listIdx, int(m_visible.size()))));
-    const float scrollTarget = m_scroll.target;
-    if (std::fabs(scrollTarget - m_scroll.v) > 1.25f)
-        m_scroll.snap(scrollTarget);
-    m_scroll.update(dt, 13.f);
-    if (m_selectionSettle > 0.f) {
-        m_selectionSettle -= dt;
-        if (m_selectionSettle <= 0.f) hydrateSelection(app);
-    }
-    m_entrance.update(dt);
-    m_pickerFade.update(dt);
-    m_actionsFade.update(dt);
-}
-
-/* ---------------------------------------------------------------------- */
-
-
-void HomeScene::drawHome(App& app, float alpha, float slide) {
-    if (cfg::get().homeLayout == cfg::HOME_LAYOUT_CLASSIC)
-        drawHomeClassic(app, alpha, slide);
-    else
-        drawHomeModern(app, alpha, slide);
-}
-
-void HomeScene::drawHomeModern(App& app, float alpha, float slide) {
-    if (alpha <= 2.f) return;
+void HomeScene::drawViewMenu(App& app) {
     auto& r = app.renderer();
     const auto& pal = app.pal();
     const auto& fonts = app.fonts();
-    const u32 a = u32(rsClamp(alpha, 0.f, 255.f));
+    const float t = ui::easeOutCubic(m_overlayFade.t);
+    const u32 a = u32(t * 255.f);
+    drawBackdrop(app, a);
 
-    /* Each icon/label group sits in a content-sized slot. The active group's
-     * leading edge resolves to the same 12px content line as the console name
-     * and game count below it; equal slot padding keeps neighbours even. */
-    constexpr float RAIL_ACTIVE_LEFT = 12.f;
-    constexpr float RAIL_Y = 60.f;
-    constexpr float ICON_SIZE = 32.f;
-    constexpr float ICON_LABEL_GAP = 8.f;
-    constexpr float SELECTION_TRAILING_PAD = 8.f;
-    constexpr float SLOT_PAD = 16.f;
-    float groupWidths[NUM_CATS];
-    float slotCenters[NUM_CATS];
-    float cursor = 0.f;
-    for (int i = 0; i < NUM_CATS; ++i) {
-        const bool selected = i == m_catIdx;
-        const bool favorite = cat(i).systemIdx == CATEGORY_FAVORITES;
-        const float iconFootprint = favorite ? 20.f : 24.f;
-        const auto& railFont = selected ? fonts.pixelLarge : fonts.pixel;
-        groupWidths[i] = iconFootprint + ICON_LABEL_GAP +
-                         railFont.measure(categoryRailLabel(i));
-        const float slotWidth = groupWidths[i] + SLOT_PAD * 2.f;
-        slotCenters[i] = cursor + slotWidth * .5f;
-        cursor += slotWidth;
-    }
-    const int leftIndex = rsClamp(int(std::floor(m_catPos.v)), 0,
-                                  NUM_CATS - 1);
-    const int rightIndex = rsClamp(leftIndex + 1, 0, NUM_CATS - 1);
-    const float fraction = m_catPos.v - float(leftIndex);
-    const float leftStart = slotCenters[leftIndex] -
-                            groupWidths[leftIndex] * .5f;
-    const float rightStart = slotCenters[rightIndex] -
-                             groupWidths[rightIndex] * .5f;
-    const float focusStart = leftStart + (rightStart - leftStart) * fraction;
+    int rows[5];
+    const int n = viewRows(rows);
+    constexpr float PW = 280.f, ROW = 22.f, PAD = 6.f, HEAD = 22.f;
+    const float ph = PAD * 2.f + HEAD + ROW * float(n);
+    const float px = (RS_SCREEN_W - PW) * .5f;
+    const float py = float(int((RS_SCREEN_H - ph) * .5f)) - (1.f - t) * 8.f - 8.f;
+    r.rect(px, py, PW, ph, fade(pal.menuBg, a));
+    ui::prim::outlineRect(r, px, py, PW, ph, 2.f, fade(pal.railOutline, a));
+    fonts.pixelTiny.draw(r, px + 14.f, py + PAD + 6.f, "VIEW",
+                         fade(pal.accent, a));
+    fonts.pixelTiny.draw(r, px + PW - 14.f, py + PAD + 6.f,
+                         systemTitle(currentSystemId()),
+                         fade(pal.textSecondary, a), text::Align::Right);
 
-    /* The active system's texture begins left of its visible artwork because
-     * the source icon includes transparent padding. Clip to the viewport, not
-     * the content line, so its outermost pixels remain intact. */
-    r.setScissor(0, int(RAIL_Y + slide), RS_SCREEN_W, 52);
-    for (int i = 0; i < NUM_CATS; i++) {
-        const bool selected = i == m_catIdx;
-        const bool favorite = cat(i).systemIdx == CATEGORY_FAVORITES;
-        const float iconFootprint = favorite ? 20.f : 24.f;
-        const float iconInset = ICON_SIZE - iconFootprint;
-        const auto& railFont = selected ? fonts.pixelLarge : fonts.pixel;
-        const float distance = std::fabs(float(i) - m_catPos.v);
-        const float proximity = 1.f - rsClamp(distance, 0.f, 1.f);
-        const float restingAlpha = pal.dark ? .72f : .42f;
-        const u32 itemAlpha = u32(float(a) *
-            (restingAlpha + (1.f - restingAlpha) * proximity));
-        const float groupStart = slotCenters[i] - groupWidths[i] * .5f;
-        const float x = RAIL_ACTIVE_LEFT + groupStart - focusStart;
-        if (!selected && i < m_catIdx && x < RAIL_ACTIVE_LEFT) continue;
-        if (x + groupWidths[i] < 0.f || x > RS_SCREEN_W) continue;
-        const float iconY = RAIL_Y + slide;
-        const float textY = RAIL_Y +
-            (ICON_SIZE - railFont.lineHeight()) * .5f + slide;
-        const int systemIdx = cat(i).systemIdx;
-        if (systemIdx == CATEGORY_FAVORITES) {
-            ui::prim::iconStar(
-                r, x + iconFootprint * .5f, iconY + ICON_SIZE * .5f, 10.f,
-                rsWithAlpha(pal.textSecondary, itemAlpha));
-        } else {
-            ui::prim::iconSystem(
-                r, systemIdx >= 0 ? systemIdx : SETTINGS_ICON,
-                x - iconInset, iconY, ICON_SIZE,
-                rsWithAlpha(pal.textSecondary, itemAlpha),
-                rsWithAlpha(pal.accent, itemAlpha));
+    for (int i = 0; i < n; i++) {
+        const float y = py + PAD + HEAD + float(i) * ROW;
+        const bool selected = i == m_viewRow;
+        const int row = rows[i];
+        const u32 ink = selected ? pal.selectText : pal.textPrimary;
+        const u32 sub = selected ? pal.selectText : pal.textSecondary;
+        const float textY = y + (ROW - 2.f - fonts.pixelSmall.lineHeight()) * .5f
+                            + 1.f;
+        if (selected)
+            r.rect(px + 6.f, y, PW - 12.f, ROW - 2.f, fade(pal.selectBg, a));
+        const char* label = row == VR_SHOW ? "Show" : row == VR_SORT ? "Sort by"
+                          : row == VR_SEARCH ? "Search"
+                          : row == VR_CLEAR ? "Clear search" : "Back";
+        fonts.pixelSmall.draw(r, px + 16.f, textY, label, fade(ink, a));
+        std::string value;
+        if (row == VR_SHOW) value = db::filterName(m_view.filter);
+        else if (row == VR_SORT)
+            value = m_view.filter == db::ViewFilter::RecentlyAdded
+                        ? "Newest first" : db::sortName(m_view.sort);
+        else if (row == VR_SEARCH)
+            value = m_query.empty() ? std::string("Press X") : "\"" + m_query + "\"";
+        const bool adjustable =
+            row == VR_SHOW || (row == VR_SORT &&
+                               m_view.filter != db::ViewFilter::RecentlyAdded);
+        if (!value.empty()) {
+            const float vx = px + PW - (adjustable ? 28.f : 16.f);
+            drawEllipsized(fonts.pixelSmall, r, vx, textY, 150.f, value,
+                           fade(sub, a), text::Align::Right);
+            if (adjustable && selected) {
+                ui::prim::chevron(r, ui::prim::Dir::Left,
+                                  vx - fonts.pixelSmall.measure(value.c_str()) -
+                                      10.f, y + (ROW - 2.f) * .5f, 4.f, 2.f,
+                                  fade(ink, a));
+                ui::prim::chevron(r, ui::prim::Dir::Right, px + PW - 16.f,
+                                  y + (ROW - 2.f) * .5f, 4.f, 2.f, fade(ink, a));
+            }
         }
-        railFont.draw(r, x + iconFootprint + ICON_LABEL_GAP, textY,
-                      categoryRailLabel(i),
-                      rsWithAlpha(selected ? pal.accent : pal.textPrimary,
-                                  itemAlpha));
-        if (selected) {
-            r.rect(x, RAIL_Y + ICON_SIZE + 2.f + slide,
-                   groupWidths[i] + SELECTION_TRAILING_PAD, 2.f,
-                   rsWithAlpha(pal.accent, a));
-        }
-    }
-    r.resetScissor();
-
-    const Category& selectedCategory = cat(m_catIdx);
-    const bool isSettings =
-        selectedCategory.systemIdx == CATEGORY_SETTINGS;
-    const bool isFavorites =
-        selectedCategory.systemIdx == CATEGORY_FAVORITES;
-    if (isSettings) {
-        fonts.body.draw(r, 12.f, 130.f + slide, "Settings",
-                        rsWithAlpha(pal.textPrimary, a));
-        fonts.small.draw(r, 12.f, 150.f + slide,
-                         "Theme, display and performance",
-                         rsWithAlpha(pal.textDim, a));
-    } else if (isFavorites) {
-        fonts.body.draw(r, 12.f, 130.f + slide, "Favorites",
-                        rsWithAlpha(pal.textPrimary, a));
-        char favoriteCount[32];
-        std::snprintf(favoriteCount, sizeof favoriteCount, "%d GAME%s",
-                      int(m_visible.size()),
-                      m_visible.size() == 1 ? "" : "S");
-        fonts.small.draw(r, 12.f, 150.f + slide, favoriteCount,
-                         rsWithAlpha(pal.textDim, a));
-    } else {
-        const auto& system =
-            db::systemInfo(db::System(selectedCategory.systemIdx));
-        fonts.body.draw(r, 12.f, 130.f + slide, system.displayName,
-                        rsWithAlpha(pal.textPrimary, a));
-        char gameCount[32];
-        std::snprintf(gameCount, sizeof gameCount, "%d GAME%s",
-                      int(m_visible.size()), m_visible.size() == 1 ? "" : "S");
-        fonts.small.draw(r, 12.f, 150.f + slide, gameCount,
-                         rsWithAlpha(pal.textDim, a));
-    }
-
-    /* Recent games stay collapsed into a single bottom banner until Down is
-     * pressed. The drawer then rises without moving the console carousel. */
-    const float reveal = rsClamp(m_recentReveal.v, 0.f, 1.f);
-    const float drawerTop = 216.f - reveal * 112.f + slide;
-    r.rect(0.f, drawerTop, RS_SCREEN_W, 246.f - drawerTop,
-           rsWithAlpha(pal.bgTop, a));
-    const u32 drawerAccent = rsLerpColor(pal.panelOutline, pal.accent, reveal);
-    r.rect(0.f, drawerTop, RS_SCREEN_W, 1.f,
-           rsWithAlpha(drawerAccent,
-                       rsClamp<u32>(u32(rsAlphaOf(drawerAccent) * 2u),
-                                    36u, 170u) * a / 255u));
-    fonts.body.draw(r, 12.f, drawerTop + 8.f, "Recently Played",
-                    rsWithAlpha(
-                        rsLerpColor(pal.textPrimary, pal.accent, reveal), a));
-
-    const int recentCount = int(m_recentVisible.size());
-    if (recentCount == 0 || reveal < .15f) return;
-
-    const u32 listAlpha = u32(float(a) *
-        rsClamp((reveal - .15f) / .85f, 0.f, 1.f));
-    constexpr float RECENT_ROW = LIST_ROW;
-    const float recentTop = drawerTop + 30.f;
-    for (int i = 0; i < recentCount; i++) {
-        const db::GameEntry* g = m_recentVisible[size_t(i)];
-        const float y = recentTop + float(i) * RECENT_ROW;
-        const bool focused = m_recentFocus && i == m_recentIdx;
-        if (focused) {
-            ui::prim::focusRow(
-                r, 12.f, y, 456.f, RECENT_ROW,
-                rsWithAlpha(pal.tileFocusBg,
-                            rsAlphaOf(pal.tileFocusBg) * listAlpha / 255u),
-                rsWithAlpha(pal.accent, listAlpha),
-                rsWithAlpha(pal.shadow,
-                            rsAlphaOf(pal.shadow) * listAlpha / (255u * 2u)));
-        } else if (i + 1 < recentCount) {
-            r.rect(20.f, y + RECENT_ROW - 1.f, 440.f, 1.f,
-                   rsWithAlpha(pal.panelOutline,
-                               rsAlphaOf(pal.panelOutline) * listAlpha /
-                                   (255u * 2u)));
-        }
-        r.setScissor(20, int(y), 360, int(RECENT_ROW));
-        drawEllipsized(
-            fonts.body, r, 20.f, y + 6.f, 360.f, g->name,
-            rsWithAlpha(focused ? pal.accent : pal.textPrimary, listAlpha),
-            text::Align::Left);
-        r.resetScissor();
-        fonts.small.draw(
-            r, 456.f, y + 8.f, db::systemInfo(g->system).badge,
-            rsWithAlpha(focused ? pal.accent : pal.textDim, listAlpha),
-            text::Align::Right);
     }
 }
 
-/* Pre-beta.3 presentation: 50px badge cards on a scrolling rail, with the
- * recent games as a horizontal shelf beneath. Preserved verbatim apart from
- * the rename so switching layouts is a faithful revert, not a reinterpretation. */
-void HomeScene::drawHomeClassic(App& app, float alpha, float slide) {
-    if (alpha <= 2.f) return;
+void HomeScene::drawSearch(App& app) {
     auto& r = app.renderer();
     const auto& pal = app.pal();
     const auto& fonts = app.fonts();
-    const u32 a = u32(rsClamp(alpha, 0.f, 255.f));
+    const float t = ui::easeOutCubic(m_overlayFade.t);
+    const u32 a = u32(t * 255.f);
+    drawBackdrop(app, a);
 
-    fonts.body.draw(r, 12.f, 28.f + slide, "BROWSE LIBRARY",
-                    rsWithAlpha(pal.textPrimary, a));
+    constexpr float PW = 300.f, PH = 132.f;
+    const float px = (RS_SCREEN_W - PW) * .5f;
+    const float py = float(int((RS_SCREEN_H - PH) * .5f)) - (1.f - t) * 8.f - 8.f;
+    r.rect(px, py, PW, PH, fade(pal.menuBg, a));
+    ui::prim::outlineRect(r, px, py, PW, PH, 2.f, fade(pal.railOutline, a));
+    fonts.pixelTiny.draw(r, px + 14.f, py + 12.f, "SEARCH",
+                         fade(pal.accent, a));
+    char count[40];
+    std::snprintf(count, sizeof count, "%d match%s", m_searchCount,
+                  m_searchCount == 1 ? "" : "es");
+    fonts.pixelTiny.draw(r, px + PW - 14.f, py + 12.f, count,
+                         fade(pal.textSecondary, a), text::Align::Right);
 
-    constexpr float CARD_W = 50.f;
-    constexpr float CARD_H = 50.f;
-    constexpr float STEP = 56.f;
-    constexpr int VISIBLE_CATS = 8;
-    const float first =
-        rsClamp(m_catPos.v - 3.f, 0.f, float(NUM_CATS - VISIBLE_CATS));
-    r.setScissor(12, int(52.f + slide), 456, int(CARD_H + 4.f));
-    for (int i = 0; i < NUM_CATS; i++) {
-        const float x = 12.f + (float(i) - first) * STEP;
-        if (x + CARD_W < 0.f || x > RS_SCREEN_W) continue;
-        const bool current = i == m_catIdx;
-        const bool focused = current && !m_recentFocus;
-        const float y = 52.f + slide;
-        const u32 panelAlpha = u32((current ? rsAlphaOf(pal.tileFocusBg)
-                                             : rsAlphaOf(pal.tileBg)) *
-                                   a / 255u);
-        if (focused)
-            ui::prim::dropShadow(
-                r, x, y, CARD_W, CARD_H, 8.f,
-                rsWithAlpha(pal.shadow,
-                            rsAlphaOf(pal.shadow) * a / (255u * 2u)));
-        ui::prim::roundedRect(r, x, y, CARD_W, CARD_H, 8.f,
-                              rsWithAlpha(current ? pal.tileFocusBg
-                                                   : pal.tileBg,
-                                          panelAlpha));
-        ui::prim::roundedOutline(
-            r, x, y, CARD_W, CARD_H, 8.f,
-            focused
-                ? rsWithAlpha(pal.accent, a)
-                : rsWithAlpha(pal.panelOutline,
-                              rsAlphaOf(pal.panelOutline) * a / 255u));
-        const int systemIdx = cat(i).systemIdx;
-        const char* badge = systemIdx >= 0
-            ? db::systemInfo(db::System(systemIdx)).badge
-            : (systemIdx == CATEGORY_FAVORITES ? "FAV" : "SET");
-        if (systemIdx == CATEGORY_FAVORITES) {
-            ui::prim::iconStar(
-                r, x + CARD_W * .5f, y + 15.f, 10.f,
-                rsWithAlpha(current ? pal.accent : pal.textSecondary, a));
+    /* Text field: locked letters, then the pending one on an accent block. */
+    const float fx = px + 14.f, fy = py + 30.f, fw = PW - 28.f, fh = 26.f;
+    ui::prim::outlineRect(r, fx, fy, fw, fh, 1.f, fade(pal.divider, a));
+    const float ty = fy + (fh - fonts.pixelBody.lineHeight()) * .5f;
+    const float lockedW = fonts.pixelBody.measure(m_searchBuf.c_str());
+    fonts.pixelBody.draw(r, fx + 8.f, ty, m_searchBuf.c_str(),
+                         fade(pal.textPrimary, a));
+    const char pending[2] = {SEARCH_CHARS[m_searchChar] == ' ' ? '_'
+                                 : SEARCH_CHARS[m_searchChar], '\0'};
+    const float cw = fonts.pixelBody.measure("M") + 2.f;
+    if (m_searchTouched) {
+        r.rect(fx + 8.f + lockedW, fy + 3.f, cw, fh - 6.f, fade(pal.selectBg, a));
+        fonts.pixelBody.draw(r, fx + 9.f + lockedW, ty, pending,
+                             fade(pal.selectText, a));
+    } else if (std::fmod(app.time(), 1.f) < .6f) {
+        r.rect(fx + 8.f + lockedW, fy + fh - 7.f, cw, 2.f,
+               fade(pal.textSecondary, a));
+    }
+
+    /* Letter strip: the pending letter in the middle, neighbours either side,
+     * so the D-pad's up/down has somewhere visible to go. */
+    const float sy = py + 74.f;
+    for (int d = -3; d <= 3; d++) {
+        const int idx = (m_searchChar + d + SEARCH_CHAR_COUNT * 4) %
+                        SEARCH_CHAR_COUNT;
+        char one[2] = {SEARCH_CHARS[idx] == ' ' ? '_' : SEARCH_CHARS[idx], '\0'};
+        const float cx = px + PW * .5f + float(d) * 34.f;
+        if (d == 0) {
+            r.rect(cx - 13.f, sy - 4.f, 26.f, 26.f, fade(pal.selectBg, a));
+            fonts.pixelBody.draw(r, cx, sy + 1.f, one, fade(pal.selectText, a),
+                                 text::Align::Center);
         } else {
-            ui::prim::iconSystem(
-                r, systemIdx >= 0 ? systemIdx : SETTINGS_ICON,
-                x + 9.f, y + 1.f, 32.f,
-                rsWithAlpha(current ? pal.accent : pal.textSecondary, a),
-                rsWithAlpha(current ? pal.textPrimary : pal.textDim, a));
+            fonts.pixelSmall.draw(r, cx, sy + 3.f, one,
+                                  fade(pal.textSecondary,
+                                       a * (d == -3 || d == 3 ? 90u : 190u) /
+                                           255u),
+                                  text::Align::Center);
         }
-        fonts.small.draw(r, x + CARD_W * .5f, y + 35.f, badge,
-                         rsWithAlpha(current ? pal.accent
-                                             : pal.textPrimary, a),
-                         text::Align::Center);
     }
-    r.resetScissor();
+    fonts.pixelTiny.draw(r, px + PW * .5f, py + PH - 20.f,
+                         "L / R skip five letters  -  Square clears",
+                         fade(pal.textSecondary, a), text::Align::Center);
+}
 
-    const Category& selectedCategory = cat(m_catIdx);
-    const bool isSettings =
-        selectedCategory.systemIdx == CATEGORY_SETTINGS;
-    const bool isFavorites =
-        selectedCategory.systemIdx == CATEGORY_FAVORITES;
-    const db::GameEntry* focusedRecent =
-        (m_recentFocus && !m_recentVisible.empty())
-            ? m_recentVisible[size_t(m_recentIdx)] : nullptr;
-    if (focusedRecent) {
-        r.setScissor(12, int(108.f + slide), 456, 16);
-        drawEllipsized(fonts.body, r, 12.f, 108.f + slide, 456.f,
-                       focusedRecent->name,
-                       rsWithAlpha(pal.textPrimary, a), text::Align::Left);
-        r.resetScissor();
-        char played[48];
-        formatLastPlayedDate(
-            app.library().lastPlayed(focusedRecent->pathHash), played,
-            sizeof played);
-        char recentMeta[96];
-        std::snprintf(
-            recentMeta, sizeof recentMeta, "%s  ·  %s",
-            db::systemInfo(focusedRecent->system).displayName, played);
-        r.setScissor(12, int(128.f + slide), 456, 12);
-        fonts.small.draw(r, 12.f, 128.f + slide, recentMeta,
-                         rsWithAlpha(pal.textDim, a));
-        r.resetScissor();
-    } else if (isSettings) {
-        fonts.body.draw(r, 12.f, 108.f + slide, "Settings",
-                        rsWithAlpha(pal.textPrimary, a));
-        fonts.small.draw(r, 12.f, 128.f + slide,
-                         "Theme, display and performance",
-                         rsWithAlpha(pal.textDim, a));
-    } else if (isFavorites) {
-        fonts.body.draw(r, 12.f, 108.f + slide, "Favorites",
-                        rsWithAlpha(pal.textPrimary, a));
-        char favoriteCount[32];
-        std::snprintf(favoriteCount, sizeof favoriteCount, "%d GAME%s",
-                      int(m_visible.size()),
-                      m_visible.size() == 1 ? "" : "S");
-        fonts.small.draw(r, 12.f, 128.f + slide, favoriteCount,
-                         rsWithAlpha(pal.textDim, a));
-    } else {
-        const auto& system =
-            db::systemInfo(db::System(selectedCategory.systemIdx));
-        fonts.body.draw(r, 12.f, 108.f + slide, system.displayName,
-                        rsWithAlpha(pal.textPrimary, a));
-        char gameCount[32];
-        std::snprintf(gameCount, sizeof gameCount, "%d GAME%s",
-                      int(m_visible.size()), m_visible.size() == 1 ? "" : "S");
-        fonts.small.draw(r, 12.f, 128.f + slide, gameCount,
-                         rsWithAlpha(pal.textDim, a));
+void HomeScene::drawError(App& app) {
+    app.drawBackground();
+    app.drawTopBar(false);
+    const float t = ui::easeOutCubic(m_overlayFade.t);
+    const u32 a = u32(t * 255.f);
+
+    ui::StatePanel panel;
+    panel.kind = ui::StatePanel::Kind::Error;
+    panel.title = m_notice.title;
+    panel.message = m_noticeMessage;
+    /* Name the game, trimmed, so a stack of failures is distinguishable. */
+    char game[48];
+    std::snprintf(game, sizeof game, "%.40s", m_noticeGame.shown().c_str());
+    panel.detail = game;
+    const char* label = launch::actionLabel(m_notice.action);
+    if (*label) {
+        panel.actionLabel = label;
+        panel.actionButton = ui::prim::Button::Triangle;
     }
-    r.rect(0.f, 140.f + slide, RS_SCREEN_W, 1.f,
-           rsWithAlpha(pal.panelOutline,
-                       rsClamp<u32>(u32(rsAlphaOf(pal.panelOutline) * 2u),
-                                    28u, 76u)));
+    ui::drawStatePanel(app, panel, a, (1.f - t) * 8.f);
 
-    fonts.body.draw(r, 12.f, 148.f + slide, "RECENTLY PLAYED",
-                    rsWithAlpha(pal.textPrimary, a));
-    const int recentCount = int(m_recentVisible.size());
-    if (recentCount == 0) {
-        fonts.small.draw(r, 12.f, 180.f + slide,
-                         "Games you launch will appear here.",
-                         rsWithAlpha(pal.textDim, a));
+    /* The action sits under the message, where the eye lands; the legend
+     * only needs to say how to leave. */
+    const App::Hint hints[] = {{ui::prim::Button::Circle, "Back"}};
+    app.drawHintBar(hints, 1);
+}
+
+void HomeScene::drawLegend(App& app) {
+    using B = ui::prim::Button;
+    const bool picker = m_overlay == Overlay::CorePicker;
+    if (picker) {
+        const App::Hint hints[] = {{B::Cross, "Play"}, {B::Circle, "Cancel"}};
+        app.drawHintBar(hints, 2);
         return;
     }
-
-    const int warm = int(app.time() * 18.f) % recentCount;
-    app.boxart().get(*m_recentVisible[size_t(warm)]);
-
-    for (int i = 0; i < recentCount; i++) {
-        const db::GameEntry* g = m_recentVisible[size_t(i)];
-        const float x = 12.f + float(i) * 56.f;
-        const float y = 170.f + slide;
-        const bool focused = m_recentFocus && i == m_recentIdx;
-        if (focused)
-            ui::prim::focusRow(
-                r, x, y, 50.f, 50.f,
-                rsWithAlpha(pal.tileFocusBg,
-                            rsAlphaOf(pal.tileFocusBg) * a / 255u),
-                rsWithAlpha(pal.accent, a),
-                rsWithAlpha(pal.shadow,
-                            rsAlphaOf(pal.shadow) * a / (255u * 2u)));
-        else
-            ui::prim::roundedRect(
-                r, x, y, 50.f, 50.f, 8.f,
-                rsWithAlpha(pal.tileBg,
-                            rsAlphaOf(pal.tileBg) * a / 255u));
-        if (const gfx::Texture* art = app.boxart().peek(*g))
-            drawArtCover(r, *art, x + 8.f, y + 4.f, 34.f, 34.f,
-                         rsWithAlpha(rsHex(0xFFFFFF), a),
-                         rsWithAlpha(
-                             surfaceAt(pal, focused ? pal.tileFocusBg
-                                                    : pal.tileBg,
-                                       y + 24.f),
-                             a));
-        else
-            ui::prim::iconSystem(
-                r, int(g->system), x + 9.f, y + 5.f, 32.f,
-                rsWithAlpha(pal.textSecondary, a),
-                rsWithAlpha(pal.accent, a));
-        r.setScissor(int(x + 3.f), int(y + 39.f), 44, 11);
-        drawEllipsized(
-            fonts.small, r, x + 25.f, y + 39.f, 44.f, g->name,
-            rsWithAlpha(focused ? pal.accent : pal.textPrimary, a),
-            text::Align::Center);
-        r.resetScissor();
+    if (m_overlay == Overlay::ViewMenu) {
+        const App::Hint hints[] = {
+            {B::DpadLeftRight, "Change"}, {B::Cross, "Select"},
+            {B::Circle, "Close"},
+        };
+        app.drawHintBar(hints, 3);
+        return;
     }
-}
-
-void HomeScene::drawBrowser(App& app, float alpha) {
-    if (alpha <= 2.f || m_visible.empty()) return;
-    auto& r = app.renderer();
-    const auto& pal = app.pal();
-    const auto& fonts = app.fonts();
-    const u32 a = u32(rsClamp(alpha, 0.f, 255.f));
-    const bool browsingFavorites =
-        cat(m_catIdx).systemIdx == CATEGORY_FAVORITES;
-    fonts.large.draw(
-        r, 16.f, 32.f,
-        browsingFavorites
-            ? "Favorites"
-            : db::systemInfo(db::System(cat(m_catIdx).systemIdx)).displayName,
-        rsWithAlpha(pal.accent, a));
-    char count[32];
-    std::snprintf(count, sizeof count, "%d GAME%s",
-                  int(m_visible.size()), m_visible.size() == 1 ? "" : "S");
-    fonts.small.draw(r, 16.f, 56.f, count,
-                     rsWithAlpha(pal.textDim, a));
-
-    const int countVisible = int(m_visible.size());
-    const float maxStart =
-        float(rsClamp(countVisible - LIST_VISIBLE, 0, countVisible));
-    const float scrollIndex = rsClamp(m_scroll.v, 0.f, maxStart);
-    const int first = rsClamp(int(std::floor(scrollIndex)), 0, countVisible);
-    const int pastLast = rsClamp(first + LIST_VISIBLE + 1, 0, countVisible);
-    constexpr float LIST_X = 16.f;
-    constexpr float LIST_W = 232.f;
-    constexpr float LIST_H = LIST_ROW * LIST_VISIBLE;
-    r.setScissor(int(LIST_X), int(LIST_TOP), int(LIST_W), int(LIST_H));
-    for (int i = first; i < pastLast; i++) {
-        const float y = float(int(LIST_TOP +
-            (float(i) - scrollIndex) * LIST_ROW));
-        if (y < LIST_TOP - LIST_ROW || y >= LIST_TOP + LIST_H) continue;
-        const bool selected = i == m_listIdx;
-        const db::GameEntry& g = *m_visible[size_t(i)];
-        if (selected) {
-            ui::prim::focusRow(
-                r, LIST_X, y, LIST_W, LIST_ROW,
-                rsWithAlpha(pal.tileFocusBg,
-                            rsAlphaOf(pal.tileFocusBg) * a / 255u),
-                rsWithAlpha(pal.accent, a),
-                rsWithAlpha(pal.shadow,
-                            rsAlphaOf(pal.shadow) * a / (255u * 2u)));
-        } else if (i + 1 < countVisible) {
-            r.rect(LIST_X + 8.f, y + LIST_ROW - 1.f,
-                   LIST_W - 16.f, 1.f,
-                   rsWithAlpha(pal.panelOutline,
-                               rsAlphaOf(pal.panelOutline) * a / (255u * 2u)));
+    if (m_overlay == Overlay::Search) {
+        const App::Hint hints[] = {
+            {B::DpadUp, "Letter"}, {B::DpadLeftRight, "Add / Delete"},
+            {B::Cross, "Search"}, {B::Circle, "Back"},
+        };
+        app.drawHintBar(hints, 4);
+        return;
+    }
+    switch (m_nav.layer) {
+        case nav::Layer::Systems: {
+            if (m_empty) {
+                const App::Hint hints[] = {
+                    {B::Cross, "Scan"}, {B::Triangle, "Settings"},
+                };
+                app.drawHintBar(hints, 2);
+                break;
+            }
+            App::Hint hints[4];
+            int n = 0;
+            if (!m_recents.empty()) hints[n++] = {B::DpadUp, "Continue"};
+            hints[n++] = {B::DpadDown, "Library"};
+            hints[n++] = {B::Triangle, "Settings"};
+            hints[n++] = {B::Start, "Home"};
+            app.drawHintBar(hints, n);
+            break;
         }
-        r.setScissor(int(LIST_X + 8.f), int(y), int(LIST_W - 16.f),
-                     int(LIST_ROW));
-        drawEllipsized(
-            fonts.body, r, LIST_X + 8.f, y + 6.f, LIST_W - 16.f,
-            g.name, rsWithAlpha(selected ? pal.accent : pal.textPrimary, a),
-            text::Align::Left);
-        r.setScissor(int(LIST_X), int(LIST_TOP), int(LIST_W), int(LIST_H));
-    }
-    r.resetScissor();
-
-    const float px = 272.f, py = 40.f, pw = 192.f, ph = 192.f;
-    ui::prim::roundedRect(
-        r, px, py, pw, ph, 8.f,
-        rsWithAlpha(pal.panelBg, rsAlphaOf(pal.panelBg) * a / 255u));
-    ui::prim::roundedOutline(
-        r, px, py, pw, ph, 8.f,
-        rsWithAlpha(pal.panelOutline,
-                    rsAlphaOf(pal.panelOutline) * a / 255u));
-    const db::GameEntry& selected = *m_visible[size_t(m_listIdx)];
-    const gfx::Texture* selectedArt = app.boxart().peek(selected);
-    constexpr float ART_SIZE = 96.f;
-    const float artX = px + (pw - ART_SIZE) * .5f;
-    const float artY = py + 8.f;
-    ui::prim::roundedRect(
-        r, artX, artY, ART_SIZE, ART_SIZE, 4.f,
-        rsWithAlpha(pal.tileBg, rsAlphaOf(pal.tileBg) * a / 255u));
-    if (selectedArt)
-        drawArtCover(r, *selectedArt, artX, artY, ART_SIZE, ART_SIZE,
-                     rsWithAlpha(rsHex(0xFFFFFF), a),
-                     rsWithAlpha(
-                         opaqueOver(
-                             pal.tileBg,
-                             opaqueOver(pal.panelBg,
-                                        backgroundAt(pal,
-                                                     artY + ART_SIZE * .5f))),
-                         a));
-    else
-        drawCoverPlaceholder(r, fonts, pal, selected,
-                             artX, artY, ART_SIZE, ART_SIZE, a);
-
-    r.setScissor(int(px + 16.f), int(py + 112.f),
-                 int(pw - 32.f), int(ph - 112.f));
-    drawWrapped(fonts.body, r, px + 16.f, py + 112.f, pw - 32.f, 2,
-                selected.name, rsWithAlpha(pal.accent, a));
-    char meta[64];
-    if (m_selMeta.year > 0)
-        std::snprintf(meta, sizeof meta, "%d%s%s", m_selMeta.year,
-                      m_selMeta.genre.empty() ? "" : "  ·  ",
-                      m_selMeta.genre.c_str());
-    else
-        std::snprintf(meta, sizeof meta, "%s%s%s",
-                      db::systemInfo(selected.system).badge,
-                      m_selMeta.genre.empty() ? "" : "  ·  ",
-                      m_selMeta.genre.c_str());
-    fonts.small.draw(r, px + 16.f, py + 144.f, meta,
-                     rsWithAlpha(pal.textSecondary, a));
-    if (m_selCore) {
-        char core[64];
-        std::snprintf(core, sizeof core, "%s%s", m_selCore->name.c_str(),
-                      m_selMultiCore ? "  ·  Core options" : "");
-        fonts.small.draw(r, px + 16.f, py + 160.f, core,
-                         rsWithAlpha(pal.textDim, a));
-    }
-    char lastPlayed[48];
-    formatLastPlayed(app.library().lastPlayed(selected.pathHash),
-                     cfg::get().clock24Hour,
-                     lastPlayed, sizeof lastPlayed);
-    fonts.small.draw(r, px + 16.f, py + 176.f, lastPlayed,
-                     rsWithAlpha(pal.textDim, a));
-    r.resetScissor();
-}
-
-void HomeScene::drawActions(App& app) {
-    if (!m_actionsOpen) return;
-    auto& r = app.renderer();
-    const auto& pal = app.pal();
-    const auto& fonts = app.fonts();
-    const float t = ui::easeOutCubic(m_actionsFade.t);
-    const u32 a = u32(t * 255.f);
-    r.rect(0, 0, RS_SCREEN_W, RS_SCREEN_H,
-           rsWithAlpha(pal.scrim, 168u * a / 255u));
-
-    constexpr float PX = 240.f;
-    constexpr float PY = 40.f;
-    constexpr float PW = 224.f;
-    constexpr float ROW = 32.f;
-    constexpr int COUNT = 4;
-    const float ph = ROW * COUNT + 48.f;
-    ui::prim::roundedRect(r, PX, PY, PW, ph, 8.f,
-                          rsWithAlpha(pal.menuBg, a));
-    ui::prim::roundedOutline(
-        r, PX, PY, PW, ph, 8.f,
-        rsWithAlpha(pal.panelOutline,
-                    rsAlphaOf(pal.panelOutline) * a / 255u));
-
-    const db::GameEntry& game = m_actionGame;
-    r.setScissor(int(PX + 16.f), int(PY + 8.f), int(PW - 32.f), 12);
-    fonts.small.draw(r, PX + 16.f, PY + 8.f, game.name.c_str(),
-                     rsWithAlpha(pal.textDim, a));
-    r.resetScissor();
-    const char* labels[COUNT] = {
-        "Play",
-        app.library().isFavorite(game.pathHash)
-            ? "Remove Favorite" : "Favorite",
-        "Save States",
-        "Per-game Settings",
-    };
-    for (int i = 0; i < COUNT; i++) {
-        const float y = PY + 40.f + i * ROW;
-        const bool focused = i == m_actionIdx;
-        if (focused)
-            ui::prim::focusRow(
-                r, PX + 16.f, y, PW - 32.f, 32.f,
-                rsWithAlpha(pal.tileFocusBg,
-                            rsAlphaOf(pal.tileFocusBg) * a / 255u),
-                rsWithAlpha(pal.accent, a),
-                rsWithAlpha(pal.shadow,
-                            rsAlphaOf(pal.shadow) * a / (255u * 2u)));
-        ui::prim::circle(r, PX + 32.f, y + 16.f, 2.5f,
-                         rsWithAlpha(focused ? pal.accent
-                                             : pal.textDim, a));
-        fonts.body.draw(r, PX + 48.f, y + 8.f, labels[i],
-                        rsWithAlpha(focused ? pal.accent
-                                           : pal.textPrimary, a));
-        if (i == 2 && m_saveCount > 0) {
-            char slots[16];
-            std::snprintf(slots, sizeof slots, "%d", m_saveCount);
-            fonts.small.draw(r, PX + PW - 24.f, y + 10.f, slots,
-                             rsWithAlpha(pal.textDim, a),
-                             text::Align::Right);
+        case nav::Layer::Continue: {
+            const App::Hint hints[] = {
+                {B::DpadDown, "Systems"}, {B::Triangle, "Options"},
+                {B::Square, "Favorite"}, {B::Cross, "Resume"},
+            };
+            app.drawHintBar(hints, 4);
+            break;
         }
-        if (i < COUNT - 1)
-            r.rect(PX + 48.f, y + 28.f, PW - 72.f, 1.f,
-                   rsWithAlpha(pal.panelOutline,
-                               rsAlphaOf(pal.panelOutline) * a / 255u));
+        case nav::Layer::Library: {
+            const App::Hint hints[] = {
+                {B::Cross, "Details"}, {B::Square, "Favorite"},
+                {B::Triangle, "Options"}, {B::Select, "View"},
+                {B::Circle, "Back"},
+            };
+            app.drawHintBar(hints, 5);
+            break;
+        }
+        case nav::Layer::Detail: {
+            if (m_detailExpanded && m_selMultiCore) {
+                const App::Hint hints[] = {
+                    {B::Cross, "Confirm"}, {B::Triangle, "Core"},
+                    {B::Circle, "Back"},
+                };
+                app.drawHintBar(hints, 3);
+            } else {
+                const App::Hint hints[] = {
+                    {B::Cross, "Confirm"}, {B::Circle, "Back"},
+                };
+                app.drawHintBar(hints, 2);
+            }
+            break;
+        }
     }
 }
 
 void HomeScene::draw(App& app) {
-    app.drawBackground();
-    app.drawTopBar();
-
-    const float enter = ui::easeOutCubic(m_entrance.t);
-    const float slideUp = (1.f - enter) * 10.f;
-    const float enterA = enter * 255.f;
-    const float focus = m_listFocus.v;
-
-    const float homeReveal = 1.f - rsClamp(focus * 2.f, 0.f, 1.f);
-    const float browserReveal =
-        rsClamp((focus - .12f) / .88f, 0.f, 1.f);
-    drawHome(app, homeReveal * enterA, slideUp);
-    drawBrowser(app, browserReveal * 255.f);
-
-    if (m_actionsOpen) drawActions(app);
-    if (m_pickerOpen) drawPicker(app);
-
-    if (m_pickerOpen) {
-        const App::Hint hints[] = {
-            {ui::prim::Button::Cross, "Play"},
-            {ui::prim::Button::Circle, "Cancel"},
-        };
-        app.drawHintBar(hints, 2);
-    } else if (m_actionsOpen) {
-        const App::Hint hints[] = {
-            {ui::prim::Button::Cross, "Select"},
-            {ui::prim::Button::Circle, "Close"},
-        };
-        app.drawHintBar(hints, 2);
-    } else if (m_inList) {
-        const App::Hint hints[] = {
-            {ui::prim::Button::Cross, "Play"},
-            {ui::prim::Button::Square, "Save States"},
-            {ui::prim::Button::Triangle, "Options"},
-            {ui::prim::Button::Circle, "Back"},
-        };
-        app.drawHintBar(hints, 4);
-    } else if (m_recentFocus) {
-        const App::Hint hints[] = {
-            {ui::prim::Button::Cross, "Play"},
-            {ui::prim::Button::Triangle, "Options"},
-            {ui::prim::Button::Circle, "Back"},
-        };
-        app.drawHintBar(hints, 3);
-    } else {
-        const App::Hint hints[] = {
-            {ui::prim::Button::Cross, "Open"},
-            {ui::prim::Button::Triangle, "Settings"},
-        };
-        app.drawHintBar(hints, 2);
+    if (m_overlay == Overlay::Error) {
+        drawError(app);
+        return;
     }
+    app.drawBackground();
 
+    const float pos = m_layerPos.v;
+    const float enter = ui::easeOutCubic(m_entrance.t);
+    const u32 enterA = u32(enter * 255.f);
+    auto layerA = [&](float index) {
+        return u32(layerAlpha(pos, index) * float(enterA));
+    };
+    auto offset = [&](float index) { return (index - pos) * SHIFT; };
+
+    /* Status cluster stays for every layer except the focused Detail view;
+     * the wordmark belongs to Systems and Continue only. */
+    if (pos < 1.5f) app.drawTopBar(pos < .5f);
+
+    drawContinue(app, layerA(-1.f), offset(-1.f));
+    drawSystems(app, layerA(0.f), offset(0.f));
+    drawLibrary(app, layerA(1.f), offset(1.f));
+    drawDetail(app, layerA(2.f), offset(2.f));
+
+    drawLegend(app);
+
+    if (m_overlay == Overlay::Options) drawOptions(app);
+    else if (m_overlay == Overlay::CorePicker) drawPicker(app);
+    else if (m_overlay == Overlay::ViewMenu) drawViewMenu(app);
+    else if (m_overlay == Overlay::Search) drawSearch(app);
 }
 
 }  // namespace rs

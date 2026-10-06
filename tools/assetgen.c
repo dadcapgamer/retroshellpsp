@@ -63,7 +63,11 @@ static int build_codepoint_list(const stbtt_fontinfo* info, int* cps) {
     return n;
 }
 
-static void bake_font(const char* ttf_path, float px, const char* out_path) {
+/* `mono_advance` > 0 forces a fixed advance and centres every glyph in its
+ * cell, giving the pixel face the monospaced firmware look of the redesign
+ * mockups. Pass 0 for the face's natural proportional spacing. */
+static void bake_font_ex(const char* ttf_path, float px, int mono_advance,
+                         const char* out_path) {
     long ttf_size;
     unsigned char* ttf = read_file(ttf_path, &ttf_size);
 
@@ -77,7 +81,7 @@ static void bake_font(const char* ttf_path, float px, const char* out_path) {
 
     /* Grow the atlas until everything packs. */
     static const int sizes[][2] = {
-        {256, 128}, {256, 256}, {512, 256}, {512, 512}
+        {128, 128}, {256, 128}, {256, 256}, {512, 256}, {512, 512}
     };
     unsigned char* atlas = NULL;
     stbtt_packedchar pcd[512];
@@ -129,9 +133,16 @@ static void bake_font(const char* ttf_path, float px, const char* out_path) {
         u16v = c->y0;                       fwrite(&u16v, 2, 1, f);
         u16v = (uint16_t)(c->x1 - c->x0);   fwrite(&u16v, 2, 1, f);
         u16v = (uint16_t)(c->y1 - c->y0);   fwrite(&u16v, 2, 1, f);
-        s16v = (int16_t)(c->xoff + (c->xoff < 0 ? -0.5f : 0.5f)); fwrite(&s16v, 2, 1, f);
+        int xoff = (int)(c->xoff + (c->xoff < 0 ? -0.5f : 0.5f));
+        int xadv = (int)(c->xadvance + 0.5f);
+        if (mono_advance > 0) {
+            const int gw = c->x1 - c->x0;
+            xoff = gw > 0 ? (mono_advance - gw) / 2 : 0;
+            xadv = mono_advance;
+        }
+        s16v = (int16_t)xoff; fwrite(&s16v, 2, 1, f);
         s16v = (int16_t)(c->yoff + (c->yoff < 0 ? -0.5f : 0.5f)); fwrite(&s16v, 2, 1, f);
-        s16v = (int16_t)(c->xadvance + 0.5f); fwrite(&s16v, 2, 1, f);
+        s16v = (int16_t)xadv; fwrite(&s16v, 2, 1, f);
         s16v = 0;                             fwrite(&s16v, 2, 1, f);
     }
     fwrite(atlas, 1, (size_t)(aw * ah), f);
@@ -140,6 +151,10 @@ static void bake_font(const char* ttf_path, float px, const char* out_path) {
     printf("baked %-28s %3dpx  %dx%d  %d glyphs\n", out_path, (int)px, aw, ah, ncp);
     free(atlas);
     free(ttf);
+}
+
+static void bake_font(const char* ttf_path, float px, const char* out_path) {
+    bake_font_ex(ttf_path, px, 0, out_path);
 }
 
 /* ---------------- PBP artwork ------------------------------------- */
@@ -213,8 +228,12 @@ static void make_pbp_art(const char* out_dir) {
 /* ------------------------------------------------------------------ */
 
 int main(int argc, char** argv) {
-    if (argc != 3) {
-        fprintf(stderr, "usage: assetgen <font-dir> <out-dir>\n");
+    /* "--fonts-only" skips the PBP artwork bake, which needs source frames
+     * that are not committed; use it when only the .rsf atlases change. */
+    const int fonts_only = argc == 4 && strcmp(argv[3], "--fonts-only") == 0;
+    if (argc != 3 && !fonts_only) {
+        fprintf(stderr,
+                "usage: assetgen <font-dir> <out-dir> [--fonts-only]\n");
         return 1;
     }
     const char* fdir = argv[1];
@@ -224,8 +243,6 @@ int main(int argc, char** argv) {
     snprintf(ttf, sizeof ttf, "%s/Inter-SemiBold.ttf", fdir);
     snprintf(rsf, sizeof rsf, "%s/fonts/font_title.rsf", out);
     bake_font(ttf, 26, rsf);
-    snprintf(rsf, sizeof rsf, "%s/fonts/font_large.rsf", out);
-    bake_font(ttf, 19, rsf);
 
     snprintf(ttf, sizeof ttf, "%s/Inter-Regular.ttf", fdir);
     snprintf(rsf, sizeof rsf, "%s/fonts/font_body.rsf", out);
@@ -238,10 +255,17 @@ int main(int argc, char** argv) {
      * sacrificing Inter's legibility in dense metadata and hint bars. */
     snprintf(ttf, sizeof ttf, "%s/GeistPixel-Square.ttf", fdir);
     snprintf(rsf, sizeof rsf, "%s/fonts/font_pixel.rsf", out);
-    bake_font(ttf, 19, rsf);
-    snprintf(rsf, sizeof rsf, "%s/fonts/font_pixel_large.rsf", out);
-    bake_font(ttf, 23, rsf);
+    bake_font_ex(ttf, 19, 12, rsf);
+    /* Firmware-style list, legend and metadata sizes (480x272 layouts). */
+    snprintf(rsf, sizeof rsf, "%s/fonts/font_pixel_tiny.rsf", out);
+    bake_font_ex(ttf, 10, 6, rsf);
+    snprintf(rsf, sizeof rsf, "%s/fonts/font_pixel_small.rsf", out);
+    bake_font_ex(ttf, 12, 7, rsf);
+    snprintf(rsf, sizeof rsf, "%s/fonts/font_pixel_body.rsf", out);
+    bake_font_ex(ttf, 14, 8, rsf);
+    snprintf(rsf, sizeof rsf, "%s/fonts/font_pixel_medium.rsf", out);
+    bake_font_ex(ttf, 16, 10, rsf);
 
-    make_pbp_art(out);
+    if (!fonts_only) make_pbp_art(out);
     return 0;
 }

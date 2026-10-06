@@ -9,6 +9,7 @@
 #include "frontend/database/library.h"
 #include "frontend/database/metadata.h"
 #include "frontend/database/rom_scanner.h"
+#include "frontend/scenes/home_nav.h"
 #include "frontend/scenes/scene.h"
 #include "frontend/text/font.h"
 #include "frontend/themes/theme.h"
@@ -26,11 +27,17 @@ namespace rs {
  * frontend teardown around a core launch — the "FrontendSnapshot" of the
  * bi-layer protocol. Plain data only. */
 struct FrontendSnapshot {
-    int  catIdx  = 0;      /* home console (GB) */
-    int  listIdx = 0;
-    int  recentIdx = 0;
-    bool inList  = false;
-    bool recentFocus = false;
+    nav::Layer layer = nav::Layer::Systems;
+    int  systemId    = 0;   /* db::System of the rail selection (GB) */
+    int  continueIdx = 0;
+    /* Per-system game selection, the Library filter/sort and the rail
+     * position are persisted in library.json rather than here, so they also
+     * survive a process restart (native emulators replace the process). */
+    /* Set by a failed launch's "Choose Emulator" action: Home opens the core
+     * picker for this game as soon as it appears. */
+    u32  pickerHash  = 0;
+    /* Set when a failed launch should kick off a library rescan on return. */
+    bool rescanOnHome = false;
 };
 
 class App {
@@ -53,11 +60,13 @@ public:
 
     struct Fonts {
         text::Font title;   /* Inter SemiBold 26 */
-        text::Font large;   /* Inter SemiBold 19 */
         text::Font body;    /* Inter Regular 15  */
         text::Font small;   /* Inter Regular 12  */
-        text::Font pixel;   /* Geist Pixel Square 19 — display use only */
-        text::Font pixelLarge; /* Geist Pixel Square 23 — active system */
+        text::Font pixel;   /* Geist Pixel Square 19 (mono) — system name */
+        text::Font pixelBody;   /* Geist Pixel Square 14 — item titles */
+        text::Font pixelMedium; /* Geist Pixel Square 16 — screen titles */
+        text::Font pixelSmall;  /* Geist Pixel Square 12 — lists, metadata */
+        text::Font pixelTiny;   /* Geist Pixel Square 10 — legend, labels */
     };
     const Fonts& fonts() const { return m_fonts; }
 
@@ -79,6 +88,12 @@ public:
      * serves the game. */
     void launchGame(const db::GameEntry& game, const CoreInfo* core = nullptr);
 
+    /* A launch that fails before any scene change (missing ROM, missing
+     * emulator, native-launch refusal) leaves its raw reason here instead of
+     * a toast, so the shell can present it as a proper error state. Returns
+     * false when there is nothing pending. */
+    bool takeLaunchError(char* out, size_t size);
+
     /* Bi-layer launch protocol (called by GameSession):
      * evictForCore drops every large frontend resource — box art, theme
      * assets, non-boot VRAM — so the core owns the memory; restoreAfterCore
@@ -88,8 +103,13 @@ public:
 
     /* --- shared chrome ---------------------------------------------------- */
     void drawBackground();
-    void drawTopBar();
+    /* Status cluster (clock, battery %, battery). With `wordmark` the
+     * RETROSHELL mark is drawn at the left; screens with their own header
+     * (Library, Details) pass false. */
+    void drawTopBar(bool wordmark = true);
     struct Hint { ui::prim::Button button; const char* label; };
+    /* Compact control legend: thin rule, then glyph+label pairs spread
+     * edge to edge across the safe area. */
     void drawHintBar(const Hint* hints, int count);
     void toast(const char* msg);
 
@@ -127,6 +147,8 @@ private:
     theme::Palette m_themeFrom;
     ui::Tween m_themeFade;
 
+    char m_launchError[96] = {};
+
     char m_toastMsg[96] = {};
     ui::Tween m_toastTween;
 
@@ -136,6 +158,7 @@ private:
     int  m_batteryPct   = -1;
     bool m_batteryChg   = false;
     int  m_batteryPoll  = 0;
+    int  m_batteryWarned = 100;   /* last low-battery threshold announced */
 
 #ifdef RS_DEBUG_OVERLAY
     bool m_showOverlay = false;

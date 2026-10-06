@@ -55,6 +55,41 @@ void statePath(char* buf, size_t n, const db::GameEntry& g, int slot) {
 
 }  // namespace
 
+namespace {
+const char* const SAVE_FILES[] = {
+    "sram.bin", "rtc.bin", "state0.rst", "state1.rst", "state2.rst",
+    "state3.rst", "state4.rst",
+};
+static_assert(sizeof(SAVE_FILES) / sizeof(SAVE_FILES[0]) == 2 + SLOTS,
+              "SAVE_FILES must list every state slot");
+}  // namespace
+
+bool hasAnySave(const db::GameEntry& game) {
+    char dir[128];
+    gameDir(dir, sizeof dir, game);
+    for (const char* name : SAVE_FILES) {
+        char path[192];
+        std::snprintf(path, sizeof path, "%s/%s", dir, name);
+        if (fs::fileSize(path) >= 0) return true;
+    }
+    return false;
+}
+
+int deleteAll(const db::GameEntry& game) {
+    char dir[128];
+    gameDir(dir, sizeof dir, game);
+    int removed = 0;
+    for (const char* name : SAVE_FILES) {
+        char path[192], backup[200];
+        std::snprintf(path, sizeof path, "%s/%s", dir, name);
+        std::snprintf(backup, sizeof backup, "%s.bak", path);
+        const bool existed = fs::exists(path);
+        if (fs::removeFile(path) && existed) removed++;
+        fs::removeFile(backup);
+    }
+    return removed;
+}
+
 void querySlots(const db::GameEntry& game, SlotInfo out[SLOTS]) {
     for (int i = 0; i < SLOTS; i++) {
         out[i] = SlotInfo{};

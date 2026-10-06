@@ -19,6 +19,11 @@ struct Palette {
     u32 menuBg;                   /* opaque surface for modal dialogs */
     u32 shadow;                   /* text shadow */
     u32 scrim;                    /* scene-transition overlay base (alpha set live) */
+    u32 selectBg, selectText;     /* flat selection bar and its text */
+    u32 divider;                  /* thin separators and the legend rule */
+    u32 railOutline;              /* box around the selected system */
+    u32 dim;                      /* backdrop under popups (alpha is live) */
+    u32 fallbackDot;              /* dotted placeholder pattern */
     bool dark;
 };
 
@@ -33,16 +38,21 @@ Palette personalize(const Palette& base, int accentIndex);
 
 inline const Palette& light() {
     static const Palette p = {
-        /* IPS-friendly warm grey instead of a near-white backlight field. */
-        /* bg        */ rsHex(0xD5D4CF), rsHex(0xD5D4CF),
-        /* waves     */ rsHex(0xD6A646, 8), rsHex(0x8F8777, 5),
-        /* text      */ rsHex(0x24231F), rsHex(0x45433E), rsHex(0x605D56),
-        /* accent    */ rsHex(0xD6A646),
-        /* tiles     */ rsHex(0xE7E6E1, 218), rsHex(0xF7F6F2),
-        /* panel     */ rsHex(0xE4E2DD, 236), rsHex(0x383630, 46),
-        /* menu      */ rsHex(0xE8E6E1),
-        /* shadow    */ rsHex(0x383630, 42),
-        /* scrim     */ rsHex(0xC9C8C3),
+        /* Warm ivory field: flat, no gradient, no ribbons. */
+        /* bg        */ rsHex(0xF1EBDD), rsHex(0xF1EBDD),
+        /* waves     */ rsHex(0x2F63C8, 0), rsHex(0x2F63C8, 0),
+        /* text      */ rsHex(0x1B2230), rsHex(0x4A5160), rsHex(0x7C8089),
+        /* accent    */ rsHex(0x2F63C8),
+        /* tiles     */ rsHex(0xE6DFCE), rsHex(0xE6DFCE),
+        /* panel     */ rsHex(0xE9E2D2), rsHex(0x1B2230, 70),
+        /* menu      */ rsHex(0xF6F1E4),
+        /* shadow    */ rsHex(0x1B2230, 40),
+        /* scrim     */ rsHex(0xF1EBDD),
+        /* select    */ rsHex(0x2F63C8), rsHex(0xFFFFFF),
+        /* divider   */ rsHex(0x1B2230, 56),
+        /* rail box  */ rsHex(0x1B2230),
+        /* dim       */ rsHex(0x0B1220),
+        /* dots      */ rsHex(0x1B2230, 34),
         false,
     };
     return p;
@@ -50,16 +60,21 @@ inline const Palette& light() {
 
 inline const Palette& dark() {
     static const Palette p = {
-        /* Solid near-black field; no gradient or decorative bands. */
-        /* bg        */ rsHex(0x121318), rsHex(0x121318),
-        /* waves     */ rsHex(0xD6A646, 12), rsHex(0x8E846D, 7),
-        /* text      */ rsHex(0xF3EEE2), rsHex(0xC2BCB0), rsHex(0x7E7B75),
-        /* accent    */ rsHex(0xE0B557),
-        /* tiles     */ rsHex(0xFFFFFF, 15), rsHex(0x34363F),
-        /* panel     */ rsHex(0xFFFFFF, 10), rsHex(0xFFFFFF, 24),
-        /* menu      */ rsHex(0x24252B),
+        /* Deep navy-charcoal field, same flat treatment. */
+        /* bg        */ rsHex(0x0F1829), rsHex(0x0F1829),
+        /* waves     */ rsHex(0x3B73E0, 0), rsHex(0x3B73E0, 0),
+        /* text      */ rsHex(0xEFE9DA), rsHex(0xB9B6AC), rsHex(0x7D8594),
+        /* accent    */ rsHex(0x3B73E0),
+        /* tiles     */ rsHex(0x172338), rsHex(0x172338),
+        /* panel     */ rsHex(0x15213A), rsHex(0xEFE9DA, 60),
+        /* menu      */ rsHex(0x16233B),
         /* shadow    */ rsHex(0x000000, 118),
-        /* scrim     */ rsHex(0x121318),
+        /* scrim     */ rsHex(0x0F1829),
+        /* select    */ rsHex(0x3B73E0), rsHex(0xFFFFFF),
+        /* divider   */ rsHex(0xEFE9DA, 50),
+        /* rail box  */ rsHex(0xEFE9DA),
+        /* dim       */ rsHex(0x000000),
+        /* dots      */ rsHex(0xEFE9DA, 26),
         true,
     };
     return p;

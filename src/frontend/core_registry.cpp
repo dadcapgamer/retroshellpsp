@@ -88,6 +88,14 @@ const CoreInfo* CoreRegistry::resolve(const db::GameEntry& game) const {
 }
 
 const CoreInfo* CoreRegistry::defaultFor(db::System system) const {
+    /* The user's per-system choice (first-run setup / Settings) outranks
+     * priority, but only while that core is still installed and serves the
+     * system — otherwise fall through rather than fail to launch. */
+    const std::string chosen = cfg::systemCore(db::systemInfo(system).coreId);
+    if (!chosen.empty()) {
+        const CoreInfo* c = find(chosen.c_str());
+        if (c && c->serves(system)) return c;
+    }
     for (const auto& c : m_cores)
         if (c.serves(system)) return &c;
     return nullptr;

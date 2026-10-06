@@ -5,6 +5,7 @@
 #include "rs_build_stamp.h"
 #include "frontend/app.h"
 #include "frontend/scenes/home_scene.h"
+#include "frontend/scenes/setup_scene.h"
 #include "platform/psp/power.h"
 #include "runtime/config.h"
 
@@ -17,9 +18,9 @@ namespace rs {
 
 namespace {
 const char* ROW_LABELS[] = {
-    "Theme", "Accent color", "Home layout", "Time format", "Menu CPU clock",
+    "Theme", "Accent color", "Time format", "Artwork", "Menu CPU clock",
     "In-game CPU clock", "UI sounds", "Show FPS", "Auto-save",
-    "Rescan library",
+    "Rescan library", "Run setup again",
 };
 constexpr int CPU_STEPS[] = {222, 266, 333};
 
@@ -32,9 +33,7 @@ int cpuStepIndex(int mhz) {
 
 void SettingsScene::enter(App& app) {
     m_row = 0;
-    m_rowPos.snap(0.f);
-    m_scroll.snap(0.f);
-    m_entrance.start(0.35f);
+    m_entrance.start(0.22f);
     m_themes = theme::availableThemes();
     m_themeIdx = 0;
     for (size_t i = 0; i < m_themes.size(); i++)
@@ -56,15 +55,12 @@ void SettingsScene::adjust(App& app, int dir) {
             app.setAccentIndex(next);
             break;
         }
-        case ROW_HOME_LAYOUT: {
-            const int next = (c.homeLayout + dir + cfg::HOME_LAYOUT_COUNT) %
-                             cfg::HOME_LAYOUT_COUNT;
-            c.homeLayout = next;
-            cfg::save();
-            break;
-        }
         case ROW_TIME_FORMAT:
             c.clock24Hour = !c.clock24Hour;
+            cfg::save();
+            break;
+        case ROW_ARTWORK:
+            c.showArt = !c.showArt;
             cfg::save();
             break;
         case ROW_CPU_MENU: {
@@ -98,10 +94,12 @@ void SettingsScene::adjust(App& app, int dir) {
 }
 
 void SettingsScene::activate(App& app) {
-    if (m_row == ROW_RESCAN) {
+    if (m_row == ROW_SETUP) {
+        app.switchScene(std::make_unique<SetupScene>(/*fromSettings=*/true));
+    } else if (m_row == ROW_RESCAN) {
         if (!app.scanner().running()) {
             app.scanner().start();
-            app.toast("Rescanning library…");
+            app.toast("Rescanning library...");
         }
     } else {
         adjust(app, 1);
@@ -119,10 +117,8 @@ const char* SettingsScene::valueText(App& app, int row, char* buf,
             std::snprintf(buf, n, "%s",
                           theme::accentOption(c.accent).name);
             return buf;
-        case ROW_HOME_LAYOUT:
-            return c.homeLayout == cfg::HOME_LAYOUT_CLASSIC ? "Classic"
-                                                            : "Modern";
         case ROW_TIME_FORMAT: return c.clock24Hour ? "24-hour" : "12-hour";
+        case ROW_ARTWORK:   return c.showArt ? "On" : "Text only";
         case ROW_CPU_MENU:
             std::snprintf(buf, n, "%d MHz", c.cpuMenuMhz);
             return buf;
@@ -133,7 +129,8 @@ const char* SettingsScene::valueText(App& app, int row, char* buf,
         case ROW_SHOW_FPS:  return c.showFps ? "On" : "Off";
         case ROW_AUTOSAVE:  return c.autosave ? "On" : "Off";
         case ROW_RESCAN:
-            return app.scanner().running() ? "Scanning…" : "Press ×";
+            return app.scanner().running() ? "Scanning..." : "Press X";
+        case ROW_SETUP:     return "Press X";
         default: return "";
     }
 }
@@ -145,14 +142,11 @@ void SettingsScene::update(App& app, float dt) {
     if (pad.navPressed(PSP_CTRL_LEFT)) adjust(app, -1);
     if (pad.navPressed(PSP_CTRL_RIGHT)) adjust(app, 1);
     if (pad.isPressed(PSP_CTRL_CROSS)) activate(app);
-    if (pad.isPressed(PSP_CTRL_CIRCLE))
+    /* O goes back; Start jumps Home like everywhere else. */
+    if (pad.isPressed(PSP_CTRL_CIRCLE) || pad.isPressed(PSP_CTRL_START) ||
+        pad.isPressed(PSP_CTRL_TRIANGLE))
         app.switchScene(std::make_unique<HomeScene>());
 
-    m_rowPos.to(float(m_row));
-    m_rowPos.update(dt, 14.f);
-    constexpr int VISIBLE_ROWS = 4;
-    m_scroll.to(float(rsClamp(m_row - 2, 0, ROW_COUNT - VISIBLE_ROWS)));
-    m_scroll.update(dt, 14.f);
     m_entrance.update(dt);
 }
 
@@ -162,101 +156,67 @@ void SettingsScene::draw(App& app) {
     const auto& fonts = app.fonts();
 
     app.drawBackground();
-    app.drawTopBar();
+    app.drawTopBar(false);
 
+    /* Settings arrives from below, like the Library: a short vertical shift
+     * and fade, reversed by the scene fade on the way back. */
     const float enter = ui::easeOutCubic(m_entrance.t);
     const u32 a = u32(enter * 255.f);
-    const float slide = (1.f - enter) * 14.f;
+    const float dy = (1.f - enter) * 24.f;
+    auto fade = [&](u32 c) {
+        return rsWithAlpha(c, rsAlphaOf(c) * a / 255u);
+    };
 
-    fonts.large.drawShadow(r, 16.f, 32.f + slide, "Settings",
-                           rsWithAlpha(pal.textPrimary, a), pal.shadow);
-
-    constexpr int VISIBLE_ROWS = 4;
-    const float px = 16.f, pw = 448.f, py = 64.f + slide;
-    const float rowH = 40.f;
-    const float ph = float(VISIBLE_ROWS) * rowH;
-
-    /* Full-width rows align to the same 16px content rail as the heading.
-     * Selection, not an enclosing card, supplies the necessary grouping. */
-    const float hy = py + (m_rowPos.v - m_scroll.v) * rowH;
-    ui::prim::focusRow(r, px, hy + 4.f, pw, 32.f,
-                       rsWithAlpha(pal.tileFocusBg,
-                                   rsAlphaOf(pal.tileFocusBg) * a / 255u),
-                       rsWithAlpha(pal.accent, a),
-                       rsWithAlpha(pal.shadow,
-                                   rsAlphaOf(pal.shadow) * a / (255u * 2u)));
-
-    char buf[48];
-    r.setScissor(int(px), int(py), int(pw), int(ph));
-    for (int i = 0; i < ROW_COUNT; i++) {
-        const float rowY = py + (float(i) - m_scroll.v) * rowH;
-        if (rowY < py || rowY >= py + ph) continue;
-        /* Font::draw receives the top of its 15px line box. Centre that
-         * box in the 40px logical row rather than aligning it to the
-         * 32px focus shape's top edge. */
-        const float y =
-            rowY + float(int((rowH - fonts.body.lineHeight()) * .5f));
-        const bool sel = i == m_row;
-        fonts.body.draw(r, px + 16.f, y, ROW_LABELS[i],
-                        rsWithAlpha(sel ? pal.textPrimary : pal.textSecondary,
-                                    a));
-        if (!(i == ROW_ACCENT && sel))
-            fonts.body.draw(r, px + pw - 16.f, y,
-                            valueText(app, i, buf, sizeof buf),
-                            rsWithAlpha(sel ? pal.textPrimary : pal.textDim, a),
-                            text::Align::Right);
-        if (i < ROW_COUNT - 1)
-            r.rect(px + 16.f, rowY + 39.f, pw - 32.f, 1.f,
-                   rsWithAlpha(pal.panelOutline,
-                               rsAlphaOf(pal.panelOutline) * a / 255u));
-        /* The expanded palette replaces, rather than overlays, the normal
-         * one-color value indicator while this row is selected. */
-        if (i == ROW_ACCENT && !sel) {
-            ui::prim::circle(
-                r, px + pw - 104.f, rowY + rowH * .5f, 4.f,
-                rsWithAlpha(
-                    rsHex(theme::accentOption(cfg::get().accent).rgb), a));
-        }
-    }
-    if (m_row == ROW_ACCENT) {
-        /* Palette contents belong to the selected data row, not to the
-         * animated focus outline. Anchoring to the row prevents the dots
-         * floating above their label for several frames after navigation. */
-        const float selectedRowY =
-            py + (float(m_row) - m_scroll.v) * rowH;
-        for (int i = 0; i < theme::ACCENT_COUNT; i++) {
-            const float cx =
-                px + pw - 32.f -
-                float(theme::ACCENT_COUNT - 1 - i) * 16.f;
-            const float cy = selectedRowY + rowH * .5f;
-            if (i == cfg::get().accent)
-                ui::prim::ring(r, cx, cy, 6.f,
-                               rsWithAlpha(pal.textPrimary, a));
-            ui::prim::circle(
-                r, cx, cy, 4.f,
-                rsWithAlpha(rsHex(theme::accentOption(i).rgb), a));
-        }
-    }
-    r.resetScissor();
-
-    /* Build identity, parked above the hint bar. Testers report problems
-     * against a build, and matching a PSP to the artifact that produced it
-     * was previously only possible by reading the log — which already cost
-     * one round of confusion when a stale EBOOT was left installed. The core
-     * API version is included because a mismatched EBOOT and core set fails
-     * with a version error that is otherwise hard to interpret. */
+    fonts.pixelMedium.drawBold(r, 21.f, 13.f + dy, "SETTINGS",
+                               fade(pal.textPrimary));
+    /* Build identity. Testers report problems against a build, and matching
+     * a PSP to the artifact that produced it was previously only possible by
+     * reading the log. The core API version is included because a mismatched
+     * EBOOT and core set fails with a version error that is otherwise hard
+     * to interpret. */
     char build[96];
-    std::snprintf(build, sizeof build, "%s  ·  built %s UTC  ·  core API v%u",
+    std::snprintf(build, sizeof build, "%s \xC2\xB7 built %s UTC \xC2\xB7 core API v%u",
                   RS_RELEASE_VERSION, RS_BUILD_STAMP,
                   unsigned(RS_CORE_API_VERSION));
-    fonts.small.draw(r, px, py + ph + 8.f, build,
-                     rsWithAlpha(pal.textDim, a));
+    fonts.pixelTiny.draw(r, 21.f, 34.f + dy, build, fade(pal.textSecondary));
+
+    constexpr float TOP = 48.f, ROW = 17.f, X = 12.f, W = 456.f;
+    char buf[48];
+    for (int i = 0; i < ROW_COUNT; i++) {
+        const float y = TOP + float(i) * ROW + dy;
+        const bool sel = i == m_row;
+        const float textY = y + (ROW - fonts.pixelSmall.lineHeight()) * .5f;
+        if (sel) {
+            r.rect(X, y, W, ROW, fade(pal.selectBg));
+            ui::prim::chevron(r, ui::prim::Dir::Right, 24.f, y + ROW * .5f,
+                              5.f, 2.f, fade(pal.selectText));
+        }
+        const u32 ink = sel ? pal.selectText : pal.textPrimary;
+        fonts.pixelSmall.draw(r, 36.f, textY, ROW_LABELS[i], fade(ink));
+        if (i == ROW_ACCENT) {
+            /* The accent row shows its swatches in place of a value. */
+            for (int s = 0; s < theme::ACCENT_COUNT; s++) {
+                const float cx = X + W - 14.f -
+                                 float(theme::ACCENT_COUNT - 1 - s) * 14.f;
+                const float cy = y + ROW * .5f;
+                if (s == cfg::get().accent)
+                    ui::prim::ring(r, cx, cy, 6.f, fade(ink));
+                ui::prim::circle(r, cx, cy, 4.f,
+                                 fade(rsHex(theme::accentOption(s).rgb)));
+            }
+        } else {
+            fonts.pixelSmall.draw(r, X + W - 12.f, textY,
+                                  valueText(app, i, buf, sizeof buf),
+                                  fade(ink), text::Align::Right);
+        }
+    }
 
     const App::Hint hints[] = {
         {ui::prim::Button::Cross, "Change"},
         {ui::prim::Button::Circle, "Back"},
+        {ui::prim::Button::Start, "Home"},
     };
-    app.drawHintBar(hints, 2);
+    app.drawHintBar(hints, 3);
 }
 
 }  // namespace rs

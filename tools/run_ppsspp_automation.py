@@ -35,6 +35,9 @@ PERF = re.compile(
     r"underrun (\d+) drop (\d+).*video (\S+)"
 )
 ARENA_RESERVED = re.compile(r"arena: reserved (\d+) KB")
+# Names predate the Astra redesign: "home_recent"/"recent_focus" now capture
+# Systems and Continue Playing, "favorites_*" the Systems rail and a Library
+# showing the starred game.
 EXPECTED_SHOTS = {
     "boot.png", "home.png", "list_target.png", "quick_actions.png",
     "game_a.png", "game_b.png",
@@ -78,10 +81,6 @@ def main() -> int:
     parser.add_argument("--runs-dir", type=Path,
                         default=ROOT / "build-ppsspp-auto" / "runs")
     parser.add_argument("--timeout", type=int, default=75)
-    parser.add_argument(
-        "--home-layout", choices=("modern", "classic"), default="modern",
-        help="Home screen presentation seeded into config.json, so both "
-             "layouts can be captured without editing the stick by hand.")
     parser.add_argument(
         "--psp-model", type=int, choices=(0, 1), default=0,
         help="0 = PSP-1000 (32 MB, default), 1 = PSP-2000+ (64 MB). The "
@@ -198,7 +197,6 @@ def main() -> int:
         "showFps": True,
         "autoSave": False,
         "theme": args.theme,
-        "homeLayout": 1 if args.home_layout == "classic" else 0,
     })
     (system_dir / "ppsspp.ini").write_text(
         "[General]\nFirstRun = False\nCheckForNewVersion = False\n"

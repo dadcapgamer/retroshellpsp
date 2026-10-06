@@ -3,6 +3,7 @@
 #include "frontend/autopilot.h"
 #include "frontend/game_session.h"
 #include "frontend/native_emulator_launcher.h"
+#include "frontend/launch_notice.h"
 #include "frontend/scenes/boot_scene.h"
 #include "platform/psp/audio_out.h"
 #include "platform/psp/fs_psp.h"
@@ -26,11 +27,13 @@
 
 /* Baked font atlases embedded at build time (see cmake/rs_assets.cmake). */
 #include "rs_asset_font_title_rsf.h"
-#include "rs_asset_font_large_rsf.h"
 #include "rs_asset_font_body_rsf.h"
 #include "rs_asset_font_small_rsf.h"
 #include "rs_asset_font_pixel_rsf.h"
-#include "rs_asset_font_pixel_large_rsf.h"
+#include "rs_asset_font_pixel_body_rsf.h"
+#include "rs_asset_font_pixel_medium_rsf.h"
+#include "rs_asset_font_pixel_small_rsf.h"
+#include "rs_asset_font_pixel_tiny_rsf.h"
 #include "rs_asset_splash_png.h"
 
 /* Set by the HOME-menu exit callback in main.cpp. */
@@ -132,12 +135,17 @@ bool App::init() {
 
     struct { text::Font* font; const unsigned char* data; unsigned len; } fonts[] = {
         {&m_fonts.title, rs_asset_font_title_rsf, rs_asset_font_title_rsf_len},
-        {&m_fonts.large, rs_asset_font_large_rsf, rs_asset_font_large_rsf_len},
         {&m_fonts.body,  rs_asset_font_body_rsf,  rs_asset_font_body_rsf_len},
         {&m_fonts.small, rs_asset_font_small_rsf, rs_asset_font_small_rsf_len},
         {&m_fonts.pixel, rs_asset_font_pixel_rsf, rs_asset_font_pixel_rsf_len},
-        {&m_fonts.pixelLarge, rs_asset_font_pixel_large_rsf,
-                             rs_asset_font_pixel_large_rsf_len},
+        {&m_fonts.pixelBody, rs_asset_font_pixel_body_rsf,
+                             rs_asset_font_pixel_body_rsf_len},
+        {&m_fonts.pixelMedium, rs_asset_font_pixel_medium_rsf,
+                               rs_asset_font_pixel_medium_rsf_len},
+        {&m_fonts.pixelSmall, rs_asset_font_pixel_small_rsf,
+                              rs_asset_font_pixel_small_rsf_len},
+        {&m_fonts.pixelTiny, rs_asset_font_pixel_tiny_rsf,
+                             rs_asset_font_pixel_tiny_rsf_len},
     };
     for (auto& f : fonts) {
         if (!f.font->load(f.data, f.len)) {
@@ -168,6 +176,13 @@ bool App::init() {
     m_themeFrom = m_pal;
 
     m_library.load();
+    /* Resume exactly where the user left the shell, even across a process
+     * replacement (native emulators) or a power cycle. */
+    if (const auto& loc = m_library.location(); loc.valid) {
+        m_snapshot.systemId = loc.system;
+        m_snapshot.layer = nav::Layer(rsClamp(loc.layer, 0, 3));
+        m_snapshot.continueIdx = loc.continueIdx;
+    }
     const bool libraryCached = m_index.loadCache();
     if (!libraryCached) RS_LOGI("index: no cache yet");
     m_cores.discover();
@@ -196,14 +211,29 @@ bool App::init() {
     return true;
 }
 
+bool App::takeLaunchError(char* out, size_t size) {
+    if (!m_launchError[0]) return false;
+    std::snprintf(out, size, "%s", m_launchError);
+    m_launchError[0] = '\0';
+    return true;
+}
+
 void App::launchGame(const db::GameEntry& game, const CoreInfo* core) {
+    m_launchError[0] = '\0';
+    auto fail = [&](const char* reason) {
+        std::snprintf(m_launchError, sizeof m_launchError, "%s", reason);
+        RS_LOGW("app: launch refused for '%s': %s", game.name.c_str(), reason);
+    };
     if (!core) core = m_cores.resolve(game);
     if (!core) {
-        char msg[64];
-        std::snprintf(msg, sizeof msg, "No core installed for %s",
-                      db::systemInfo(game.system).displayName);
-        toast(msg);
-        RS_LOGW("app: %s", msg);
+        fail("core not installed");
+        return;
+    }
+    /* Preflight while the frontend is still intact: a missing ROM found after
+     * the bi-layer eviction would cost a full teardown and rebuild just to
+     * print an error. One stat is cheaper than a failed launch. */
+    if (!fs::exists(game.path.c_str())) {
+        fail(fs::exists(fs::ROOT) ? "rom missing" : "storage unavailable");
         return;
     }
     RS_LOGI("app: launching '%s' via %s", game.name.c_str(),
@@ -235,7 +265,7 @@ void App::launchGame(const db::GameEntry& game, const CoreInfo* core) {
         }
         char msg[96];
         std::snprintf(msg, sizeof msg, "%s: %s", core->name.c_str(), reason);
-        toast(msg);
+        fail(msg);
         RS_LOGE("app: native launch failed (%d): %s", result, msg);
         return;
     }
@@ -278,11 +308,13 @@ void App::shutdown() {
     m_theme.freeAssets();
     audio::shutdown();
     m_fonts.title.unload();
-    m_fonts.large.unload();
     m_fonts.body.unload();
     m_fonts.small.unload();
     m_fonts.pixel.unload();
-    m_fonts.pixelLarge.unload();
+    m_fonts.pixelBody.unload();
+    m_fonts.pixelMedium.unload();
+    m_fonts.pixelSmall.unload();
+    m_fonts.pixelTiny.unload();
     m_renderer.shutdown();
 }
 
@@ -357,7 +389,8 @@ void App::run() {
         if (cfg::get().uiSounds && audio::isPaused()) {
             const u32 pressed = m_pad.pressed();
             if (pressed & (PSP_CTRL_UP | PSP_CTRL_DOWN |
-                           PSP_CTRL_LEFT | PSP_CTRL_RIGHT)) {
+                           PSP_CTRL_LEFT | PSP_CTRL_RIGHT |
+                           PSP_CTRL_LTRIGGER | PSP_CTRL_RTRIGGER)) {
                 audio::playUiSound(audio::UiSound::Move);
             } else if (pressed & PSP_CTRL_CIRCLE) {
                 audio::playUiSound(audio::UiSound::Back);
@@ -415,6 +448,16 @@ void App::update(float dt) {
         m_batteryPoll = 120;
         m_batteryPct = power::batteryPercent();
         m_batteryChg = power::batteryCharging();
+        /* Announce each low-battery threshold once per discharge. */
+        if (m_batteryChg || m_batteryPct < 0) {
+            m_batteryWarned = 100;
+        } else if (m_batteryPct <= 5 && m_batteryWarned > 5) {
+            m_batteryWarned = 5;
+            toast("Battery critical - connect charger");
+        } else if (m_batteryPct <= 15 && m_batteryWarned > 15) {
+            m_batteryWarned = 15;
+            toast("Low battery");
+        }
     }
 
     m_toastTween.update(dt);
@@ -490,11 +533,13 @@ void App::drawBackground() {
     }
 }
 
-void App::drawTopBar() {
+void App::drawTopBar(bool wordmark) {
     const auto& f = m_fonts;
-    f.small.draw(m_renderer, 12.f, 1.f, "RetroShell", m_pal.textDim);
+    if (wordmark)
+        f.pixelMedium.drawBold(m_renderer, 21.f, 13.f, "RETROSHELL",
+                               m_pal.textPrimary);
 
-    /* Clock, right-aligned, with a pixel-snapped battery to its right. */
+    /* Status cluster, right to left: battery, percentage, clock. */
     int hh = 0, mm = 0;
     power::clockNow(hh, mm);
     char clock[12];
@@ -506,39 +551,62 @@ void App::drawTopBar() {
         std::snprintf(clock, sizeof clock, "%d:%02d %s",
                       displayHour, mm, suffix);
     }
-    f.small.draw(m_renderer, RS_SCREEN_W - 40.f, 1.f, clock,
-                 m_pal.textSecondary,
-                 text::Align::Right);
-    ui::prim::battery(m_renderer, RS_SCREEN_W - 32.f, 3.f,
-                      m_batteryPct < 0 ? -1.f : float(m_batteryPct) / 100.f,
-                      m_batteryChg, m_pal.textSecondary, m_pal.accent);
-    /* One shared chrome rail for every frontend scene. */
-    m_renderer.rect(
-        0.f, 15.f, RS_SCREEN_W, 1.f,
-        rsWithAlpha(m_pal.panelOutline,
-                    rsClamp<u32>(
-                        u32(rsAlphaOf(m_pal.panelOutline) * 2u), 28u, 76u)));
+    constexpr float BATTERY_X = 440.f;
+    constexpr float STATUS_Y = 10.f;
+    /* Low battery (not charging) turns the readout red; below 5% it blinks. */
+    const bool low = m_batteryPct >= 0 && !m_batteryChg && m_batteryPct <= 15;
+    const bool blinkOff = low && m_batteryPct <= 5 &&
+                          std::fmod(m_time, 1.f) > .6f;
+    const u32 batteryInk = low ? rsHex(0xE05252) : m_pal.textPrimary;
+    if (!blinkOff)
+        ui::prim::battery(m_renderer, BATTERY_X, STATUS_Y + 2.f,
+                          m_batteryPct < 0 ? -1.f
+                                           : float(m_batteryPct) / 100.f,
+                          m_batteryChg, batteryInk, m_pal.accent);
+    float right = BATTERY_X - 8.f;
+    if (m_batteryPct >= 0) {
+        char pct[16];
+        std::snprintf(pct, sizeof pct, "%d%%", m_batteryPct);
+        f.pixelSmall.draw(m_renderer, right, STATUS_Y, pct, batteryInk,
+                          text::Align::Right);
+        right -= f.pixelSmall.measure(pct) + 14.f;
+    }
+    f.pixelSmall.draw(m_renderer, right, STATUS_Y, clock, m_pal.textPrimary,
+                      text::Align::Right);
 }
 
 void App::drawHintBar(const Hint* hints, int count) {
-    m_renderer.rect(
-        0.f, RS_SCREEN_H - 26.f, RS_SCREEN_W, 1.f,
-        rsWithAlpha(m_pal.panelOutline,
-                    rsClamp<u32>(
-                        u32(rsAlphaOf(m_pal.panelOutline) * 2u), 28u, 76u)));
-    m_fonts.small.draw(m_renderer, 20.f, RS_SCREEN_H - 17.f, "Actions",
-                       m_pal.textDim);
+    constexpr float LEFT = 21.f, RIGHT = RS_SCREEN_W - 21.f;
+    constexpr float RULE_Y = RS_SCREEN_H - 34.f;
+    constexpr float GLYPH_R = 6.f;
+    constexpr float GLYPH_GAP = 8.f;    /* glyph to label */
+    const float textY = RS_SCREEN_H - 23.f;
+    const float glyphY = textY + 5.f;
+    const auto& font = m_fonts.pixelTiny;
 
-    float x = RS_SCREEN_W - 20.f;
-    for (int i = count - 1; i >= 0; i--) {
-        const float w = m_fonts.small.measure(hints[i].label);
-        x -= w;
-        m_fonts.small.draw(m_renderer, x, RS_SCREEN_H - 17.f, hints[i].label,
-                           m_pal.textSecondary);
-        x -= 16.f;
-        ui::prim::buttonGlyph(m_renderer, hints[i].button, x,
-                              RS_SCREEN_H - 10.f, 6.f, m_pal.textSecondary);
-        x -= 16.f;
+    m_renderer.rect(LEFT, RULE_Y, RIGHT - LEFT, 1.f, m_pal.divider);
+
+    float widths[8];
+    float total = 0.f;
+    if (count > 8) count = 8;
+    for (int i = 0; i < count; i++) {
+        const float lead = ui::prim::buttonGlyphWidth(hints[i].button);
+        widths[i] = lead + GLYPH_GAP + font.measure(hints[i].label);
+        total += widths[i];
+    }
+    const float gap = count > 1
+        ? rsClamp((RIGHT - LEFT - total) / float(count - 1), 10.f, 64.f)
+        : 0.f;
+
+    float x = LEFT;
+    for (int i = 0; i < count; i++) {
+        const float lead = ui::prim::buttonGlyphWidth(hints[i].button);
+        ui::prim::buttonGlyph(m_renderer, hints[i].button, x + lead * .5f,
+                              glyphY, GLYPH_R, m_pal.textPrimary);
+        const float labelX = x + lead + GLYPH_GAP;
+        font.draw(m_renderer, labelX, textY, hints[i].label,
+                  m_pal.textPrimary);
+        x += widths[i] + gap;
     }
 }
 
@@ -551,32 +619,35 @@ void App::drawToast() {
     else if (t > 0.8f) a = (1.f - t) / 0.2f;
     const u32 alpha = u32(a * 235.f);
 
-    const float w =
-        rsClamp(m_fonts.body.measure(m_toastMsg) + 32.f, 64.f, 448.f);
-    const float x = (RS_SCREEN_W - w) / 2.f;
+    /* Flat notice in the firmware style: solid panel, hard outline. */
+    const auto& font = m_fonts.pixelSmall;
+    const float w = rsClamp(font.measure(m_toastMsg) + 32.f, 64.f, 438.f);
+    const float x = float(int((RS_SCREEN_W - w) / 2.f));
     const float y = RS_SCREEN_H - 72.f;
-    ui::prim::roundedRect(m_renderer, x, y, w, 32.f, 12.f,
-                          rsWithAlpha(darkTheme() ? rsHex(0x2A3242)
-                                                  : rsHex(0x353C4A),
-                                      alpha));
-    m_renderer.setScissor(int(x + 16.f), int(y), int(w - 32.f), 32);
-    m_fonts.body.draw(m_renderer, RS_SCREEN_W / 2.f, y + 8.f, m_toastMsg,
-                      rsWithAlpha(rsHex(0xF2F5FA), alpha),
-                      text::Align::Center);
+    m_renderer.rect(x, y, w, 24.f, rsWithAlpha(m_pal.menuBg, alpha));
+    ui::prim::outlineRect(m_renderer, x, y, w, 24.f, 2.f,
+                          rsWithAlpha(m_pal.railOutline, alpha));
+    m_renderer.setScissor(int(x + 8.f), int(y), int(w - 16.f), 24);
+    font.draw(m_renderer, RS_SCREEN_W / 2.f,
+              y + (24.f - font.lineHeight()) * .5f, m_toastMsg,
+              rsWithAlpha(m_pal.textPrimary, alpha), text::Align::Center);
     m_renderer.resetScissor();
 }
 
 void App::drawScanStatus() {
     if (!m_scanner.running()) return;
     /* Spinner: orbiting dot. */
-    const float cx = 22.f, cy = RS_SCREEN_H - 14.f;
+    /* Parked in the quiet middle of the status row so it never collides
+     * with the control legend. */
+    const float cx = 176.f, cy = 17.f;
     ui::prim::ring(m_renderer, cx, cy, 7.f, rsWithAlpha(m_pal.textDim, 120));
     const float a = m_time * 5.f;
     ui::prim::circle(m_renderer, cx + std::cos(a) * 7.f,
                      cy + std::sin(a) * 7.f, 2.2f, m_pal.accent);
     char buf[40];
-    std::snprintf(buf, sizeof buf, "Scanning… %d", m_scanner.progress());
-    m_fonts.small.draw(m_renderer, cx + 14.f, cy - 7.f, buf, m_pal.textDim);
+    std::snprintf(buf, sizeof buf, "Scanning... %d", m_scanner.progress());
+    m_fonts.pixelTiny.draw(m_renderer, cx + 14.f, cy - 5.f, buf,
+                           m_pal.textDim);
 }
 
 #ifdef RS_DEBUG_OVERLAY
@@ -587,9 +658,9 @@ void App::drawDebugOverlay() {
     /* Keep diagnostics in the otherwise-empty centre of the top bar. The
      * old y=24 placement obscured every scene title and made correct layout
      * look broken whenever Show FPS was enabled. */
-    ui::prim::roundedRect(m_renderer, 176.f, 4.f, 128.f, 18.f, 6.f,
+    ui::prim::roundedRect(m_renderer, 216.f, 4.f, 112.f, 18.f, 6.f,
                           rsHex(0x000000, 140));
-    m_fonts.small.draw(m_renderer, 240.f, 7.f, buf, rsHex(0x7CFF9B),
+    m_fonts.small.draw(m_renderer, 272.f, 7.f, buf, rsHex(0x7CFF9B),
                        text::Align::Center);
 }
 #endif

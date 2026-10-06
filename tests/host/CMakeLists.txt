@@ -57,3 +57,43 @@ target_compile_options(pause_menu_contract_test PRIVATE -Wall -Wextra -Werror
   -fsanitize=address,undefined -fno-omit-frame-pointer)
 target_link_options(pause_menu_contract_test PRIVATE -fsanitize=address,undefined)
 add_test(NAME pause_menu_contract_test COMMAND pause_menu_contract_test)
+
+add_executable(relative_time_test relative_time_test.cpp)
+target_compile_features(relative_time_test PRIVATE cxx_std_17)
+target_include_directories(relative_time_test PRIVATE ../.. ../../src)
+target_compile_options(relative_time_test PRIVATE -Wall -Wextra -Werror
+  -fsanitize=address,undefined -fno-omit-frame-pointer)
+target_link_options(relative_time_test PRIVATE -fsanitize=address,undefined)
+add_test(NAME relative_time_test COMMAND relative_time_test)
+
+add_executable(home_nav_test home_nav_test.cpp)
+target_compile_features(home_nav_test PRIVATE cxx_std_17)
+target_include_directories(home_nav_test PRIVATE ../.. ../../src)
+target_compile_options(home_nav_test PRIVATE -Wall -Wextra -Werror
+  -fsanitize=address,undefined -fno-omit-frame-pointer)
+target_link_options(home_nav_test PRIVATE -fsanitize=address,undefined)
+add_test(NAME home_nav_test COMMAND home_nav_test)
+
+add_executable(title_clean_test title_clean_test.cpp)
+target_compile_features(title_clean_test PRIVATE cxx_std_17)
+target_include_directories(title_clean_test PRIVATE ../.. ../../src)
+target_compile_options(title_clean_test PRIVATE -Wall -Wextra -Werror
+  -fsanitize=address,undefined -fno-omit-frame-pointer)
+target_link_options(title_clean_test PRIVATE -fsanitize=address,undefined)
+add_test(NAME title_clean_test COMMAND title_clean_test)
+
+add_executable(library_view_test library_view_test.cpp)
+target_compile_features(library_view_test PRIVATE cxx_std_17)
+target_include_directories(library_view_test PRIVATE ../.. ../../src)
+target_compile_options(library_view_test PRIVATE -Wall -Wextra -Werror
+  -fsanitize=address,undefined -fno-omit-frame-pointer)
+target_link_options(library_view_test PRIVATE -fsanitize=address,undefined)
+add_test(NAME library_view_test COMMAND library_view_test)
+
+add_executable(launch_notice_test launch_notice_test.cpp)
+target_compile_features(launch_notice_test PRIVATE cxx_std_17)
+target_include_directories(launch_notice_test PRIVATE ../.. ../../src)
+target_compile_options(launch_notice_test PRIVATE -Wall -Wextra -Werror
+  -fsanitize=address,undefined -fno-omit-frame-pointer)
+target_link_options(launch_notice_test PRIVATE -fsanitize=address,undefined)
+add_test(NAME launch_notice_test COMMAND launch_notice_test)

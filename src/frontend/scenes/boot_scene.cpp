@@ -1,6 +1,8 @@
 #include "frontend/scenes/boot_scene.h"
 #include "frontend/app.h"
 #include "frontend/scenes/home_scene.h"
+#include "frontend/scenes/setup_scene.h"
+#include "runtime/config.h"
 
 #include "rs_asset_retroshell_logo_light_2x_png.h"
 #include "stb_image.h"
@@ -94,7 +96,16 @@ void BootScene::update(App& app, float dt) {
     m_t += dt;
     if (m_t >= HOLD_END && !m_handedOff) {
         m_handedOff = true;
-        app.switchScene(std::make_unique<HomeScene>());
+        /* A first run goes through setup; autopilot builds skip it so the
+         * regression scripts keep their frame budget (RS_AUTOPILOT_SETUP
+         * opts back in to capture the setup screens). */
+#if defined(RS_AUTOPILOT) && !defined(RS_AUTOPILOT_SETUP)
+        const bool needsSetup = false;
+#else
+        const bool needsSetup = !cfg::get().setupDone;
+#endif
+        if (needsSetup) app.switchScene(std::make_unique<SetupScene>());
+        else app.switchScene(std::make_unique<HomeScene>());
     }
 }
 

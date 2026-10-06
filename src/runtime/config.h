@@ -15,6 +15,8 @@
 namespace rs::cfg {
 
 enum HomeLayout {
+    /* Retired by the Astra redesign: Home has one layout now. The field is
+     * still read and written so existing config.json files round-trip. */
     HOME_LAYOUT_MODERN = 0,  /* beta.3 text rail: icon + label, no panels */
     HOME_LAYOUT_CLASSIC = 1, /* pre-beta.3: 50px badge cards and a recent shelf */
     HOME_LAYOUT_COUNT
@@ -29,12 +31,27 @@ struct Config {
     bool clock24Hour   = false;
     bool showFps       = false;
     bool autosave      = true;
+    /* Text-only mode: the Library collapses to full-width rows with no
+     * preview column and no artwork is decoded. */
+    bool showArt       = true;
     /* Home screen presentation. Classic is the pre-beta.3 card rail, kept
      * because some users prefer its denser, more console-like shelf. */
     int  homeLayout    = HOME_LAYOUT_MODERN;
+    /* First-run setup (scan, confirm systems, confirm emulators) has been
+     * completed or skipped. A config.json written before this key existed
+     * counts as done: those users are not new. */
+    bool setupDone     = false;
+    /* Per-system default emulator: db::SystemInfo::coreId -> core name.
+     * A game's own remembered core still wins, because save states are
+     * core-specific. */
+    std::vector<std::pair<std::string, std::string>> systemCores;
 };
 
 Config& get();
+
+/* Default-emulator override for a system, or "" for "automatic". */
+std::string systemCore(const char* coreId);
+void setSystemCore(const char* coreId, const char* coreName);   /* "" clears */
 void load();
 void save();
 

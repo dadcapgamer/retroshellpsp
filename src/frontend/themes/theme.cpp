@@ -45,6 +45,9 @@ void applyColors(Palette& p, const cJSON* colors) {
         {"panelBg", &p.panelBg},       {"panelOutline", &p.panelOutline},
         {"menuBg", &p.menuBg},
         {"shadow", &p.shadow},         {"scrim", &p.scrim},
+        {"selectBg", &p.selectBg},     {"selectText", &p.selectText},
+        {"divider", &p.divider},       {"railOutline", &p.railOutline},
+        {"dim", &p.dim},               {"fallbackDot", &p.fallbackDot},
     };
     for (auto& m : MAP) {
         const cJSON* v = cJSON_GetObjectItemCaseSensitive(colors, m.key);

@@ -4,14 +4,14 @@ namespace rs::theme {
 
 const AccentOption& accentOption(int index) {
     static const AccentOption OPTIONS[ACCENT_COUNT] = {
-        {"Gold",   0xD6A646},
-        {"Amber",  0xD9893D},
-        {"Coral",  0xD56B61},
-        {"Rose",   0xBE6685},
-        {"Violet", 0x8874CF},
-        {"Blue",   0x4E86CF},
-        {"Teal",   0x4C958C},
-        {"Sage",   0x748A74},
+        {"Cobalt", 0x2F63C8},
+        {"Teal",   0x2A8C8C},
+        {"Rust",   0xB5532D},
+        {"Gold",   0xC9962B},
+        {"Violet", 0x7B63C9},
+        {"Rose",   0xBE5C82},
+        {"Sage",   0x5E8A5E},
+        {"Slate",  0x5B6B82},
     };
     return OPTIONS[rsClamp(index, 0, ACCENT_COUNT - 1)];
 }
@@ -19,9 +19,18 @@ const AccentOption& accentOption(int index) {
 Palette personalize(const Palette& base, int accentIndex) {
     Palette p = base;
     const u32 rgb = accentOption(accentIndex).rgb;
-    p.accent = rsHex(rgb);
-    p.waveA = rsHex(rgb, base.dark ? 12 : 8);
-    p.waveB = rsHex(rgb, base.dark ? 7 : 5);
+    /* Dark fields need a lifted accent to keep the selection bar readable;
+     * the same hue family is used so the two themes stay one identity. */
+    const u32 lift = base.dark ? 0x10u : 0u;
+    auto channel = [&](u32 shift) {
+        const u32 c = ((rgb >> shift) & 0xFFu) + lift;
+        return c > 255u ? 255u : c;
+    };
+    const u32 tuned = (channel(16) << 16) | (channel(8) << 8) | channel(0);
+    p.accent = rsHex(tuned);
+    p.selectBg = rsHex(tuned);
+    p.waveA = rsHex(tuned, 0);
+    p.waveB = rsHex(tuned, 0);
     return p;
 }
 
@@ -44,6 +53,12 @@ Palette blend(const Palette& a, const Palette& b, float t) {
     p.menuBg        = rsLerpColor(a.menuBg, b.menuBg, t);
     p.shadow        = rsLerpColor(a.shadow, b.shadow, t);
     p.scrim         = rsLerpColor(a.scrim, b.scrim, t);
+    p.selectBg      = rsLerpColor(a.selectBg, b.selectBg, t);
+    p.selectText    = rsLerpColor(a.selectText, b.selectText, t);
+    p.divider       = rsLerpColor(a.divider, b.divider, t);
+    p.railOutline   = rsLerpColor(a.railOutline, b.railOutline, t);
+    p.dim           = rsLerpColor(a.dim, b.dim, t);
+    p.fallbackDot   = rsLerpColor(a.fallbackDot, b.fallbackDot, t);
     p.dark          = t < 0.5f ? a.dark : b.dark;
     return p;
 }

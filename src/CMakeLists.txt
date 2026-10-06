@@ -29,6 +29,8 @@ add_executable(retrosuite
   frontend/autopilot.cpp
   frontend/text/font.cpp
   frontend/ui/prim.cpp
+  frontend/ui/text_layout.cpp
+  frontend/ui/state_panel.cpp
   frontend/themes/palette.cpp
   frontend/themes/theme.cpp
   frontend/database/game_index.cpp
@@ -37,7 +39,21 @@ add_executable(retrosuite
   frontend/database/metadata.cpp
   frontend/scenes/boot_scene.cpp
   frontend/scenes/home_scene.cpp
+  frontend/scenes/setup_scene.cpp
   frontend/scenes/settings_scene.cpp)
+
+# Cold, non-per-frame UI and setup code is built for size: every byte of the
+# module comes out of the PSP-1000's core arena, and the startup arena has a
+# 17,000 KB release gate. The renderer, fonts, the home scene and the
+# emulation loop stay at -O2.
+set_source_files_properties(
+  frontend/scenes/setup_scene.cpp
+  frontend/scenes/settings_scene.cpp
+  frontend/scenes/boot_scene.cpp
+  frontend/ui/state_panel.cpp
+  frontend/core_package_installer.cpp
+  frontend/native_emulator_launcher.cpp
+  PROPERTIES COMPILE_OPTIONS "-Os")
 
 target_include_directories(retrosuite PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
@@ -70,22 +86,41 @@ target_link_libraries(retrosuite PRIVATE
 
 rs_embed_assets(retrosuite
   ${CMAKE_SOURCE_DIR}/assets/fonts/font_title.rsf
-  ${CMAKE_SOURCE_DIR}/assets/fonts/font_large.rsf
   ${CMAKE_SOURCE_DIR}/assets/fonts/font_body.rsf
   ${CMAKE_SOURCE_DIR}/assets/fonts/font_small.rsf
   ${CMAKE_SOURCE_DIR}/assets/fonts/font_pixel.rsf
-  ${CMAKE_SOURCE_DIR}/assets/fonts/font_pixel_large.rsf
+  ${CMAKE_SOURCE_DIR}/assets/fonts/font_pixel_body.rsf
+  ${CMAKE_SOURCE_DIR}/assets/fonts/font_pixel_medium.rsf
+  ${CMAKE_SOURCE_DIR}/assets/fonts/font_pixel_small.rsf
+  ${CMAKE_SOURCE_DIR}/assets/fonts/font_pixel_tiny.rsf
   ${CMAKE_SOURCE_DIR}/assets/SPLASH.PNG
   ${CMAKE_SOURCE_DIR}/assets/branding/retroshell-logo-light-2x.png
-  ${CMAKE_SOURCE_DIR}/assets/icons/consoles/game-boy.png
-  ${CMAKE_SOURCE_DIR}/assets/icons/consoles/game-boy-color.png
-  ${CMAKE_SOURCE_DIR}/assets/icons/consoles/game-boy-advance.png
-  ${CMAKE_SOURCE_DIR}/assets/icons/consoles/nes.png
-  ${CMAKE_SOURCE_DIR}/assets/icons/consoles/snes.png
-  ${CMAKE_SOURCE_DIR}/assets/icons/consoles/megadrive.png
-  ${CMAKE_SOURCE_DIR}/assets/icons/consoles/master-system.png
-  ${CMAKE_SOURCE_DIR}/assets/icons/consoles/game-gear.png
-  ${CMAKE_SOURCE_DIR}/assets/icons/consoles/pc-engine.png)
+  ${CMAKE_SOURCE_DIR}/assets/icons/consoles/game-boy-48.png
+  ${CMAKE_SOURCE_DIR}/assets/icons/consoles/game-boy-64.png
+  ${CMAKE_SOURCE_DIR}/assets/icons/consoles/game-boy-color-48.png
+  ${CMAKE_SOURCE_DIR}/assets/icons/consoles/game-boy-color-64.png
+  ${CMAKE_SOURCE_DIR}/assets/icons/consoles/game-boy-advance-48.png
+  ${CMAKE_SOURCE_DIR}/assets/icons/consoles/game-boy-advance-64.png
+  ${CMAKE_SOURCE_DIR}/assets/icons/consoles/nes-48.png
+  ${CMAKE_SOURCE_DIR}/assets/icons/consoles/nes-64.png
+  ${CMAKE_SOURCE_DIR}/assets/icons/consoles/snes-48.png
+  ${CMAKE_SOURCE_DIR}/assets/icons/consoles/snes-64.png
+  ${CMAKE_SOURCE_DIR}/assets/icons/consoles/megadrive-48.png
+  ${CMAKE_SOURCE_DIR}/assets/icons/consoles/megadrive-64.png
+  ${CMAKE_SOURCE_DIR}/assets/icons/consoles/master-system-48.png
+  ${CMAKE_SOURCE_DIR}/assets/icons/consoles/master-system-64.png
+  ${CMAKE_SOURCE_DIR}/assets/icons/consoles/game-gear-48.png
+  ${CMAKE_SOURCE_DIR}/assets/icons/consoles/game-gear-64.png
+  ${CMAKE_SOURCE_DIR}/assets/icons/consoles/pc-engine-48.png
+  ${CMAKE_SOURCE_DIR}/assets/icons/consoles/pc-engine-64.png
+  ${CMAKE_SOURCE_DIR}/assets/icons/controls/control-cross-24.png
+  ${CMAKE_SOURCE_DIR}/assets/icons/controls/control-circle-24.png
+  ${CMAKE_SOURCE_DIR}/assets/icons/controls/control-triangle-24.png
+  ${CMAKE_SOURCE_DIR}/assets/icons/controls/control-square-24.png
+  ${CMAKE_SOURCE_DIR}/assets/icons/controls/control-start-24.png
+  ${CMAKE_SOURCE_DIR}/assets/icons/controls/control-left-shoulder-24.png
+  ${CMAKE_SOURCE_DIR}/assets/icons/controls/control-right-shoulder-24.png
+  ${CMAKE_SOURCE_DIR}/assets/icons/controls/control-select-24.png)
 
 create_pbp_file(
   TARGET retrosuite

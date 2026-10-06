@@ -1,6 +1,7 @@
 #include "frontend/game_session.h"
 #include "frontend/app.h"
 #include "frontend/scenes/home_scene.h"
+#include "frontend/ui/state_panel.h"
 #include "platform/psp/audio_out.h"
 #include "platform/psp/fs_psp.h"
 #include "platform/psp/power.h"
@@ -330,6 +331,16 @@ void GameSession::enter(App& app) {
     }
 }
 
+/* The notice's action, withdrawn when it could not help: choosing another
+ * emulator needs one to exist. */
+launch::Action GameSession::failureAction(App& app) const {
+    const launch::Notice notice = launch::classify(m_error);
+    if (notice.action != launch::Action::ChooseCore) return notice.action;
+    const size_t cores = app.cores().coresFor(m_game.system).size();
+    const size_t needed = notice.kind == launch::Kind::CoreMissing ? 1 : 2;
+    return cores >= needed ? launch::Action::ChooseCore : launch::Action::None;
+}
+
 void GameSession::systemSuspend(App&) {
     m_systemSuspended = true;
     audio::setPaused(true);
@@ -422,6 +433,7 @@ void GameSession::teardown(App& app, bool restoreFrontend) {
      * released. cJSON and Library::save use the small newlib heap, so these
      * writes must not compete with a loaded emulator core. */
     if (completedLaunch) {
+        app.library().addPlaytime(m_game.pathHash, u32(m_playSeconds));
         app.library().notePlayed(m_game.pathHash, power::localTimestamp());
         cfg::setGameOption(m_game.pathHash, "core", m_coreName.c_str());
         if (m_videoOptionsDirty) {
@@ -537,6 +549,7 @@ void GameSession::queuePeriodicSram() {
 
 void GameSession::updateRunning(App& app, float dt) {
     const auto& pad = app.pad();
+    m_playSeconds += dt;   /* App clamps dt, so a sleep never counts as play */
 
     if ((pad.held() & MENU_COMBO) == MENU_COMBO &&
         pad.isPressed(PSP_CTRL_SELECT)) {
@@ -942,9 +955,24 @@ void GameSession::update(App& app, float dt) {
             updateMenu(app);
             break;
         case State::Failed:
-            if (app.pad().isPressed(PSP_CTRL_CIRCLE) ||
-                app.pad().isPressed(PSP_CTRL_CROSS))
+            if (app.pad().isPressed(PSP_CTRL_TRIANGLE)) {
+                /* Carry the chosen fix back to Home, which acts on it once
+                 * the frontend is restored. */
+                switch (failureAction(app)) {
+                    case launch::Action::Rescan:
+                        app.snapshot().rescanOnHome = true;
+                        break;
+                    case launch::Action::ChooseCore:
+                        app.snapshot().pickerHash = m_game.pathHash;
+                        break;
+                    default:
+                        break;
+                }
                 exitToHome(app);
+            } else if (app.pad().isPressed(PSP_CTRL_CIRCLE) ||
+                       app.pad().isPressed(PSP_CTRL_CROSS)) {
+                exitToHome(app);
+            }
             break;
         default:
             break;
@@ -1070,7 +1098,7 @@ void GameSession::drawMenu(App& app) {
 
     /* A long ROM title must never escape the pause panel. */
     r.setScissor(int(px + 16.f), int(py + 8.f), int(pw - 32.f), 12);
-    fonts.small.draw(r, px + 16.f, py + 8.f, m_game.name.c_str(),
+    fonts.small.draw(r, px + 16.f, py + 8.f, m_game.shown().c_str(),
                      rsWithAlpha(pal.textDim, a));
     r.resetScissor();
 
@@ -1166,14 +1194,24 @@ void GameSession::draw(App& app) {
 
     if (m_state == State::Failed) {
         app.drawBackground();
-        const auto& pal = app.pal();
-        app.fonts().large.draw(r, RS_SCREEN_W / 2.f, 100.f, "Launch failed",
-                               pal.textPrimary, text::Align::Center);
-        app.fonts().body.draw(r, RS_SCREEN_W / 2.f, 130.f, m_error,
-                              pal.textSecondary, text::Align::Center);
-        app.fonts().small.draw(r, RS_SCREEN_W / 2.f, 156.f,
-                               "Press × to return", pal.textDim,
-                               text::Align::Center);
+        app.drawTopBar(false);
+        const launch::Notice notice = launch::classify(m_error);
+        const launch::Action action = failureAction(app);
+        ui::StatePanel panel;
+        panel.kind = ui::StatePanel::Kind::Error;
+        panel.title = notice.title;
+        panel.message = notice.message;
+        char game[48];
+        std::snprintf(game, sizeof game, "%.40s", m_game.shown().c_str());
+        panel.detail = game;
+        const char* label = launch::actionLabel(action);
+        if (*label) {
+            panel.actionLabel = label;
+            panel.actionButton = ui::prim::Button::Triangle;
+        }
+        ui::drawStatePanel(app, panel);
+        const App::Hint hints[] = {{ui::prim::Button::Circle, "Back"}};
+        app.drawHintBar(hints, 1);
         return;
     }
     if (m_state == State::Exiting || !m_cores.loaded()) return;

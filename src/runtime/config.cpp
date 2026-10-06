@@ -36,9 +36,39 @@ void gamePath(char* buf, size_t n, u32 hash) {
 
 Config& get() { return s_cfg; }
 
+std::string systemCore(const char* coreId) {
+    for (const auto& [id, name] : s_cfg.systemCores)
+        if (id == coreId) return name;
+    return {};
+}
+
+void setSystemCore(const char* coreId, const char* coreName) {
+    if (!safeId(coreId, 16)) return;
+    for (auto it = s_cfg.systemCores.begin(); it != s_cfg.systemCores.end();
+         ++it) {
+        if (it->first != coreId) continue;
+        if (!coreName || !*coreName) s_cfg.systemCores.erase(it);
+        else if (safeId(coreName)) it->second = coreName;
+        return;
+    }
+    if (coreName && safeId(coreName))
+        s_cfg.systemCores.push_back({coreId, coreName});
+}
+
 void load() {
     cJSON* root = json::parseFile(CFG_PATH);
-    if (!root) return;
+    if (!root) return;   /* first boot: setupDone stays false */
+    /* An existing config predates first-run setup unless it says otherwise. */
+    s_cfg.setupDone = true;
+    if (const cJSON* v = cJSON_GetObjectItemCaseSensitive(root, "setupDone");
+        cJSON_IsBool(v))
+        s_cfg.setupDone = cJSON_IsTrue(v);
+    if (const cJSON* map = cJSON_GetObjectItemCaseSensitive(root, "systemCores");
+        cJSON_IsObject(map)) {
+        for (const cJSON* it = map->child; it; it = it->next)
+            if (cJSON_IsString(it) && it->string)
+                setSystemCore(it->string, it->valuestring);
+    }
     if (const cJSON* v = cJSON_GetObjectItemCaseSensitive(root, "theme");
         cJSON_IsString(v) && safeId(v->valuestring))
         s_cfg.theme = v->valuestring;
@@ -64,6 +94,9 @@ void load() {
     if (const cJSON* v = cJSON_GetObjectItemCaseSensitive(root, "autosave");
         cJSON_IsBool(v))
         s_cfg.autosave = cJSON_IsTrue(v);
+    if (const cJSON* v = cJSON_GetObjectItemCaseSensitive(root, "showArt");
+        cJSON_IsBool(v))
+        s_cfg.showArt = cJSON_IsTrue(v);
     if (const cJSON* v = cJSON_GetObjectItemCaseSensitive(root, "homeLayout");
         cJSON_IsNumber(v) && v->valueint >= 0 &&
         v->valueint < HOME_LAYOUT_COUNT)
@@ -81,7 +114,12 @@ void save() {
     cJSON_AddBoolToObject(root, "clock24Hour", s_cfg.clock24Hour);
     cJSON_AddBoolToObject(root, "showFps", s_cfg.showFps);
     cJSON_AddBoolToObject(root, "autosave", s_cfg.autosave);
+    cJSON_AddBoolToObject(root, "showArt", s_cfg.showArt);
     cJSON_AddNumberToObject(root, "homeLayout", s_cfg.homeLayout);
+    cJSON_AddBoolToObject(root, "setupDone", s_cfg.setupDone);
+    cJSON* cores = cJSON_AddObjectToObject(root, "systemCores");
+    for (const auto& [id, name] : s_cfg.systemCores)
+        cJSON_AddStringToObject(cores, id.c_str(), name.c_str());
     fs::mkdirs(fs::ROOT);
     if (!json::writeFile(CFG_PATH, root)) RS_LOGW("config: save failed");
     cJSON_Delete(root);

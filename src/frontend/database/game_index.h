@@ -15,7 +15,14 @@
 namespace rs::db {
 
 struct GameEntry {
-    std::string name;       /* display name (file name sans extension)   */
+    std::string name;       /* file name sans extension — the key for
+                             * metadata/art lookup, never rewritten      */
+    std::string title;      /* cleaned display title (see title_clean.h) */
+    std::string variant;    /* "USA, Rev 1": the dump tags removed from
+                             * the title                                 */
+    std::string label;      /* what lists show: the title, with the
+                             * variant appended only when two games in the
+                             * same system would otherwise look identical */
     std::string path;       /* full ms0:/ path (the .zip when zipped)    */
     std::string zipEntry;   /* rom name inside the zip, or empty         */
     std::string artPath;    /* sibling cover discovered during scan      */
@@ -24,6 +31,11 @@ struct GameEntry {
     u32 crc32      = 0;     /* from zip central dir; 0 = not yet known   */
     u32 size       = 0;     /* uncompressed rom size                     */
     u32 mtime      = 0;
+
+    /* Never blank: the label, then the title, then the raw file name. */
+    const std::string& shown() const {
+        return !label.empty() ? label : (!title.empty() ? title : name);
+    }
 };
 
 u32 fnv1a(const char* s);

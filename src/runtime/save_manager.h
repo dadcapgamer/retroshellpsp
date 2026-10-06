@@ -35,6 +35,13 @@ struct SlotInfo {
 /* Reads slot headers for the menu (cheap: header only). */
 void querySlots(const db::GameEntry& game, SlotInfo out[SLOTS]);
 
+/* True when the game has any battery save, RTC data or save state. */
+bool hasAnySave(const db::GameEntry& game);
+/* "Delete Save Data": removes sram.bin, rtc.bin and every state slot plus
+ * their atomic-write .bak twins (readFile would otherwise resurrect a save
+ * from the backup). Returns the number of files removed. */
+int deleteAll(const db::GameEntry& game);
+
 /* Thumbnail is optional RGB565 THUMB_W x THUMB_H. */
 bool saveState(const db::GameEntry& game, EmulatorCore& core, int slot,
                const u16* thumb);

@@ -35,15 +35,34 @@ void ring(gfx::Renderer& r, float cx, float cy, float radius, u32 color);
 void iconClock(gfx::Renderer& r, float cx, float cy, float radius, u32 color);
 void iconStar(gfx::Renderer& r, float cx, float cy, float radius, u32 color);
 void iconGear(gfx::Renderer& r, float cx, float cy, float radius, u32 color);
-/* Ten hard-pixel system silhouettes: System enum order 0..8, settings=9.
- * `size` should be 32, 48 or 64 so the baked pixels remain crisp. */
+/* Console icons (Figma "console icons v2"): System enum order 0..8,
+ * settings=9. `size` snaps to 48 or 64 (the artwork has built-in padding). */
 void iconSystem(gfx::Renderer& r, int systemIdx, float x, float y, float size,
                 u32 base, u32 detail);
 
-/* PSP face-button glyphs for hint bars. */
-enum class Button { Cross, Circle, Triangle, Square };
+/* Flat 1-bit-style shapes for the firmware look: no AA masks, integer
+ * aligned, so edges stay crisp on the LCD. */
+void outlineRect(gfx::Renderer& r, float x, float y, float w, float h,
+                 float thickness, u32 color);
+enum class Dir { Up, Down, Left, Right };
+/* Open chevron (<, >, ^, v), `size` is the half-height of the head. */
+void chevron(gfx::Renderer& r, Dir d, float cx, float cy, float size,
+             float thickness, u32 color);
+/* Arrow with a stem, used by the d-pad legend glyphs. */
+void arrow(gfx::Renderer& r, Dir d, float cx, float cy, float size, u32 color);
+/* Sparse dot lattice for the artwork fallback; tiled from one baked tile so
+ * a full placeholder costs a handful of sprites, not hundreds of rects. */
+void dotField(gfx::Renderer& r, float x, float y, float w, float h, u32 color);
+
+/* PSP face-button glyphs for hint bars. DpadUp/DpadDown draw as arrows;
+ * Face buttons and START are the Figma pixel glyphs. */
+enum class Button { Cross, Circle, Triangle, Square, DpadUp, DpadDown, Start,
+                    L1, R1, Select, DpadLeftRight };
 void buttonGlyph(gfx::Renderer& r, Button b, float cx, float cy, float radius,
                  u32 color);
+/* Drawn width of a glyph in pixels (the Figma artwork is baked at legend
+ * size, so widths differ: START is a wordmark). */
+float buttonGlyphWidth(Button b);
 
 /* Battery pill with fill level (0..1) or unknown (-1). */
 void battery(gfx::Renderer& r, float x, float y, float level, bool charging,
