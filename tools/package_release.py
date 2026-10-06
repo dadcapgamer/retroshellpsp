@@ -248,8 +248,8 @@ def main() -> None:
                   "RETROSHELL/system/README.txt")
         add_file(archive, ROOT / "THIRD_PARTY_NOTICES.md",
                  "RETROSHELL/THIRD_PARTY_NOTICES.md")
-        add_file(archive, ROOT / "assets/fonts/OFL-Geist.txt",
-                 "RETROSHELL/licenses/Geist-Pixel-OFL-1.1.txt")
+        add_file(archive, ROOT / "assets/fonts/OFL-IBMPlexMono.txt",
+                 "RETROSHELL/licenses/IBM-Plex-Mono-OFL-1.1.txt")
     print(output)
 
     if args.core_packages:

@@ -36,7 +36,7 @@ void iconClock(gfx::Renderer& r, float cx, float cy, float radius, u32 color);
 void iconStar(gfx::Renderer& r, float cx, float cy, float radius, u32 color);
 void iconGear(gfx::Renderer& r, float cx, float cy, float radius, u32 color);
 /* Console icons (Figma "console icons v2"): System enum order 0..8,
- * settings=9. `size` snaps to 48 or 64 (the artwork has built-in padding). */
+ * settings=9. `size` snaps to 24, 48 or 64 (the artwork has built-in padding). */
 void iconSystem(gfx::Renderer& r, int systemIdx, float x, float y, float size,
                 u32 base, u32 detail);
 

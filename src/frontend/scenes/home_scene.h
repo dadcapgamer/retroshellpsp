@@ -99,6 +99,8 @@ private:
     void drawContinue(App& app, u32 alpha, float dy);
     void drawLibrary(App& app, u32 alpha, float dy);
     void drawDetail(App& app, u32 alpha, float dy);
+    void drawMetaLine(App& app, const db::GameEntry& g, float x, float capsTop,
+                      float maxW, u32 alpha);
     void drawOptions(App& app);
     void drawPicker(App& app);
     void drawViewMenu(App& app);

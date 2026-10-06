@@ -32,8 +32,7 @@
 #include "rs_asset_font_body_strong_rsf.h"
 #include "rs_asset_font_body_rsf.h"
 #include "rs_asset_font_small_rsf.h"
-#include "rs_asset_font_pixel_small_rsf.h"
-#include "rs_asset_font_pixel_tiny_rsf.h"
+#include "rs_asset_font_tiny_rsf.h"
 #include "rs_asset_splash_png.h"
 
 /* Set by the HOME-menu exit callback in main.cpp. */
@@ -141,10 +140,7 @@ bool App::init() {
                               rs_asset_font_body_strong_rsf_len},
         {&m_fonts.body,  rs_asset_font_body_rsf,  rs_asset_font_body_rsf_len},
         {&m_fonts.small, rs_asset_font_small_rsf, rs_asset_font_small_rsf_len},
-        {&m_fonts.mono, rs_asset_font_pixel_small_rsf,
-                        rs_asset_font_pixel_small_rsf_len},
-        {&m_fonts.monoTiny, rs_asset_font_pixel_tiny_rsf,
-                            rs_asset_font_pixel_tiny_rsf_len},
+        {&m_fonts.tiny, rs_asset_font_tiny_rsf, rs_asset_font_tiny_rsf_len},
     };
     for (auto& f : fonts) {
         if (!f.font->load(f.data, f.len)) {
@@ -189,6 +185,7 @@ bool App::init() {
         m_scanner.start();
     } else {
         RS_LOGI("scanner: using cached library; manual rescan available");
+        m_thumbs.rebuild(m_index, false);
     }
 
     m_lastUs = sceKernelGetSystemTimeLow();
@@ -275,6 +272,7 @@ void App::evictForCore() {
     /* A scanner competes for the 4 MB newlib heap and Memory Stick while a
      * core is loading. Stop and join it before changing the memory map. */
     m_scanner.stop();
+    m_thumbs.suspend();
     m_boxart.clear();
     m_theme.freeAssets();
     gfx::vram::freeToBootMark();
@@ -291,11 +289,15 @@ void App::restoreAfterCore() {
     m_theme = theme::loadTheme(m_theme.id);
     m_pal = theme::personalize(m_theme.palette, cfg::get().accent);
     m_themeFrom = m_pal;
+    /* Finish any thumbnail work the launch interrupted; already-built
+     * systems cost one read each, on the worker. */
+    m_thumbs.rebuild(m_index, false);
     RS_LOGI("app: frontend restored");
 }
 
 void App::shutdown() {
     m_scanner.stop();
+    m_thumbs.suspend();
     if (m_scene) m_scene->shutdown(*this);
     /* GameSession launch bookkeeping happens in the scene hook above, so
      * save the library afterwards. This also makes HOME-button exits while
@@ -307,8 +309,7 @@ void App::shutdown() {
     m_theme.freeAssets();
     audio::shutdown();
     for (text::Font* f : {&m_fonts.display, &m_fonts.title, &m_fonts.bodyStrong,
-                          &m_fonts.body, &m_fonts.small, &m_fonts.mono,
-                          &m_fonts.monoTiny})
+                          &m_fonts.body, &m_fonts.small, &m_fonts.tiny})
         f->unload();
     m_renderer.shutdown();
 }
@@ -435,8 +436,10 @@ void App::update(float dt) {
          * Clear positive and negative entries so the next visible frame
          * re-resolves the sibling/legacy paths. */
         m_boxart.clear();
+        m_thumbs.rebuild(m_index, false);
         RS_LOGI("index: refreshed, %d games", m_index.totalCount());
     }
+    m_thumbs.update();
 
     /* Battery/clock polling is cheap but not free — every ~2s. */
     if (--m_batteryPoll <= 0) {
@@ -527,28 +530,21 @@ void App::drawBackground() {
     }
 }
 
-/* One header for every screen: mark + wordmark (+ context) on the left,
- * clock and battery on the right, a hairline under both. Fixed positions and
- * a fixed baseline — nothing here moves between screens. */
-void App::drawTopBar(const char* context, u32 alpha) {
+/* One header for every screen: mark + RETROSHELL on the left, clock and
+ * battery on the right. Fixed positions and a fixed baseline — nothing here
+ * moves between screens. */
+void App::drawTopBar(u32 alpha) {
     using ui::fade;
     namespace L = ui::layout;
     const auto& f = m_fonts;
     constexpr float BAND = L::HEADER_RULE_Y;           /* 0..26 */
-    const float textY = f.mono.centerY(0.f, BAND);
+    const float statusY = f.small.centerY(0.f, BAND);
 
     ui::brandMark(m_renderer, L::MARGIN, float(int((BAND - 10.f) * .5f)), 2,
-                  fade(m_pal.textPrimary, alpha));
-    const float wordX = L::MARGIN + ui::brandMarkSize(2) + 6.f;
-    f.mono.drawBold(m_renderer, wordX, textY, "RETROSHELL",
-                    fade(m_pal.textPrimary, alpha));
-    if (context && *context) {
-        const float cx = wordX + f.mono.measure("RETROSHELL") + 1.f + 9.f;
-        m_renderer.rect(cx, float(int(BAND * .5f)) - 4.f, 1.f, 9.f,
-                        fade(m_pal.line, alpha));
-        f.mono.draw(m_renderer, cx + 9.f, textY, context,
-                    fade(m_pal.textMuted, alpha));
-    }
+                  fade(m_pal.textSecondary, alpha));
+    f.title.draw(m_renderer, L::MARGIN + 18.f, f.title.centerY(0.f, BAND),
+                 "RETROSHELL", fade(m_pal.textPrimary, alpha),
+                 text::Align::Left, 2.f);
 
     /* Status cluster, right to left: battery, percentage, clock. */
     int hh = 0, mm = 0;
@@ -568,33 +564,31 @@ void App::drawTopBar(const char* context, u32 alpha) {
     const bool low = m_batteryPct >= 0 && !m_batteryChg && m_batteryPct <= 15;
     const bool blinkOff = low && m_batteryPct <= 5 &&
                           std::fmod(m_time, 1.f) > .6f;
-    const u32 batteryInk = fade(low ? m_pal.danger : m_pal.textSecondary,
-                                alpha);
+    const u32 ink = fade(low ? m_pal.danger : m_pal.textPrimary, alpha);
     if (!blinkOff)
         ui::prim::battery(m_renderer, batteryX, float(int((BAND - 8.f) * .5f)),
                           m_batteryPct < 0 ? -1.f
                                            : float(m_batteryPct) / 100.f,
-                          m_batteryChg, batteryInk,
-                          fade(low ? m_pal.danger : m_pal.textPrimary, alpha));
-    float right = batteryX - 7.f;
+                          m_batteryChg, ink,
+                          fade(low ? m_pal.danger : m_pal.focusEdge, alpha));
+    float right = batteryX - 8.f;
     if (m_batteryPct >= 0) {
         char pct[16];
         std::snprintf(pct, sizeof pct, "%d%%", m_batteryPct);
-        f.mono.draw(m_renderer, right, textY, pct, batteryInk,
-                    text::Align::Right);
-        right -= f.mono.measure(pct) + 14.f;
+        f.small.draw(m_renderer, right, statusY, pct, ink, text::Align::Right);
+        right -= f.small.measure(pct) + 14.f;
     }
-    f.mono.draw(m_renderer, right, textY, clock,
-                fade(m_pal.textSecondary, alpha), text::Align::Right);
-    right -= f.mono.measure(clock) + 14.f;
+    f.small.draw(m_renderer, right, statusY, clock,
+                 fade(m_pal.textPrimary, alpha), text::Align::Right);
+    right -= f.small.measure(clock) + 16.f;
 
     /* A background scan announces itself in the same quiet cluster. */
     if (m_scanner.running()) {
         char buf[32];
-        std::snprintf(buf, sizeof buf, "SCANNING %d", m_scanner.progress());
-        f.monoTiny.draw(m_renderer, right, f.monoTiny.centerY(0.f, BAND), buf,
-                        fade(m_pal.textMuted, alpha), text::Align::Right);
-        const float dotX = right - f.monoTiny.measure(buf) - 8.f;
+        std::snprintf(buf, sizeof buf, "Scanning %d", m_scanner.progress());
+        f.tiny.draw(m_renderer, right, f.tiny.centerY(0.f, BAND), buf,
+                    fade(m_pal.textMuted, alpha), text::Align::Right);
+        const float dotX = right - f.tiny.measure(buf) - 8.f;
         const int phase = int(m_time * 3.f) % 3;
         for (int i = 0; i < 3; i++)
             m_renderer.rect(dotX - float(2 - i) * 4.f, float(int(BAND * .5f)),
@@ -602,21 +596,17 @@ void App::drawTopBar(const char* context, u32 alpha) {
                             fade(i == phase ? m_pal.focusEdge : m_pal.textMuted,
                                  alpha));
     }
-
-    m_renderer.rect(L::MARGIN, L::HEADER_RULE_Y, L::RIGHT - L::MARGIN, 1.f,
-                    fade(m_pal.line, alpha));
 }
 
-/* Compact, low-contrast, one line: groups flow left to right at a fixed gap
- * so the same action sits in the same place on every screen. */
+/* One line, spread across the width: the legend sits in four (or more)
+ * equal columns, so each action keeps its place from screen to screen. */
 void App::drawHintBar(const Hint* hints, int count, bool solid) {
     namespace L = ui::layout;
-    constexpr float GLYPH_GAP = 6.f;    /* glyph to label */
-    constexpr float GROUP_GAP = 18.f;   /* label to next glyph */
+    constexpr float GLYPH_GAP = 7.f;    /* glyph to label */
     const float bandTop = L::FOOTER_RULE_Y + 1.f;
     const float bandH = RS_SCREEN_H - bandTop;
     const float cy = float(int(bandTop + bandH * .5f));
-    const auto& font = m_fonts.monoTiny;
+    const auto& font = m_fonts.small;
     const float textY = font.centerY(bandTop, bandH);
 
     if (solid)
@@ -627,18 +617,30 @@ void App::drawHintBar(const Hint* hints, int count, bool solid) {
                     m_pal.line);
 
     if (count > 8) count = 8;
-    float x = L::MARGIN;
+    /* A glyph with an empty label pairs with the next one ("L1 R1 Tab"). */
+    int groups = 0;
+    for (int i = 0; i < count; i++)
+        if (hints[i].label[0]) groups++;
+    const int columns = groups > 4 ? groups : 4;
+    const float colW = (L::RIGHT - L::MARGIN) / float(columns);
+    float x = L::MARGIN + 4.f;
+    int group = 0;
     for (int i = 0; i < count; i++) {
         const float lead = ui::prim::buttonGlyphWidth(hints[i].button);
         ui::prim::buttonGlyph(m_renderer, hints[i].button, x + lead * .5f, cy,
-                              6.f, m_pal.textSecondary);
-        const float labelX = x + lead + GLYPH_GAP;
-        font.draw(m_renderer, labelX, textY, hints[i].label,
+                              6.f, m_pal.textPrimary);
+        if (!hints[i].label[0]) {
+            x += lead + 4.f;
+            continue;
+        }
+        font.draw(m_renderer, x + lead + GLYPH_GAP, textY, hints[i].label,
                   m_pal.textSecondary);
-        /* An empty label pairs a glyph with the next one ("L1 R1 Tab"). */
-        x = hints[i].label[0]
-            ? labelX + font.measure(hints[i].label) + GROUP_GAP
-            : x + lead + 4.f;
+        group++;
+        /* The last group of a short legend (Back, Home) sits in the last
+         * column, as on every other screen. */
+        const bool lastShort = group == groups - 1 && groups < columns &&
+                               groups > 2;
+        x = L::MARGIN + 4.f + colW * float(lastShort ? columns - 1 : group);
     }
 }
 

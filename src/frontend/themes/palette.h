@@ -42,7 +42,7 @@ inline const Palette& dark() {
         /* bg        */ rsHex(0x081828),
         /* surface   */ rsHex(0x0D2235),
         /* surface2  */ rsHex(0x122B40),
-        /* line      */ rsHex(0x1E3A52),
+        /* line      */ rsHex(0x24435F),
         /* text      */ rsHex(0xF4F1E8), rsHex(0xADB8C2), rsHex(0x718292),
                         rsHex(0x4D5D69),
         /* accent    */ rsHex(0x2676E8),

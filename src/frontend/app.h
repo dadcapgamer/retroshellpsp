@@ -9,6 +9,7 @@
 #include "frontend/database/library.h"
 #include "frontend/database/metadata.h"
 #include "frontend/database/rom_scanner.h"
+#include "frontend/database/thumb_cache.h"
 #include "frontend/scenes/home_nav.h"
 #include "frontend/scenes/scene.h"
 #include "frontend/text/font.h"
@@ -54,20 +55,20 @@ public:
     db::GameIndex&    index()          { return m_index; }
     db::Library&      library()        { return m_library; }
     db::BoxartCache&  boxart()         { return m_boxart; }
+    db::ThumbCache&   thumbs()         { return m_thumbs; }
     db::RomScanner&   scanner()        { return m_scanner; }
     CoreRegistry&     cores()          { return m_cores; }
     FrontendSnapshot& snapshot()       { return m_snapshot; }
 
-    /* Two roles: Inter for content, Geist Pixel (monospaced) for technical
-     * text — wordmark, status, badges, counts, section labels, legend. */
+    /* One family, IBM Plex Mono: SemiBold for emphasis, Regular for text.
+     * Uppercase labels are drawn tracked (see Font::draw). */
     struct Fonts {
-        text::Font display;     /* Inter SemiBold 18 — system name, Detail title */
-        text::Font title;       /* Inter SemiBold 15 — pane and state titles */
-        text::Font bodyStrong;  /* Inter SemiBold 13 — focused rows, Play */
-        text::Font body;        /* Inter Regular 13  — rows, actions, labels */
-        text::Font small;       /* Inter Regular 11  — metadata, descriptions */
-        text::Font mono;        /* Geist Pixel 12    — wordmark, status, counts */
-        text::Font monoTiny;    /* Geist Pixel 10    — badges, labels, legend */
+        text::Font display;     /* SemiBold 18 — system name, Detail title */
+        text::Font title;       /* SemiBold 15 — wordmark, pane titles */
+        text::Font bodyStrong;  /* SemiBold 13 — focused rows, card titles */
+        text::Font body;        /* Regular 13  — rows, actions, labels */
+        text::Font small;       /* Regular 11  — metadata, status, counts */
+        text::Font tiny;        /* Regular 10  — chips, section labels, legend */
     };
     const Fonts& fonts() const { return m_fonts; }
 
@@ -104,12 +105,11 @@ public:
 
     /* --- shared chrome ---------------------------------------------------- */
     void drawBackground();
-    /* The one header: mark + RETROSHELL (+ an optional context label such
-     * as "LIBRARY") left, clock and battery right, hairline below. */
-    void drawTopBar(const char* context = nullptr, u32 alpha = 255);
+    /* The one header: mark + RETROSHELL left, clock and battery right. */
+    void drawTopBar(u32 alpha = 255);
     struct Hint { ui::prim::Button button; const char* label; };
-    /* The one footer: hairline, then glyph+label groups flowing left to
-     * right at a fixed gap. `solid` lays a band under it (over gameplay). */
+    /* The one footer: hairline, then glyph+label groups in equal columns
+     * across the width. `solid` lays a band under it (over gameplay). */
     void drawHintBar(const Hint* hints, int count, bool solid = false);
     void toast(const char* msg);
 
@@ -133,6 +133,7 @@ private:
     db::RomScanner  m_scanner;
     db::Library     m_library;
     db::BoxartCache m_boxart;
+    db::ThumbCache  m_thumbs;
     CoreRegistry    m_cores;
     FrontendSnapshot m_snapshot;
 

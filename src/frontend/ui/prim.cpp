@@ -1,6 +1,15 @@
 #include "frontend/ui/prim.h"
 #include "runtime/log.h"
 
+#include "rs_asset_game_boy_24_png.h"
+#include "rs_asset_game_boy_color_24_png.h"
+#include "rs_asset_game_boy_advance_24_png.h"
+#include "rs_asset_nes_24_png.h"
+#include "rs_asset_snes_24_png.h"
+#include "rs_asset_megadrive_24_png.h"
+#include "rs_asset_master_system_24_png.h"
+#include "rs_asset_game_gear_24_png.h"
+#include "rs_asset_pc_engine_24_png.h"
 #include "rs_asset_game_boy_48_png.h"
 #include "rs_asset_game_boy_64_png.h"
 #include "rs_asset_game_boy_color_48_png.h"
@@ -50,12 +59,14 @@ constexpr int DOT_TILE = 32;
 constexpr int DOT_PITCH = 4;
 gfx::Texture s_dots;       /* 32x32, one lit texel per 4x4 cell */
 constexpr int SYSTEM_COUNT = 10;
+constexpr int SYSTEM_CELL_SMALL = 24;    /* list-row glyph */
 constexpr int SYSTEM_CELL = 48;          /* resting / list size */
 constexpr int SYSTEM_CELL_LARGE = 64;    /* selected / preview size */
 constexpr int CONSOLE_COUNT = SYSTEM_COUNT - 1;
 constexpr int GLYPH_COUNT = 8;
 /* Cross, Circle, Triangle, Square, Start, L1, R1 — cropped to their ink. */
 gfx::Texture s_glyphs[GLYPH_COUNT];
+gfx::Texture s_systemIconsSmall[CONSOLE_COUNT];
 gfx::Texture s_systemIcons[CONSOLE_COUNT];
 gfx::Texture s_systemIconsLarge[CONSOLE_COUNT];
 
@@ -155,37 +166,48 @@ bool bakeSystemIcons() {
         const unsigned char* bytes;
         unsigned int length;
     };
-    /* Pre-sized Figma exports (assets/icons/consoles/<name>-48|64.png).
+    /* Pre-sized exports (assets/icons/consoles/<name>-24|48|64.png; the 24 px
+     * glyphs are exact 8:1 box averages of the 192 px masters).
      * Keep this order identical to db::System. */
-    const EmbeddedPng icons[CONSOLE_COUNT][2] = {
-        {{rs_asset_game_boy_48_png, rs_asset_game_boy_48_png_len},
+    const EmbeddedPng icons[CONSOLE_COUNT][3] = {
+        {{rs_asset_game_boy_24_png, rs_asset_game_boy_24_png_len},
+         {rs_asset_game_boy_48_png, rs_asset_game_boy_48_png_len},
          {rs_asset_game_boy_64_png, rs_asset_game_boy_64_png_len}},
-        {{rs_asset_game_boy_color_48_png, rs_asset_game_boy_color_48_png_len},
+        {{rs_asset_game_boy_color_24_png, rs_asset_game_boy_color_24_png_len},
+         {rs_asset_game_boy_color_48_png, rs_asset_game_boy_color_48_png_len},
          {rs_asset_game_boy_color_64_png, rs_asset_game_boy_color_64_png_len}},
-        {{rs_asset_game_boy_advance_48_png, rs_asset_game_boy_advance_48_png_len},
+        {{rs_asset_game_boy_advance_24_png, rs_asset_game_boy_advance_24_png_len},
+         {rs_asset_game_boy_advance_48_png, rs_asset_game_boy_advance_48_png_len},
          {rs_asset_game_boy_advance_64_png, rs_asset_game_boy_advance_64_png_len}},
-        {{rs_asset_nes_48_png, rs_asset_nes_48_png_len},
+        {{rs_asset_nes_24_png, rs_asset_nes_24_png_len},
+         {rs_asset_nes_48_png, rs_asset_nes_48_png_len},
          {rs_asset_nes_64_png, rs_asset_nes_64_png_len}},
-        {{rs_asset_snes_48_png, rs_asset_snes_48_png_len},
+        {{rs_asset_snes_24_png, rs_asset_snes_24_png_len},
+         {rs_asset_snes_48_png, rs_asset_snes_48_png_len},
          {rs_asset_snes_64_png, rs_asset_snes_64_png_len}},
-        {{rs_asset_megadrive_48_png, rs_asset_megadrive_48_png_len},
+        {{rs_asset_megadrive_24_png, rs_asset_megadrive_24_png_len},
+         {rs_asset_megadrive_48_png, rs_asset_megadrive_48_png_len},
          {rs_asset_megadrive_64_png, rs_asset_megadrive_64_png_len}},
-        {{rs_asset_master_system_48_png, rs_asset_master_system_48_png_len},
+        {{rs_asset_master_system_24_png, rs_asset_master_system_24_png_len},
+         {rs_asset_master_system_48_png, rs_asset_master_system_48_png_len},
          {rs_asset_master_system_64_png, rs_asset_master_system_64_png_len}},
-        {{rs_asset_game_gear_48_png, rs_asset_game_gear_48_png_len},
+        {{rs_asset_game_gear_24_png, rs_asset_game_gear_24_png_len},
+         {rs_asset_game_gear_48_png, rs_asset_game_gear_48_png_len},
          {rs_asset_game_gear_64_png, rs_asset_game_gear_64_png_len}},
-        {{rs_asset_pc_engine_48_png, rs_asset_pc_engine_48_png_len},
+        {{rs_asset_pc_engine_24_png, rs_asset_pc_engine_24_png_len},
+         {rs_asset_pc_engine_48_png, rs_asset_pc_engine_48_png_len},
          {rs_asset_pc_engine_64_png, rs_asset_pc_engine_64_png_len}},
     };
 
     for (int icon = 0; icon < CONSOLE_COUNT; ++icon) {
-        gfx::Texture* targets[2] = {&s_systemIcons[icon],
+        gfx::Texture* targets[3] = {&s_systemIconsSmall[icon],
+                                    &s_systemIcons[icon],
                                     &s_systemIconsLarge[icon]};
-        const int cells[2] = {SYSTEM_CELL, SYSTEM_CELL_LARGE};
+        const int cells[3] = {SYSTEM_CELL_SMALL, SYSTEM_CELL, SYSTEM_CELL_LARGE};
         /* Each system keeps its own texture per size: a shared atlas once
          * contaminated every console card with a neighbour's pixels on
          * hardware. Independent images also give exact texture bounds. */
-        for (int v = 0; v < 2; ++v) {
+        for (int v = 0; v < 3; ++v) {
             int w = 0, h = 0, comp = 0;
             stbi_uc* px = stbi_load_from_memory(
                 icons[icon][v].bytes, int(icons[icon][v].length), &w, &h,
@@ -419,8 +441,9 @@ void iconSystem(gfx::Renderer& r, int systemIdx, float x, float y, float size,
     systemIdx = rsClamp(systemIdx, 0, SYSTEM_COUNT - 1);
     x = float(int(x));
     y = float(int(y));
-    const bool selectedSize = size >= 56.f;
-    size = selectedSize ? 64.f : 48.f;
+    const int cell = size >= 56.f ? SYSTEM_CELL_LARGE
+                   : size >= 36.f ? SYSTEM_CELL : SYSTEM_CELL_SMALL;
+    size = float(cell);
     if (systemIdx == CONSOLE_COUNT) {
         iconGear(r, x + size * .5f, y + size * .5f, size * .3f, base);
         return;
@@ -429,10 +452,11 @@ void iconSystem(gfx::Renderer& r, int systemIdx, float x, float y, float size,
     const gfx::TexFilter previous = r.texFilter();
     r.setTexFilter(gfx::TexFilter::Nearest);
     const u32 tint = rsWithAlpha(rsHex(0xFFFFFF), rsAlphaOf(base));
-    const gfx::Texture& texture = selectedSize
-        ? s_systemIconsLarge[systemIdx] : s_systemIcons[systemIdx];
-    const float sourceSize = selectedSize
-        ? float(SYSTEM_CELL_LARGE) : float(SYSTEM_CELL);
+    const gfx::Texture& texture = cell == SYSTEM_CELL_LARGE
+        ? s_systemIconsLarge[systemIdx]
+        : cell == SYSTEM_CELL ? s_systemIcons[systemIdx]
+                              : s_systemIconsSmall[systemIdx];
+    const float sourceSize = float(cell);
     r.sprite(texture, 0.f, 0.f, sourceSize, sourceSize,
              x, y, size, size, tint);
     r.setTexFilter(previous);

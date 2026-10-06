@@ -68,19 +68,18 @@ void focusFrame(App& app, float x, float y, float w, float h, u32 alpha = 255);
 void label(App& app, float x, float y, const char* text, u32 color,
            text::Align align = text::Align::Left);
 /* Small flat chip with a monospaced label; returns its width. */
+/* Chips: `system` is the filled identity chip ("GBC"); the others are
+ * outlined tags ("Platformer"). */
 float chip(App& app, float x, float y, const char* text, u32 alpha = 255,
-           bool onAccent = false);
-constexpr float CHIP_H = 14.f;
+           bool system = false);
+constexpr float CHIP_H = 15.f;
 float chipWidth(App& app, const char* text);
 
 /* --- brand ------------------------------------------------------------ */
-/* The RetroShell mark: nine squares touching at their corners in a diamond
- * (a 5x5 checker clipped to |dx|+|dy| <= 2), `dot` px per square, so the
- * mark is 5*dot square. Bit i of `skip` leaves out cell i. */
+/* The RetroShell mark: a 3x3 grid of square dots, `dot` px each with a
+ * `dot` px gap, so the mark is 5*dot square. Cells are row major; bit i of
+ * `skip` leaves out cell i. */
 constexpr int BRAND_CELLS = 9;
-constexpr int BRAND_CELL[BRAND_CELLS][2] = {
-    {2, 0}, {1, 1}, {3, 1}, {0, 2}, {2, 2}, {4, 2}, {1, 3}, {3, 3}, {2, 4},
-};
 constexpr int BRAND_CENTER = 4;
 void brandMark(gfx::Renderer& r, float x, float y, int dot, u32 color,
                unsigned skip = 0u);
@@ -91,14 +90,23 @@ float brandMarkSize(int dot);
 void backdrop(App& app, u32 alpha);
 /* Popup surface: surface2 fill, 1px line border, radius 3. */
 void panel(App& app, float x, float y, float w, float h, u32 alpha = 255);
+/* Card / pane surface: surface fill, 1px line border, radius 3. */
+void card(App& app, float x, float y, float w, float h, u32 alpha = 255);
+/* Hairline between list rows, inset from both ends. */
+void rowRule(App& app, float x, float y, float w, u32 alpha = 255);
 
 /* One menu row inside a panel or list: focus fill when selected, label
  * left, optional value right (with < > when adjustable and focused). */
 struct RowStyle {
     bool focused = false;
     bool disabled = false;
-    bool adjustable = false;     /* draws chevrons around the value when focused */
+    bool adjustable = false;     /* draws ‹ value › when focused */
     bool strong = false;         /* SemiBold label even when unfocused */
+    bool chevron = false;        /* › at the right edge when focused */
+    bool soft = false;           /* focus is a surface highlight, not the
+                                  * accent: a second-level focus (Settings
+                                  * values while the category is active) */
+    int  icon = -1;              /* ui::Icon drawn before the label */
 };
 void menuRow(App& app, float x, float y, float w, float h, const char* text,
              const char* value, const RowStyle& style, u32 alpha = 255);

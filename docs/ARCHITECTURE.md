@@ -73,12 +73,15 @@ edges stay crisp on the LCD. Fonts are pre-baked `.rsf` atlases (see
 
 ### Typography
 
-Two roles, never more:
+One family, IBM Plex Mono, matching the concept board:
 
-| Role | Face | Sizes | Used for |
-|---|---|---|---|
-| Content | Inter SemiBold / Regular | 18, 15, 13 (both weights), 11 | game titles, system names, actions, settings labels, metadata |
-| Technical | Geist Pixel, fixed advance | 12, 10 | wordmark, clock/battery, badges, counts, section labels, legend |
+| Weight | Sizes | Used for |
+|---|---|---|
+| SemiBold | 18, 15, 13 | system name and Detail title (18), wordmark and pane titles (15), focused rows and card titles (13) |
+| Regular | 13, 11, 10 | rows, actions and settings (13), metadata, status and counts (11), chips, labels and legend (10) |
+
+Uppercase labels (wordmark, system name, pane titles) are drawn tracked via
+`Font::draw`'s `tracking` argument rather than baked as separate atlases.
 
 `Font::centerY` centres a label on its cap height (measured from 'H' at
 load), which is how every row, chip and button places text on whole pixels.
@@ -87,12 +90,22 @@ arena (startup gate: 17,000 KB), so a size exists only when a role needs it.
 
 ### Shared chrome (`ui/chrome.*`)
 
-One grid — 16px margins, header 0–27 (hairline at 27), content 36–238,
-footer hairline at 246 — and one focus language in the accent colour:
-`focusFill` (rows, menus, settings), `focusUnderline` (rail, tabs) and
-`focusFrame` (cards, artwork). `App::drawTopBar` (mark, wordmark, optional
-context, clock, battery, scan status) and `App::drawHintBar` (left-flowing
-glyph+label groups) are the only header and footer. Panels, chips, menu
+One grid — 16px margins, header 0–27, content 36–238, footer hairline at
+246 — and one focus language in the accent colour: `focusFill` (rows, menus,
+settings), `focusFrame` (cards, the selected system) and `focusUnderline`.
+`App::drawTopBar` (3×3 dot mark, wordmark, clock, battery, scan status) and
+`App::drawHintBar` (glyph+label groups in equal columns) are the only header
+and footer. `ui/icons` holds the 11×11 1-bit action and settings icons.
+
+### Library thumbnails (`database/thumb_cache.*`)
+
+24×24 RGB565 thumbnails, one cache file per system under
+`RETROSHELL/cache/thumbs/`, built on a background worker from each cover (or
+the newest screenshot) after a scan and loaded by the worker when the Library
+switches system. The main thread only searches the resident set and uploads
+a 1 KB texture per newly visible row, so scrolling never touches the Memory
+Stick; rows without a thumbnail show the 24 px console glyph. The worker is
+stopped with the scanner before a core launches. Panels, chips, menu
 rows, the RetroShell mark and the artwork well/fallback live in the same
 module, so a screen composes them rather than drawing its own.
 

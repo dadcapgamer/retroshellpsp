@@ -93,23 +93,24 @@ const Font::Glyph* Font::find(u32 cp) const {
     return nullptr;
 }
 
-float Font::measure(const char* text) const {
+float Font::measure(const char* text, float tracking) const {
     float w = 0.f;
+    int n = 0;
     while (*text) {
         const u32 cp = utf8Next(&text);
         const Glyph* g = find(cp);
         if (!g) g = find('?');
-        if (g) w += float(g->xadv);
+        if (g) { w += float(g->xadv); n++; }
     }
-    return w;
+    return n > 1 ? w + tracking * float(n - 1) : w;
 }
 
 void Font::draw(gfx::Renderer& r, float x, float y, const char* text,
-                u32 color, Align align) const {
+                u32 color, Align align, float tracking) const {
     if (!m_glyphs || !text || !*text) return;
 
-    if (align == Align::Center)     x -= measure(text) * 0.5f;
-    else if (align == Align::Right) x -= measure(text);
+    if (align == Align::Center)     x -= measure(text, tracking) * 0.5f;
+    else if (align == Align::Right) x -= measure(text, tracking);
     x = float(int(x));           /* pixel-snap for crisp glyphs */
     const float baseline = float(int(y)) + float(m_ascent);
 
@@ -148,7 +149,7 @@ void Font::draw(gfx::Renderer& r, float x, float y, const char* text,
                             gx + float(g->w), gy + float(g->h), 0.f};
             i++;
         }
-        pen += float(g->xadv);
+        pen += float(g->xadv) + tracking;
     }
     r.endSprites(v, i);
     r.setTexFilter(previousFilter);

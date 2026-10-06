@@ -193,16 +193,14 @@ void SetupScene::drawRows(App& app, u32 a, bool emulators) {
         const char* text = value;
         bool missing = false;
         if (!emulators) {
-            std::snprintf(value, sizeof value, "%d GAME%s", row.games,
-                          row.games == 1 ? "" : "S");
+            std::snprintf(value, sizeof value, "%d game%s", row.games,
+                          row.games == 1 ? "" : "s");
         } else if (row.cores.empty()) {
-            text = "NO EMULATOR INSTALLED";
+            text = "No emulator installed";
             missing = true;
         } else {
             std::snprintf(value, sizeof value, "%s",
                           row.cores[size_t(row.choice)]->name.c_str());
-            for (char* p = value; *p; ++p)
-                if (*p >= 'a' && *p <= 'z') *p = char(*p - 32);
         }
         ui::RowStyle style;
         style.focused = sel;
@@ -211,7 +209,7 @@ void SetupScene::drawRows(App& app, u32 a, bool emulators) {
                     ui::systemName(row.system),
                     missing ? nullptr : text, style, a);
         if (missing)
-            fonts.mono.draw(r, L::RIGHT - 10.f, fonts.mono.centerY(y, L::ROW_H),
+            fonts.body.draw(r, L::RIGHT - 10.f, fonts.body.centerY(y, L::ROW_H),
                             text, fade(sel ? pal.onAccent : pal.danger, a),
                             text::Align::Right);
     }
@@ -222,7 +220,7 @@ void SetupScene::draw(App& app) {
     const auto& pal = app.pal();
     const auto& fonts = app.fonts();
     app.drawBackground();
-    app.drawTopBar("SETUP");
+    app.drawTopBar();
 
     const float enter = ui::easeOutCubic(m_entrance.t);
     const u32 a = u32(enter * 255.f);
@@ -232,7 +230,7 @@ void SetupScene::draw(App& app) {
     auto heading = [&](int step, const char* title, const char* hint) {
         char over[24];
         std::snprintf(over, sizeof over, "STEP %d", step);
-        ui::label(app, L::MARGIN, fonts.monoTiny.centerY(HEAD_Y, 6.f), over,
+        ui::label(app, L::MARGIN, fonts.tiny.centerY(HEAD_Y, 6.f), over,
                   fade(pal.textMuted, a));
         fonts.title.draw(r, L::MARGIN,
                          fonts.title.centerY(HEAD_Y + 14.f,

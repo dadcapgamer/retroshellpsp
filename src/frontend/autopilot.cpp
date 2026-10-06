@@ -75,9 +75,10 @@ constexpr Step GAME_SCRIPT[] = {
     {1424, PSP_CTRL_CIRCLE,   nullptr},
     {1432, PSP_CTRL_TRIANGLE, nullptr},         /* open Settings */
     {1452, 0,                 "settings"},
-    {1456, PSP_CTRL_DOWN,     nullptr},         /* Accent color */
+    {1456, PSP_CTRL_CROSS,    nullptr},         /* into the panel */
+    {1464, PSP_CTRL_DOWN,     nullptr},         /* Accent color */
     {1472, 0,                 "accent_picker"},
-    {1480, PSP_CTRL_CIRCLE,   nullptr},         /* return to Systems */
+    {1480, PSP_CTRL_START,    nullptr},         /* return to Systems */
     {1500, PSP_CTRL_CROSS,    nullptr},         /* open Library */
     {1516, PSP_CTRL_CROSS,    nullptr},         /* Library: X relaunches */
     {1718, 0,                 "game_relaunch"},
@@ -269,26 +270,29 @@ constexpr Step TOUR[] = {
     {2300, PSP_CTRL_RTRIGGER, nullptr},         /* T */
     {2310, PSP_CTRL_CROSS,    nullptr},
     {2380, 0,                 "t31_screenshot_fallback"},
-    /* Polish pass: Settings tabs, the Continue options popup, text-only. */
+    /* Polish pass: Settings categories, the Continue options popup, and
+     * text-only mode. */
     {2390, PSP_CTRL_CIRCLE,   nullptr},         /* Systems */
     {2430, PSP_CTRL_TRIANGLE, nullptr},         /* Settings */
     {2440, PSP_CTRL_RTRIGGER, nullptr},
     {2480, 0,                 "t32_settings_performance"},
     {2490, PSP_CTRL_RTRIGGER, nullptr},
-    {2530, 0,                 "t33_settings_system"},
-    {2540, PSP_CTRL_UP,       nullptr},
-    {2550, PSP_CTRL_UP,       nullptr},
-    {2560, PSP_CTRL_UP,       nullptr},         /* tab bar */
-    {2590, 0,                 "t34_settings_tabbar"},
-    {2600, PSP_CTRL_LEFT,     nullptr},
-    {2610, PSP_CTRL_LEFT,     nullptr},         /* Appearance */
-    {2620, PSP_CTRL_DOWN,     nullptr},         /* Theme */
-    {2630, PSP_CTRL_DOWN,     nullptr},
-    {2640, PSP_CTRL_DOWN,     nullptr},
-    {2650, PSP_CTRL_DOWN,     nullptr},         /* Artwork */
-    {2660, PSP_CTRL_RIGHT,    nullptr},         /* Text only */
+    {2500, PSP_CTRL_RTRIGGER, nullptr},
+    {2510, PSP_CTRL_RTRIGGER, nullptr},         /* About */
+    {2540, 0,                 "t33_settings_about"},
+    {2550, PSP_CTRL_LTRIGGER, nullptr},
+    {2560, PSP_CTRL_LTRIGGER, nullptr},
+    {2570, PSP_CTRL_LTRIGGER, nullptr},
+    {2580, PSP_CTRL_LTRIGGER, nullptr},         /* Appearance */
+    {2590, PSP_CTRL_CROSS,    nullptr},         /* into the panel */
+    {2600, PSP_CTRL_DOWN,     nullptr},
+    {2610, PSP_CTRL_DOWN,     nullptr},
+    {2620, PSP_CTRL_DOWN,     nullptr},         /* Artwork */
+    {2630, 0,                 "t34_settings_panel"},
+    {2640, PSP_CTRL_RIGHT,    nullptr},         /* Text only */
     {2690, 0,                 "t35_settings_textonly"},
-    {2700, PSP_CTRL_CIRCLE,   nullptr},         /* Systems */
+    {2700, PSP_CTRL_CIRCLE,   nullptr},         /* sidebar */
+    {2710, PSP_CTRL_CIRCLE,   nullptr},         /* Systems */
     {2740, PSP_CTRL_CROSS,    nullptr},         /* Library, text only */
     {2780, 0,                 "t36_library_textonly"},
     {2790, PSP_CTRL_CIRCLE,   nullptr},
@@ -298,11 +302,12 @@ constexpr Step TOUR[] = {
     {2880, PSP_CTRL_CIRCLE,   nullptr},
     {2890, PSP_CTRL_DOWN,     nullptr},         /* Systems */
     {2900, PSP_CTRL_TRIANGLE, nullptr},         /* Settings: artwork back on */
-    {2930, PSP_CTRL_DOWN,     nullptr},
+    {2930, PSP_CTRL_CROSS,    nullptr},
     {2940, PSP_CTRL_DOWN,     nullptr},
     {2950, PSP_CTRL_DOWN,     nullptr},
-    {2960, PSP_CTRL_RIGHT,    nullptr},
-    {2970, PSP_CTRL_CIRCLE,   nullptr},
+    {2960, PSP_CTRL_DOWN,     nullptr},
+    {2970, PSP_CTRL_RIGHT,    nullptr},
+    {2980, PSP_CTRL_START,    nullptr},
 };
 constexpr const Step* SCRIPT = TOUR;
 constexpr int STEPS = int(sizeof(TOUR) / sizeof(TOUR[0]));

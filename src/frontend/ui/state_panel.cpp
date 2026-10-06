@@ -57,7 +57,7 @@ void drawStatePanel(App& app, const StatePanel& panel, u32 alpha, float dy) {
             break;
         case StatePanel::Kind::Loading: {
             /* One square walks the mark's outer ring — branded, and alive. */
-            static const int RING[8] = {0, 2, 5, 7, 8, 6, 3, 1};
+            static const int RING[8] = {0, 1, 2, 5, 8, 7, 6, 3};
             const int step = int(app.time() * 10.f) % 8;
             markIcon(r, CX, icy, fade(pal.surface2, alpha),
                      fade(pal.focusEdge, alpha),

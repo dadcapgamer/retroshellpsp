@@ -2,40 +2,41 @@
 
 ## Unreleased — Visual polish
 
-Brings the whole shell to `RetroShell_Modern_PSP_Visual_Polish_Guide.md`:
-one design language on every screen, built for 480×272 and the PSP's
-rendering budget (flat surfaces, no blur, no shadows, no glow).
+Brings the whole shell to `RetroShell_Modern_PSP_Visual_Polish_Guide.md` and
+its concept board: one design language on every screen, built for 480×272
+and the PSP's rendering budget (flat surfaces, no blur, no shadows, no glow).
 
 - **Deep navy is the default theme** (`#081828` field, two raised surfaces);
-  Light is retuned to the same roles and contrast steps. Five accents; the
-  accent means focus and nothing else.
-- **Two type roles.** Inter for content — game titles, system names, actions,
-  settings — and Geist Pixel only for technical text: wordmark, clock and
-  battery, badges, counts, section labels and the legend. Labels centre on
+  Light is retuned to the same roles and contrast steps. Five accents; blue
+  marks focus.
+- **One typeface, IBM Plex Mono**, in SemiBold and Regular, with tracked
+  uppercase for the wordmark, system names and pane titles. Labels centre on
   their cap height, so every row and chip sits on whole pixels.
-- **One header and one footer everywhere**: the RetroShell mark and wordmark
-  with an optional context (LIBRARY, GAME, SETTINGS, SETUP, PAUSED), clock and
-  battery right; a quiet, left-flowing legend. Scan progress lives in the
-  header; toasts are a small pill above the legend that never covers a list.
-- **One focus language**: accent fill for rows and menus, accent underline for
-  the system rail and tabs, accent frame for cards.
-- **Systems**: selected slot in a small flat container with an underline;
-  neighbours smaller and quieter; the name crossfades on a switch.
-- **Continue Playing** shows exactly three cards with system chip, title and
-  relative time.
-- **Library**: X now plays (Game Details is the second row of Options);
-  compact rows; a preview with contain-fit art, at most three chips and one
-  quiet line of what is known.
+- **One header and one footer everywhere**: the 3×3 dot mark and RETROSHELL
+  wordmark, clock and battery; a legend in equal columns across the width.
+  Scan progress lives in the header; toasts are a small pill above the legend.
+- **Systems**: the selected system sits in a framed card; the name is set
+  large and tracked, and crossfades on a switch.
+- **Continue Playing** shows exactly three bordered cards: artwork, system
+  chip, title and "Last played".
+- **Library**: a 24 px thumbnail (or console glyph) per row, hairlines
+  between rows, a chevron on the focused one; a framed preview with chips and
+  a size line. X now plays (Game Details is the second row of Options).
+- **Thumbnails** are built in the background from covers and screenshots,
+  cached per system in `RETROSHELL/cache/thumbs/`, and loaded off the main
+  thread, so scrolling never reads the Memory Stick.
 - **Branded artwork fallback**: pattern, RetroShell mark, system icon and
   abbreviation at every size — never an empty frame.
-- **Game Detail**: one dominant Play control showing the emulator it will use;
-  Cheats and View Manual are no longer offered (no data exists for them).
-- **Settings** in three tabs (Appearance, Performance, System) with labelled
-  sections and an About block for the build details.
+- **Game Detail**: framed art and description box; icon action rows with Play
+  first, showing the emulator it will use. Cheats and View Manual are not
+  offered (no data exists for them).
+- **Settings**: a sidebar (Appearance, Performance, Audio, Library, About)
+  beside a panel of that category's rows; About carries the build details.
 - Setup, empty, loading and error states, the in-game pause menu and every
-  popup use the same panels, rows and type.
-- Font atlases cut from 278 KB to 208 KB; the boot scene now draws the
-  embedded splash instead of a 26 px atlas. Startup arena: 17,071 KB.
+  popup use the same cards, rows, chips and type; 11×11 pixel icons
+  throughout.
+- Font atlases cut from 278 KB to 155 KB; the boot scene draws the embedded
+  splash instead of a 26 px atlas. Startup arena: 17,099 KB.
 
 ## Unreleased — Maturity pass
 

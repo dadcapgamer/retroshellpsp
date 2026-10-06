@@ -32,12 +32,14 @@ add_executable(retrosuite
   frontend/ui/text_layout.cpp
   frontend/ui/state_panel.cpp
   frontend/ui/chrome.cpp
+  frontend/ui/icons.cpp
   frontend/themes/palette.cpp
   frontend/themes/theme.cpp
   frontend/database/game_index.cpp
   frontend/database/rom_scanner.cpp
   frontend/database/library.cpp
   frontend/database/metadata.cpp
+  frontend/database/thumb_cache.cpp
   frontend/scenes/boot_scene.cpp
   frontend/scenes/home_scene.cpp
   frontend/scenes/setup_scene.cpp
@@ -91,26 +93,34 @@ rs_embed_assets(retrosuite
   ${CMAKE_SOURCE_DIR}/assets/fonts/font_body_strong.rsf
   ${CMAKE_SOURCE_DIR}/assets/fonts/font_body.rsf
   ${CMAKE_SOURCE_DIR}/assets/fonts/font_small.rsf
-  ${CMAKE_SOURCE_DIR}/assets/fonts/font_pixel_small.rsf
-  ${CMAKE_SOURCE_DIR}/assets/fonts/font_pixel_tiny.rsf
+  ${CMAKE_SOURCE_DIR}/assets/fonts/font_tiny.rsf
   ${CMAKE_SOURCE_DIR}/assets/SPLASH.PNG
   ${CMAKE_SOURCE_DIR}/assets/branding/retroshell-logo-light-2x.png
+  ${CMAKE_SOURCE_DIR}/assets/icons/consoles/game-boy-24.png
   ${CMAKE_SOURCE_DIR}/assets/icons/consoles/game-boy-48.png
   ${CMAKE_SOURCE_DIR}/assets/icons/consoles/game-boy-64.png
+  ${CMAKE_SOURCE_DIR}/assets/icons/consoles/game-boy-color-24.png
   ${CMAKE_SOURCE_DIR}/assets/icons/consoles/game-boy-color-48.png
   ${CMAKE_SOURCE_DIR}/assets/icons/consoles/game-boy-color-64.png
+  ${CMAKE_SOURCE_DIR}/assets/icons/consoles/game-boy-advance-24.png
   ${CMAKE_SOURCE_DIR}/assets/icons/consoles/game-boy-advance-48.png
   ${CMAKE_SOURCE_DIR}/assets/icons/consoles/game-boy-advance-64.png
+  ${CMAKE_SOURCE_DIR}/assets/icons/consoles/nes-24.png
   ${CMAKE_SOURCE_DIR}/assets/icons/consoles/nes-48.png
   ${CMAKE_SOURCE_DIR}/assets/icons/consoles/nes-64.png
+  ${CMAKE_SOURCE_DIR}/assets/icons/consoles/snes-24.png
   ${CMAKE_SOURCE_DIR}/assets/icons/consoles/snes-48.png
   ${CMAKE_SOURCE_DIR}/assets/icons/consoles/snes-64.png
+  ${CMAKE_SOURCE_DIR}/assets/icons/consoles/megadrive-24.png
   ${CMAKE_SOURCE_DIR}/assets/icons/consoles/megadrive-48.png
   ${CMAKE_SOURCE_DIR}/assets/icons/consoles/megadrive-64.png
+  ${CMAKE_SOURCE_DIR}/assets/icons/consoles/master-system-24.png
   ${CMAKE_SOURCE_DIR}/assets/icons/consoles/master-system-48.png
   ${CMAKE_SOURCE_DIR}/assets/icons/consoles/master-system-64.png
+  ${CMAKE_SOURCE_DIR}/assets/icons/consoles/game-gear-24.png
   ${CMAKE_SOURCE_DIR}/assets/icons/consoles/game-gear-48.png
   ${CMAKE_SOURCE_DIR}/assets/icons/consoles/game-gear-64.png
+  ${CMAKE_SOURCE_DIR}/assets/icons/consoles/pc-engine-24.png
   ${CMAKE_SOURCE_DIR}/assets/icons/consoles/pc-engine-48.png
   ${CMAKE_SOURCE_DIR}/assets/icons/consoles/pc-engine-64.png
   ${CMAKE_SOURCE_DIR}/assets/icons/controls/control-cross-24.png

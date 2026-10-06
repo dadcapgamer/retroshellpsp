@@ -240,31 +240,24 @@ int main(int argc, char** argv) {
     const char* out = argv[2];
     char ttf[1024], rsf[1024];
 
-    /* Two type roles (see docs/ARCHITECTURE.md, "Typography"):
-     *   Inter        content — game titles, system names, actions, labels
-     *   Geist Pixel  technical — wordmark, status, badges, counts, legend
-     * Every atlas is embedded in the EBOOT and so comes straight out of the
-     * core arena; add a size only when a role needs it. */
-    snprintf(ttf, sizeof ttf, "%s/Inter-SemiBold.ttf", fdir);
+    /* One family, IBM Plex Mono, in two weights (see docs/ARCHITECTURE.md,
+     * "Typography"). Every atlas is embedded in the EBOOT and so comes
+     * straight out of the core arena; add a size only when a role needs it. */
+    snprintf(ttf, sizeof ttf, "%s/IBMPlexMono-SemiBold.ttf", fdir);
     snprintf(rsf, sizeof rsf, "%s/fonts/font_display.rsf", out);
     bake_font(ttf, 18, rsf);          /* Home system name, Detail title */
     snprintf(rsf, sizeof rsf, "%s/fonts/font_title.rsf", out);
-    bake_font(ttf, 15, rsf);          /* pane titles, state titles */
+    bake_font(ttf, 15, rsf);          /* wordmark, pane and state titles */
     snprintf(rsf, sizeof rsf, "%s/fonts/font_body_strong.rsf", out);
-    bake_font(ttf, 13, rsf);          /* focused rows, Play, active tab */
+    bake_font(ttf, 13, rsf);          /* focused rows, card titles */
 
-    snprintf(ttf, sizeof ttf, "%s/Inter-Regular.ttf", fdir);
+    snprintf(ttf, sizeof ttf, "%s/IBMPlexMono-Regular.ttf", fdir);
     snprintf(rsf, sizeof rsf, "%s/fonts/font_body.rsf", out);
     bake_font(ttf, 13, rsf);          /* list rows, actions, settings */
     snprintf(rsf, sizeof rsf, "%s/fonts/font_small.rsf", out);
-    bake_font(ttf, 11, rsf);          /* metadata, descriptions */
-
-    /* Geist Pixel, monospaced (fixed advance, glyph centred in its cell). */
-    snprintf(ttf, sizeof ttf, "%s/GeistPixel-Square.ttf", fdir);
-    snprintf(rsf, sizeof rsf, "%s/fonts/font_pixel_small.rsf", out);
-    bake_font_ex(ttf, 12, 7, rsf);    /* wordmark, status, counts */
-    snprintf(rsf, sizeof rsf, "%s/fonts/font_pixel_tiny.rsf", out);
-    bake_font_ex(ttf, 10, 6, rsf);    /* badges, section labels, legend */
+    bake_font(ttf, 11, rsf);          /* metadata, status, counts */
+    snprintf(rsf, sizeof rsf, "%s/fonts/font_tiny.rsf", out);
+    bake_font(ttf, 10, rsf);          /* chips, section labels, legend */
 
     if (!fonts_only) make_pbp_art(out);
     return 0;

@@ -4,9 +4,9 @@ RetroShell's frontend is MIT-licensed. Emulator cores remain under their
 upstream licenses; the release archive includes the corresponding retained
 license text for every PRX.
 
-The interface includes Geist Pixel Square by the Geist Project Authors,
-licensed under the SIL Open Font License 1.1. The complete license is stored
-at `assets/fonts/OFL-Geist.txt`.
+The interface is set in IBM Plex Mono, Copyright © 2017 IBM Corp., licensed
+under the SIL Open Font License 1.1. The complete license is stored at
+`assets/fonts/OFL-IBMPlexMono.txt`.
 
 | Core | Upstream | License |
 |---|---|---|

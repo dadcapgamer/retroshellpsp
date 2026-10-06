@@ -2,6 +2,7 @@
 
 #include "frontend/app.h"
 #include "frontend/database/systems.h"
+#include "frontend/ui/icons.h"
 
 namespace rs::ui {
 
@@ -96,24 +97,27 @@ void focusFrame(App& app, float x, float y, float w, float h, u32 alpha) {
 
 void label(App& app, float x, float y, const char* text, u32 color,
            text::Align align) {
-    app.fonts().monoTiny.draw(app.renderer(), x, y, text, color, align);
+    app.fonts().tiny.draw(app.renderer(), x, y, text, color, align, 1.f);
 }
 
 float chipWidth(App& app, const char* text) {
-    return px(app.fonts().monoTiny.measure(text)) + 10.f;
+    return px(app.fonts().tiny.measure(text)) + 12.f;
 }
 
 float chip(App& app, float x, float y, const char* text, u32 alpha,
-           bool onAccent) {
+           bool system) {
     auto& r = app.renderer();
     const auto& pal = app.pal();
-    const auto& font = app.fonts().monoTiny;
+    const auto& font = app.fonts().tiny;
     const float w = chipWidth(app, text);
-    pixelRect(r, x, y, w, CHIP_H, 2,
-              fade(onAccent ? rsWithAlpha(pal.onAccent, 48) : pal.surface2,
-                   alpha));
-    font.draw(r, px(x) + 5.f, font.centerY(px(y), CHIP_H), text,
-              fade(onAccent ? pal.onAccent : pal.textSecondary, alpha));
+    if (system) {
+        pixelRect(r, x, y, w, CHIP_H, 2, fade(pal.focusEdge, alpha));
+    } else {
+        pixelRect(r, x, y, w, CHIP_H, 2, fade(pal.surface2, alpha));
+        pixelFrame(r, x, y, w, CHIP_H, 1, 2, fade(pal.line, alpha));
+    }
+    font.draw(r, px(x) + 6.f, font.centerY(px(y), CHIP_H), text,
+              fade(system ? pal.bg : pal.textSecondary, alpha));
     return w;
 }
 
@@ -126,11 +130,10 @@ float brandMarkSize(int dot) { return float(dot * 5); }
 void brandMark(gfx::Renderer& r, float x, float y, int dot, u32 color,
                unsigned skip) {
     x = px(x); y = px(y);
-    const float d = float(dot);
+    const float d = float(dot), pitch = float(dot * 2);
     for (int i = 0; i < BRAND_CELLS; i++) {
         if ((skip >> i) & 1u) continue;
-        r.rect(x + float(BRAND_CELL[i][0]) * d, y + float(BRAND_CELL[i][1]) * d,
-               d, d, color);
+        r.rect(x + float(i % 3) * pitch, y + float(i / 3) * pitch, d, d, color);
     }
 }
 
@@ -152,37 +155,72 @@ void panel(App& app, float x, float y, float w, float h, u32 alpha) {
     pixelFrame(r, x, y, w, h, 1, 3, fade(pal.line, alpha));
 }
 
+void card(App& app, float x, float y, float w, float h, u32 alpha) {
+    auto& r = app.renderer();
+    const auto& pal = app.pal();
+    pixelRect(r, x, y, w, h, 3, fade(pal.surface, alpha));
+    pixelFrame(r, x, y, w, h, 1, 3, fade(pal.line, alpha));
+}
+
+void rowRule(App& app, float x, float y, float w, u32 alpha) {
+    app.renderer().rect(px(x) + 6.f, px(y), px(w) - 12.f, 1.f,
+                        fade(app.pal().line, alpha));
+}
+
 void menuRow(App& app, float x, float y, float w, float h, const char* text,
              const char* value, const RowStyle& style, u32 alpha) {
     auto& r = app.renderer();
     const auto& pal = app.pal();
     const auto& fonts = app.fonts();
     const bool focused = style.focused;
-    if (focused) focusFill(app, x, y, w, h, alpha);
+    const bool hard = focused && !style.soft;     /* accent focus */
+    if (hard) focusFill(app, x, y, w, h, alpha);
+    else if (focused) pixelRect(r, x, y, w, h, 2, fade(pal.surface2, alpha));
     const text::Font& face =
-        (focused || style.strong) ? fonts.bodyStrong : fonts.body;
-    u32 ink = focused ? pal.onAccent : pal.textPrimary;
-    if (style.disabled) ink = focused ? rsWithAlpha(pal.onAccent, 170)
-                                      : pal.textDisabled;
-    face.draw(r, px(x) + 10.f, face.centerY(y, h), text, fade(ink, alpha));
+        (hard || style.strong) ? fonts.bodyStrong : fonts.body;
+    u32 ink = hard ? pal.onAccent : pal.textPrimary;
+    if (style.disabled) ink = hard ? rsWithAlpha(pal.onAccent, 170)
+                                   : pal.textDisabled;
+    const float cy = px(y) + float(int(h) / 2);
+    float tx = px(x) + 10.f;
+    if (style.icon >= 0) {
+        icon(r, Icon(style.icon), tx, cy - 5.f,
+             fade(hard ? pal.onAccent
+                       : style.disabled ? pal.textDisabled : pal.textSecondary,
+                  alpha));
+        tx += ICON_SIZE + 9.f;
+    }
+    face.draw(r, tx, face.centerY(y, h), text, fade(ink, alpha));
+
+    float right = px(x + w) - 10.f;
+    const u32 vink = hard ? pal.onAccent
+                   : style.disabled ? pal.textDisabled
+                   : focused ? pal.textPrimary : pal.textSecondary;
+    if (style.chevron && hard) {
+        prim::chevron(r, prim::Dir::Right, right - 2.f, cy, 4.f, 1.5f,
+                      fade(pal.onAccent, alpha));
+        right -= 14.f;
+    }
     if (!value || !*value) return;
 
-    const auto& vf = fonts.mono;
-    const u32 vink = focused ? pal.onAccent
-                   : style.disabled ? pal.textDisabled : pal.textSecondary;
-    float right = px(x + w) - 10.f;
-    const float cy = px(y) + float(int(h) / 2);
+    const auto& vf = fonts.body;
     const bool arrows = style.adjustable && focused;
     if (arrows) {
+        /* ‹ value ›: the value centred between fixed arrows, so it does not
+         * jump as its width changes. */
+        constexpr float SPAN = 104.f;
+        const float left = right - SPAN;
+        prim::chevron(r, prim::Dir::Left, left + 2.f, cy, 3.f, 1.5f,
+                      fade(vink, alpha));
         prim::chevron(r, prim::Dir::Right, right - 2.f, cy, 3.f, 1.5f,
                       fade(vink, alpha));
-        right -= 12.f;
+        vf.draw(r, left + SPAN * .5f, vf.centerY(y, h), value,
+                fade(vink, alpha), text::Align::Center);
+        return;
     }
-    vf.draw(r, right, vf.centerY(y, h), value, fade(vink, alpha),
-            text::Align::Right);
-    if (arrows)
-        prim::chevron(r, prim::Dir::Left, right - vf.measure(value) - 8.f, cy,
-                      3.f, 1.5f, fade(vink, alpha));
+    vf.draw(r, style.adjustable ? right - 52.f : right, vf.centerY(y, h), value,
+            fade(vink, alpha),
+            style.adjustable ? text::Align::Center : text::Align::Right);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -215,27 +253,33 @@ void artFallback(App& app, int systemId, float x, float y, float w, float h,
     r.rect(x, y, w, h, fade(pal.surface2, alpha));
     prim::dotField(r, x, y, w, h, fade(pal.pattern, alpha));
 
-    /* Brand line along the top edge on the single, larger previews; small
-     * tiles that repeat in a row keep only the mark. */
-    if (w >= 104.f && h >= 80.f) brandMark(r, x + 8.f, y + 8.f, 1,
-                                          fade(pal.textMuted, alpha));
-    if (w >= 140.f && h >= 100.f) {
-        fonts.monoTiny.draw(r, x + 18.f, fonts.monoTiny.centerY(y + 7.f, 7.f),
-                            "RETROSHELL", fade(pal.textMuted, alpha));
+    /* Brand line, centred along the top: mark + RETROSHELL on the larger
+     * previews, the mark alone on small tiles. */
+    const bool large = w >= 140.f && h >= 100.f;
+    const float brandY = y + (large ? 10.f : 8.f);
+    if (w >= 96.f) {
+        const char* word = "RETROSHELL";
+        const float ww = large ? fonts.tiny.measure(word, 1.f) + 9.f : 0.f;
+        const float bx = px(x + (w - (5.f + ww)) * .5f);
+        brandMark(r, bx, brandY + 1.f, 1, fade(pal.textSecondary, alpha));
+        if (large)
+            fonts.tiny.draw(r, bx + 9.f, fonts.tiny.centerY(brandY, 7.f), word,
+                            fade(pal.textSecondary, alpha), text::Align::Left,
+                            1.f);
     }
 
     const float icon = h >= 112.f && w >= 96.f ? 64.f : 48.f;
     const char* badge = db::systemInfo(db::System(systemId)).badge;
-    const bool withBadge = h >= icon + 30.f;
-    const float block = icon + (withBadge ? 16.f : 0.f);
-    const float iy = px(y + (h - block) * .5f + (w >= 104.f ? 3.f : 0.f));
+    const bool withBadge = h >= icon + 34.f;
+    const float block = icon + (withBadge ? 18.f : 0.f);
+    const float iy = px(y + (h - block) * .5f + (w >= 96.f ? 4.f : 0.f));
     prim::iconSystem(r, systemId, x + px((w - icon) * .5f), iy, icon,
-                     rsWithAlpha(rsHex(0xFFFFFF), alpha * 235u / 255u),
-                     pal.accent);
+                     rsWithAlpha(rsHex(0xFFFFFF), alpha), pal.accent);
     if (withBadge)
-        fonts.monoTiny.draw(r, x + w * .5f, iy + icon + 6.f, badge,
-                            fade(pal.textSecondary, alpha),
-                            text::Align::Center);
+        fonts.bodyStrong.draw(r, x + w * .5f,
+                              fonts.bodyStrong.centerY(iy + icon + 6.f, 8.f),
+                              badge, fade(pal.textPrimary, alpha),
+                              text::Align::Center);
 }
 
 }  // namespace rs::ui

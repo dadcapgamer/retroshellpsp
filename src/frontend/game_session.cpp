@@ -1096,7 +1096,7 @@ void GameSession::drawMenu(App& app) {
     /* One dim over the frozen frame, then the shell's own chrome: the pause
      * menu is part of RetroShell, not a separate overlay style. */
     r.rect(0, 0, RS_SCREEN_W, RS_SCREEN_H, rsWithAlpha(pal.bg, u32(k * 200.f)));
-    app.drawTopBar("PAUSED", a);
+    app.drawTopBar(a);
 
     constexpr int VISIBLE = PAUSE_VISIBLE_ROWS;
     constexpr float HEAD = 36.f;
@@ -1104,9 +1104,9 @@ void GameSession::drawMenu(App& app) {
     const float py = L::CONTENT_TOP + ui::snap((1.f - k) * 6.f);
     const float ph = HEAD + L::ROW_H * float(VISIBLE) + 6.f;
     ui::panel(app, px, py, pw, ph, a);
-    ui::label(app, px + 10.f, fonts.monoTiny.centerY(py + 9.f, 6.f), "PAUSED",
+    ui::label(app, px + 10.f, fonts.tiny.centerY(py + 9.f, 6.f), "PAUSED",
               fade(pal.textMuted, a));
-    ui::label(app, px + pw - 10.f, fonts.monoTiny.centerY(py + 9.f, 6.f),
+    ui::label(app, px + pw - 10.f, fonts.tiny.centerY(py + 9.f, 6.f),
               db::systemInfo(m_game.system).badge, fade(pal.textMuted, a),
               text::Align::Right);
     ui::drawEllipsized(fonts.bodyStrong, r, px + 10.f,
@@ -1123,18 +1123,16 @@ void GameSession::drawMenu(App& app) {
         char value[32] = "";
         bool adjustable = false;
         if (i == RS_PAUSE_SAVE_STATE || i == RS_PAUSE_LOAD_STATE) {
-            std::snprintf(value, sizeof value, "SLOT %d%s", m_slot + 1,
-                          m_slots[m_slot].exists ? "" : " \xC2\xB7 EMPTY");
+            std::snprintf(value, sizeof value, "Slot %d%s", m_slot + 1,
+                          m_slots[m_slot].exists ? "" : " \xC2\xB7 Empty");
             adjustable = true;
         } else if (i == RS_PAUSE_ASPECT_RATIO) {
             std::snprintf(value, sizeof value, "%s",
                           scaleDisplayName(m_scaleMode));
-            for (char* c = value; *c; ++c)
-                if (*c >= 'a' && *c <= 'z') *c = char(*c - 32);
             adjustable = true;
         } else if (i == RS_PAUSE_FILTER) {
             std::snprintf(value, sizeof value, "%s",
-                          m_nearestFilter ? "SHARP" : "SMOOTH");
+                          m_nearestFilter ? "Sharp" : "Smooth");
             adjustable = true;
         }
         ui::RowStyle style;
@@ -1169,7 +1167,7 @@ void GameSession::drawMenu(App& app) {
             ui::panel(app, tx, ty, TW + 20.f, TH + 34.f, a);
             char cap[24];
             std::snprintf(cap, sizeof cap, "SLOT %d", m_slot + 1);
-            ui::label(app, tx + 10.f, fonts.monoTiny.centerY(ty + 9.f, 6.f), cap,
+            ui::label(app, tx + 10.f, fonts.tiny.centerY(ty + 9.f, 6.f), cap,
                       fade(pal.textMuted, a));
             r.sprite(m_thumbTex, 0, 0, save::THUMB_W, save::THUMB_H, tx + 10.f,
                      ty + 24.f, TW, TH, rsHex(0xFFFFFF, a));
@@ -1189,7 +1187,7 @@ void GameSession::draw(App& app) {
 
     if (m_state == State::Failed) {
         app.drawBackground();
-        app.drawTopBar("GAME");
+        app.drawTopBar();
         const launch::Notice notice = launch::classify(m_error);
         const launch::Action action = failureAction(app);
         ui::StatePanel panel;

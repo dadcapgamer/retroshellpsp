@@ -19,7 +19,8 @@ public:
     bool load(const void* data, u32 size);
     void unload();
 
-    float measure(const char* text) const;
+    /* `tracking` adds that many pixels between glyphs (uppercase labels). */
+    float measure(const char* text, float tracking = 0.f) const;
     float ascent() const     { return float(m_ascent); }
     float lineHeight() const { return float(m_lineHeight); }
     /* Height of a capital and its offset below the line-box top, measured
@@ -34,7 +35,7 @@ public:
 
     /* (x,y) is the TOP-left of the line box. */
     void draw(gfx::Renderer& r, float x, float y, const char* text, u32 color,
-              Align align = Align::Left) const;
+              Align align = Align::Left, float tracking = 0.f) const;
     /* One-pixel faux bold: the pixel face has a single weight, so titles and
      * selected rows double-strike one pixel to the right. */
     void drawBold(gfx::Renderer& r, float x, float y, const char* text,
