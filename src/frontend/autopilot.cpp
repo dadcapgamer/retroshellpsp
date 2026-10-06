@@ -82,6 +82,14 @@ constexpr Step GAME_SCRIPT[] = {
     {1500, PSP_CTRL_CROSS,    nullptr},         /* open Library */
     {1516, PSP_CTRL_CROSS,    nullptr},         /* Library: X relaunches */
     {1718, 0,                 "game_relaunch"},
+    /* A state saved in the first session must load in a fresh one: the
+     * common real-world case (save, quit, come back, load). */
+    {1730, PSP_CTRL_LTRIGGER | PSP_CTRL_RTRIGGER | PSP_CTRL_SELECT,
+                                    nullptr},   /* open frontend menu */
+    {1740, PSP_CTRL_DOWN,     nullptr},
+    {1750, PSP_CTRL_DOWN,     nullptr},         /* Load state */
+    {1760, PSP_CTRL_CROSS,    nullptr},
+    {1900, 0,                 "relaunch_state"},
 };
 #if defined(RS_AUTOPILOT_SETUP)
 /* First-run setup capture. Mode 1 has games and two emulators for GBC (the

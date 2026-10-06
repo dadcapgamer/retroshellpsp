@@ -167,8 +167,11 @@ bool loadState(const db::GameEntry& game, EmulatorCore& core, int slot) {
     const s32 fileSize = fs::fileSize(path);
     const u32 maxFileBytes = MAX_STATE_BYTES + 64u * 1024u;
     if (fileSize < s32(sizeof(StateHeader)) ||
-        fileSize > s32(maxFileBytes))
+        fileSize > s32(maxFileBytes)) {
+        RS_LOGW("save: state slot %d unusable size %d (%s)", slot,
+                int(fileSize), path);
         return false;
+    }
 
     const RSHostAPI* services = host::table();
     ScopedHostBuffer file(services, u32(fileSize));
@@ -183,14 +186,23 @@ bool loadState(const db::GameEntry& game, EmulatorCore& core, int slot) {
 
     StateHeader h{};
     std::memcpy(&h, file.data(), sizeof h);
-    if (h.magic != STATE_MAGIC || h.version != STATE_VERSION) return false;
-    if (!h.payloadSize || h.payloadSize > MAX_STATE_BYTES) return false;
-    if (!((h.thumbW == 0 && h.thumbH == 0) ||
-          (h.thumbW == THUMB_W && h.thumbH == THUMB_H)))
+    if (h.magic != STATE_MAGIC || h.version != STATE_VERSION) {
+        RS_LOGW("save: state slot %d bad header (magic %08x, version %u)",
+                slot, unsigned(h.magic), unsigned(h.version));
         return false;
+    }
+    if (!h.payloadSize || h.payloadSize > MAX_STATE_BYTES ||
+        !((h.thumbW == 0 && h.thumbH == 0) ||
+          (h.thumbW == THUMB_W && h.thumbH == THUMB_H))) {
+        RS_LOGW("save: state slot %d bad layout (payload %u, thumb %ux%u)",
+                slot, unsigned(h.payloadSize), unsigned(h.thumbW),
+                unsigned(h.thumbH));
+        return false;
+    }
     h.coreName[sizeof h.coreName - 1] = 0;   /* a corrupt field may lack NUL */
     if (std::strncmp(h.coreName, core.name(), sizeof h.coreName) != 0) {
-        RS_LOGW("save: state belongs to core '%s'", h.coreName);
+        RS_LOGW("save: state belongs to core '%s', running '%s'", h.coreName,
+                core.name());
         return false;
     }
     /* Validate header fields with overflow-safe arithmetic: payloadSize and
@@ -199,19 +211,37 @@ bool loadState(const db::GameEntry& game, EmulatorCore& core, int slot) {
     const size_t total = size_t(fileSize);
     const size_t thumbBytes = size_t(h.thumbW) * h.thumbH * 2;
     const size_t off = sizeof h + thumbBytes;
-    if (off < sizeof h || off > total) return false;          /* thumb overflow */
-    if (h.payloadSize > total - off) return false;            /* payload overflow */
+    if (off < sizeof h || off > total ||                      /* thumb overflow */
+        h.payloadSize > total - off) {                        /* payload overflow */
+        RS_LOGW("save: state slot %d truncated (%u of %u payload bytes)", slot,
+                unsigned(off <= total ? total - off : 0),
+                unsigned(h.payloadSize));
+        return false;
+    }
     /* A rejecting core may already have consumed part of the input. Keep a
      * rollback snapshot in the session arena so an incompatible state cannot
      * leave the running game half-modified. */
     const u32 rollbackCapacity = core.stateSize();
-    if (!rollbackCapacity || rollbackCapacity > MAX_STATE_BYTES) return false;
+    if (!rollbackCapacity || rollbackCapacity > MAX_STATE_BYTES) {
+        RS_LOGW("save: state slot %d core reports state size %u", slot,
+                unsigned(rollbackCapacity));
+        return false;
+    }
+    if (rollbackCapacity != h.payloadSize)
+        RS_LOGW("save: state slot %d size differs (file %u, core %u)", slot,
+                unsigned(h.payloadSize), unsigned(rollbackCapacity));
     void* rollback = services->mem_alloc(rollbackCapacity, 16);
-    if (!rollback) return false;
+    if (!rollback) {
+        RS_LOGE("save: no arena space for a %u-byte rollback",
+                unsigned(rollbackCapacity));
+        return false;
+    }
     RS_LOGI("save: state slot %d capturing rollback (%u bytes)", slot,
             unsigned(rollbackCapacity));
     const int rollbackSize = core.stateSave(rollback, rollbackCapacity);
     if (rollbackSize <= 0 || u32(rollbackSize) > rollbackCapacity) {
+        RS_LOGW("save: state slot %d rollback capture failed (%d)", slot,
+                rollbackSize);
         services->mem_free(rollback);
         return false;
     }
