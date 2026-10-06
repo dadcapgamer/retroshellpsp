@@ -13,6 +13,7 @@
 #include "runtime/save_manager.h"
 
 #include <pspctrl.h>
+#include <pspgu.h>
 
 #include <algorithm>
 #include <cmath>
@@ -208,14 +209,24 @@ void HomeScene::enter(App& app) {
     }
 }
 
-void HomeScene::shutdown(App& app) { app.library().flush(); }
+void HomeScene::shutdown(App& app) {
+    closeStates();
+    app.library().flush();
+}
 
 void HomeScene::rebuildSystems(App& app) {
     m_systems.clear();
-    for (int s = 0; s < db::SYSTEM_COUNT; s++)
-        if (!app.index().games(db::System(s)).empty()) m_systems.push_back(s);
+    bool anyGames = false;
+    for (int s = 0; s < db::SYSTEM_COUNT; s++) {
+        if (app.index().games(db::System(s)).empty()) continue;
+        anyGames = true;
+        /* Systems turned off in Settings → Systems stay indexed but hidden. */
+        if (cfg::systemEnabled(db::systemInfo(db::System(s)).coreId))
+            m_systems.push_back(s);
+    }
     /* No games at all is a real state with its own screen (scanning / ROM
      * folder missing / nothing found), not a rail of empty systems. */
+    m_allHidden = anyGames && m_systems.empty();
     m_empty = m_systems.empty();
     m_romRootMissing = m_empty && !fs::exists(fs::ROM_ROOT) &&
                        !fs::exists("ms0:/roms");
@@ -275,7 +286,8 @@ void HomeScene::rebuildRecents(App& app) {
     m_recentsRevision = app.library().recentsRevision();
     for (u32 hash : app.library().recents()) {
         if (const db::GameEntry* game = app.index().byHash(hash))
-            m_recents.push_back(game);
+            if (cfg::systemEnabled(db::systemInfo(game->system).coreId))
+                m_recents.push_back(game);
         if (int(m_recents.size()) == RECENT_MAX) break;
     }
 }
@@ -442,6 +454,12 @@ void HomeScene::openDetail(App& app, const db::GameEntry& game) {
     m_detailRow = 0;
     m_detailExpanded = false;
     m_detailHasSave = save::hasAnySave(game);
+    closeStates();
+    /* Slot headers only (five small reads), for the Save States count. */
+    save::querySlots(game, m_stateSlots);
+    m_detailStateCount = 0;
+    for (const auto& slot : m_stateSlots)
+        if (slot.exists) m_detailStateCount++;
     if (!m_nav.openDetail()) return;
     m_trackedHash = game.pathHash;
     m_hydratedHash = 0;
@@ -502,6 +520,7 @@ void HomeScene::activateDetail(App& app, int row) {
     const db::GameEntry& game = m_detailGame;
     switch (row) {
         case DET_PLAY:     launch(app, game); break;
+        case DET_STATES:   openStates(app); break;
         case DET_FAVORITE: toggleFavorite(app, game); break;
         case DET_DETAILS:  m_detailExpanded = !m_detailExpanded; break;
         case DET_RETURN:   m_nav.back(); break;
@@ -597,6 +616,10 @@ void HomeScene::updateLibrary(App& app) {
 
 void HomeScene::updateDetail(App& app) {
     const auto& pad = app.pad();
+    if (m_states) {
+        updateStates(app, m_dt);
+        return;
+    }
     if (pad.navPressed(PSP_CTRL_UP) && m_detailRow > 0) m_detailRow--;
     if (pad.navPressed(PSP_CTRL_DOWN) && m_detailRow < DET_COUNT - 1)
         m_detailRow++;
@@ -613,6 +636,122 @@ void HomeScene::updateDetail(App& app) {
     if (pad.isPressed(PSP_CTRL_TRIANGLE) && m_detailExpanded && m_selMultiCore)
         openCorePicker(app, m_detailGame);
     if (pad.isPressed(PSP_CTRL_CROSS)) activateDetail(app, m_detailRow);
+}
+
+/* --- Save States (Game Detail) ------------------------------------------ */
+
+void HomeScene::openStates(App& app) {
+    (void)app;
+    save::querySlots(m_detailGame, m_stateSlots);   /* explicit action: one read */
+    m_states = true;
+    m_confirmStateDelete = false;
+    m_stateIdx = 0;
+    for (int i = 0; i < save::SLOTS; i++)
+        if (m_stateSlots[i].exists) { m_stateIdx = i; break; }
+    m_previewSlot = -1;
+    m_previewSettle = 0.f;                     /* first preview: immediately */
+}
+
+void HomeScene::closeStates() {
+    m_states = false;
+    gfx::Renderer::freeTexture(m_preview);
+    m_previewSlot = -1;
+}
+
+/* Reads the selected slot's preview: the full-size frame when the state was
+ * saved by this build, else the header's small thumbnail. Runs once per
+ * settled selection, never while the cursor is moving. */
+void HomeScene::loadStatePreview(App& app) {
+    (void)app;
+    gfx::Renderer::freeTexture(m_preview);
+    m_previewSlot = m_stateIdx;
+    m_previewW = m_previewH = 0;
+    m_previewLegacy = false;
+    if (!m_stateSlots[m_stateIdx].exists) return;
+    std::vector<u16> px;
+    int w = 0, h = 0;
+    if (save::loadPreview(m_detailGame, m_stateIdx, px, w, h)) {
+        if (gfx::Renderer::createTexture(m_preview, w, h, GU_PSM_5650, px.data(),
+                                         /*dynamic=*/true)) {
+            m_previewW = w;
+            m_previewH = h;
+        }
+        return;
+    }
+    static u16 thumb[save::THUMB_W * save::THUMB_H];
+    if (save::loadThumb(m_detailGame, m_stateIdx, thumb) &&
+        gfx::Renderer::createTexture(m_preview, save::THUMB_W, save::THUMB_H,
+                                     GU_PSM_5650, thumb, /*dynamic=*/true)) {
+        m_previewW = save::THUMB_W;
+        m_previewH = save::THUMB_H;
+        m_previewLegacy = true;
+    }
+}
+
+void HomeScene::updateStates(App& app, float dt) {
+    const auto& pad = app.pad();
+    const int prev = m_stateIdx;
+    if (pad.navPressed(PSP_CTRL_UP) && m_stateIdx > 0) m_stateIdx--;
+    if (pad.navPressed(PSP_CTRL_DOWN) && m_stateIdx < save::SLOTS - 1)
+        m_stateIdx++;
+    if (m_stateIdx != prev) {
+        m_confirmStateDelete = false;
+        m_previewSettle = SETTLE_SECONDS;
+    }
+    if (m_previewSlot != m_stateIdx) {
+        m_previewSettle -= dt;
+        if (m_previewSettle <= 0.f) loadStatePreview(app);
+    }
+
+    if (pad.isPressed(PSP_CTRL_CIRCLE)) {
+        closeStates();
+        return;
+    }
+    if (pad.isPressed(PSP_CTRL_START)) {
+        closeStates();
+        m_nav.home();
+        return;
+    }
+    const save::SlotInfo& slot = m_stateSlots[m_stateIdx];
+    if (pad.isPressed(PSP_CTRL_TRIANGLE) && slot.exists) {
+        if (!m_confirmStateDelete) {
+            m_confirmStateDelete = true;          /* second press deletes */
+        } else {
+            save::deleteState(m_detailGame, m_stateIdx);
+            m_confirmStateDelete = false;
+            save::querySlots(m_detailGame, m_stateSlots);
+            m_detailHasSave = save::hasAnySave(m_detailGame);
+            m_previewSlot = -1;
+            m_previewSettle = 0.f;
+            app.toast("State deleted");
+        }
+    }
+    if (pad.isPressed(PSP_CTRL_CROSS) && slot.exists) {
+        /* Resume with the emulator that wrote the state: states are
+         * core-specific, whatever the game's default is today. */
+        const CoreInfo* core = app.cores().find(slot.coreName);
+        if (!core || !core->serves(m_detailGame.system)) {
+            char msg[64];
+            std::snprintf(msg, sizeof msg, "%s is not installed", slot.coreName);
+            app.toast(msg);
+            return;
+        }
+        app.library().flush();
+        app.snapshot().layer = m_nav.layer;
+        app.snapshot().systemId = currentSystemId();
+        app.snapshot().continueIdx = m_nav.continueIdx;
+        app.snapshot().loadStateSlot = m_stateIdx;
+        const db::GameEntry game = m_detailGame;
+        closeStates();
+        app.launchGame(game, core);
+        /* GameSession consumes the request; a launch refused before any
+         * scene change must not leave it behind for the next game. */
+        char raw[96];
+        if (app.takeLaunchError(raw, sizeof raw)) {
+            app.snapshot().loadStateSlot = -1;
+            openError(app, game, raw);
+        }
+    }
 }
 
 void HomeScene::updateOptions(App& app) {
@@ -792,6 +931,7 @@ void HomeScene::updateSearch(App& app) {
 }
 
 void HomeScene::update(App& app, float dt) {
+    m_dt = dt;
     /* A finished background scan invalidates every held GameEntry*. */
     if (app.index().generation() != m_lastIndexGen) {
         const int previousSystem = currentSystemId();
@@ -959,6 +1099,12 @@ void HomeScene::drawSystems(App& app, u32 a, float dy) {
             std::snprintf(progress, sizeof progress, "%d files checked",
                           app.scanner().progress());
             panel.detail = progress;
+        } else if (m_allHidden) {
+            panel.kind = ui::StatePanel::Kind::Empty;
+            panel.title = "All systems are turned off";
+            panel.message = "Turn a system back on in Settings, under Systems.";
+            panel.actionLabel = "Settings";
+            panel.actionButton = ui::prim::Button::Triangle;
         } else if (m_romRootMissing) {
             panel.kind = ui::StatePanel::Kind::Empty;
             panel.title = "ROM folder not found";
@@ -1259,6 +1405,10 @@ void HomeScene::drawMetaLine(App& app, const db::GameEntry& g, float x,
 
 void HomeScene::drawDetail(App& app, u32 a, float dy) {
     if (a <= 2u) return;
+    if (m_states) {
+        drawStates(app, a, dy);
+        return;
+    }
     auto& r = app.renderer();
     const auto& pal = app.pal();
     const auto& fonts = app.fonts();
@@ -1347,12 +1497,17 @@ void HomeScene::drawDetail(App& app, u32 a, float dy) {
      * chevron. Play leads, in SemiBold, and names the emulator it will use. */
     const char* labels[DET_COUNT] = {
         "Play",
+        "Save States",
         favorite ? "Remove from Favorites" : "Add to Favorites",
         "Game Details",
         m_nav.detailFrom == nav::Layer::Continue ? "Return" : "Return to Library",
     };
-    const ui::Icon icons[DET_COUNT] = {ui::Icon::Play, ui::Icon::Star,
-                                       ui::Icon::Info, ui::Icon::Return};
+    const ui::Icon icons[DET_COUNT] = {ui::Icon::Play, ui::Icon::Stack,
+                                       ui::Icon::Star, ui::Icon::Info,
+                                       ui::Icon::Return};
+    char stateCount[16];
+    std::snprintf(stateCount, sizeof stateCount, "%d / %d", m_detailStateCount,
+                  save::SLOTS);
     for (int i = 0; i < DET_COUNT; i++) {
         const float ry = actionsY + float(i) * DETAIL_ROW;
         ui::RowStyle style;
@@ -1360,13 +1515,95 @@ void HomeScene::drawDetail(App& app, u32 a, float dy) {
         style.chevron = true;
         style.strong = i == DET_PLAY;
         style.icon = int(icons[i]);
-        const std::string core = i == DET_PLAY && m_selCore && m_selMultiCore
-                                     ? m_selCore->name : std::string();
+        std::string value;
+        if (i == DET_PLAY && m_selCore && m_selMultiCore) value = m_selCore->name;
+        if (i == DET_STATES) value = stateCount;
         ui::menuRow(app, DETAIL_X, ry, DETAIL_W, DETAIL_ROW, labels[i],
-                    core.empty() ? nullptr : core.c_str(), style, a);
+                    value.empty() ? nullptr : value.c_str(), style, a);
         if (!style.focused && i + 1 < DET_COUNT && i + 1 != m_detailRow)
             ui::rowRule(app, DETAIL_X, ry + DETAIL_ROW - 1.f, DETAIL_W, a);
     }
+}
+
+/* Save States: the selected slot's frame large on the left — 1:1 whenever
+ * it fits, so a GBA or Game Boy frame is pixel-exact — and the five slots on
+ * the right with when and with which emulator each was saved. */
+void HomeScene::drawStates(App& app, u32 a, float dy) {
+    auto& r = app.renderer();
+    const auto& pal = app.pal();
+    const auto& fonts = app.fonts();
+    constexpr float PX = L::MARGIN, PY = 34.f, PW = 272.f, PH = 204.f;
+    constexpr float LX = PX + PW + 12.f, LW = L::RIGHT - LX;
+    constexpr float SLOT_H = 32.f;
+
+    ui::card(app, PX, PY + dy, PW, PH, a);
+    const float ix = PX + 1.f, iy = PY + 1.f + dy, iw = PW - 2.f, ih = PH - 2.f;
+    const save::SlotInfo& sel = m_stateSlots[m_stateIdx];
+    if (m_preview.valid() && m_previewSlot == m_stateIdx && m_previewW > 0) {
+        r.rect(ix, iy, iw, ih, fade(rsHex(0x000000), a));
+        /* Largest whole-number scale that fits keeps pixels square and
+         * sharp; a frame larger than the well scales down smoothly. The old
+         * small thumbnails are enlarged in whole steps, nearest. */
+        float scale = std::floor(std::fmin(iw / float(m_previewW),
+                                           ih / float(m_previewH)));
+        const bool exact = scale >= 1.f;
+        if (!exact)
+            scale = std::fmin(iw / float(m_previewW), ih / float(m_previewH));
+        const float w = ui::snap(float(m_previewW) * scale);
+        const float h = ui::snap(float(m_previewH) * scale);
+        const gfx::TexFilter previous = r.texFilter();
+        r.setTexFilter(exact ? gfx::TexFilter::Nearest : gfx::TexFilter::Linear);
+        r.sprite(m_preview, 0.f, 0.f, float(m_previewW), float(m_previewH),
+                 ix + ui::snap((iw - w) * .5f), iy + ui::snap((ih - h) * .5f), w,
+                 h, rsWithAlpha(rsHex(0xFFFFFF), a));
+        r.setTexFilter(previous);
+        if (m_previewLegacy)
+            fonts.tiny.draw(r, ix + iw - 8.f, iy + ih - 14.f,
+                            "Small preview: saved by an older version",
+                            fade(pal.textMuted, a), text::Align::Right);
+    } else {
+        ui::artFallback(app, int(m_detailGame.system), ix, iy, iw, ih, a);
+        if (!sel.exists)
+            fonts.small.draw(r, ix + iw * .5f, iy + ih - 20.f, "Empty slot",
+                             fade(pal.textSecondary, a), text::Align::Center);
+    }
+
+    fonts.title.draw(r, LX, capsAt(fonts.title, 38.f) + dy, "SAVE STATES",
+                     fade(pal.textPrimary, a), text::Align::Left, 1.f);
+    drawEllipsized(fonts.small, r, LX, capsAt(fonts.small, 56.f) + dy, LW,
+                   m_detailGame.shown(), fade(pal.textSecondary, a));
+    const float top = 68.f + dy;
+    for (int i = 0; i < save::SLOTS; i++) {
+        const save::SlotInfo& slot = m_stateSlots[i];
+        const float y = top + float(i) * SLOT_H;
+        const bool focused = i == m_stateIdx;
+        if (focused) ui::focusFill(app, LX, y, LW, SLOT_H, a);
+        else if (i + 1 < save::SLOTS && i + 1 != m_stateIdx)
+            ui::rowRule(app, LX, y + SLOT_H - 1.f, LW, a);
+        const u32 ink = focused ? pal.onAccent : pal.textPrimary;
+        const u32 sub = focused ? rsWithAlpha(pal.onAccent, 200)
+                                : pal.textSecondary;
+        char name[16];
+        std::snprintf(name, sizeof name, "Slot %d", i + 1);
+        const text::Font& face = focused ? fonts.bodyStrong : fonts.body;
+        face.draw(r, LX + 10.f, capsAt(face, y + 7.f), name,
+                  fade(slot.exists ? ink : (focused ? ink : pal.textMuted), a));
+        if (slot.exists) {
+            char when[24];
+            if (slot.stamp) ui::formatRelative(slot.stamp, m_now, when, sizeof when);
+            else std::snprintf(when, sizeof when, "Saved");
+            fonts.small.draw(r, LX + LW - 10.f, capsAt(fonts.small, y + 8.f), when,
+                             fade(sub, a), text::Align::Right);
+            drawEllipsized(fonts.small, r, LX + 10.f, capsAt(fonts.small, y + 20.f),
+                           LW - 20.f, slot.coreName, fade(sub, a));
+        } else {
+            fonts.small.draw(r, LX + 10.f, capsAt(fonts.small, y + 20.f), "Empty",
+                             fade(focused ? sub : pal.textDisabled, a));
+        }
+    }
+    if (m_confirmStateDelete)
+        fonts.small.draw(r, LX, capsAt(fonts.small, top + SLOT_H * save::SLOTS + 8.f),
+                         "Press triangle again to delete", fade(pal.danger, a));
 }
 
 void HomeScene::drawOptions(App& app) {
@@ -1627,6 +1864,16 @@ void HomeScene::drawLegend(App& app) {
             break;
         }
         case nav::Layer::Detail: {
+            if (m_states) {
+                const bool has = m_stateSlots[m_stateIdx].exists;
+                App::Hint hints[3];
+                int n = 0;
+                if (has) hints[n++] = {B::Cross, "Load"};
+                if (has) hints[n++] = {B::Triangle, "Delete"};
+                hints[n++] = {B::Circle, "Back"};
+                app.drawHintBar(hints, n);
+                break;
+            }
             if (m_detailExpanded && m_selMultiCore) {
                 const App::Hint hints[] = {
                     {B::Triangle, "Change Emulator"}, {B::Circle, "Back"},

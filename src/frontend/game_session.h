@@ -54,6 +54,8 @@ private:
     void primeAudio();
     void resetPerfWindow();
     void makeThumb(u16* out) const;
+    bool makePreview(std::vector<u16>& out, int& w, int& h) const;
+    int  m_loadSlot = -1;          /* state to load once the core is up */
     u32  mapButtons(const input::Pad& pad) const;
     bool injectFailure(const char* stage) const;
     launch::Action failureAction(App& app) const;

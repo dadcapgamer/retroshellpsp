@@ -69,7 +69,10 @@ Text and UI chrome are T8 textures with a shared alpha-ramp CLUT, tinted
 by vertex color; circles are anti-aliased masks baked at boot, while shell
 surfaces are integer-aligned rects with stepped (pixel-rounded) corners so
 edges stay crisp on the LCD. Fonts are pre-baked `.rsf` atlases (see
-`tools/assetgen.c` for the format).
+`tools/assetgen.c` for the format), baked with FreeType hinting by
+`tools/fontbake.c` so stems land on whole pixels. Console icons are hard-edged
+downscales of the 192 px masters (`tools/crisp_icons.py`), drawn 1:1 with
+nearest sampling.
 
 ### Typography
 
@@ -170,8 +173,9 @@ and abbreviation — never an empty frame or a broken-image glyph.
 
 ## Themes
 
-Two flat built-in themes with the same roles and contrast steps: deep navy
-(Dark, the default) and warm paper (Light). One accent, which means focus and
+Four flat built-in themes with the same roles and contrast steps: deep navy
+(Dark, the default), neutral charcoal (Graphite), warm paper (Light) and cool
+daylight (Mist). One accent, which means focus and
 nothing else (blue by default; Settings offers five). Tokens: `bg`, `surface`,
 `surface2`, `line`, `textPrimary/Secondary/Muted/Disabled`, `accent`,
 `onAccent`, `focusEdge` (derived from the accent), `danger`, `scrim`, `dim`,

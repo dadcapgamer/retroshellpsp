@@ -1,4 +1,5 @@
-/** Design tokens for the built-in Dark and Light themes.
+/** Design tokens for the built-in themes: Dark (navy, the default),
+ * Graphite, Light and Mist.
  *
  * Every colour in the shell comes from one of these roles, so a screen never
  * invents its own. Accent means exactly one thing everywhere: focus, the
@@ -74,6 +75,50 @@ inline const Palette& light() {
         /* scrim     */ rsHex(0xF2EFE7),
         /* dim       */ rsHex(0x14202C),
         /* pattern   */ rsHex(0xCFC9BB),
+        /* waves     */ rsHex(0x2676E8, 0), rsHex(0x2676E8, 0),
+        false,
+    };
+    return p;
+}
+
+/* Neutral charcoal: the Dark structure without the blue cast. */
+inline const Palette& graphite() {
+    static const Palette p = {
+        /* bg        */ rsHex(0x131517),
+        /* surface   */ rsHex(0x1B1E21),
+        /* surface2  */ rsHex(0x23272B),
+        /* line      */ rsHex(0x343A40),
+        /* text      */ rsHex(0xF2F1EE), rsHex(0xB3B7BB), rsHex(0x7C8288),
+                        rsHex(0x4F555B),
+        /* accent    */ rsHex(0x2676E8),
+        /* onAccent  */ rsHex(0xFFFFFF),
+        /* focusEdge */ rsHex(0x54B7FF),
+        /* danger    */ rsHex(0xF0645A),
+        /* scrim     */ rsHex(0x131517),
+        /* dim       */ rsHex(0x000000),
+        /* pattern   */ rsHex(0x2B3035),
+        /* waves     */ rsHex(0x2676E8, 0), rsHex(0x2676E8, 0),
+        true,
+    };
+    return p;
+}
+
+/* Cool grey-blue daylight: Light's structure without the warmth. */
+inline const Palette& mist() {
+    static const Palette p = {
+        /* bg        */ rsHex(0xEDF1F5),
+        /* surface   */ rsHex(0xE2E8EE),
+        /* surface2  */ rsHex(0xD6DEE6),
+        /* line      */ rsHex(0xC1CBD5),
+        /* text      */ rsHex(0x121C26), rsHex(0x3E4B58), rsHex(0x65727E),
+                        rsHex(0x9FA9B3),
+        /* accent    */ rsHex(0x2676E8),
+        /* onAccent  */ rsHex(0xFFFFFF),
+        /* focusEdge */ rsHex(0x1C5FC4),
+        /* danger    */ rsHex(0xC8402F),
+        /* scrim     */ rsHex(0xEDF1F5),
+        /* dim       */ rsHex(0x121C26),
+        /* pattern   */ rsHex(0xC8D1DA),
         /* waves     */ rsHex(0x2676E8, 0), rsHex(0x2676E8, 0),
         false,
     };

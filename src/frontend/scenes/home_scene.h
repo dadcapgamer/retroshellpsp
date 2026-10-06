@@ -23,6 +23,8 @@
 #include "frontend/scenes/home_nav.h"
 #include "frontend/scenes/scene.h"
 #include "frontend/ui/anim.h"
+#include "platform/psp/gu_renderer.h"
+#include "runtime/save_manager.h"
 #include "rs_common.h"
 
 #include <vector>
@@ -51,7 +53,7 @@ private:
     };
     /* Game Detail action rows: one dominant action, a short list after it. */
     enum DetailRow : int {
-        DET_PLAY, DET_FAVORITE, DET_DETAILS, DET_RETURN, DET_COUNT
+        DET_PLAY, DET_STATES, DET_FAVORITE, DET_DETAILS, DET_RETURN, DET_COUNT
     };
 
     /* --- data ------------------------------------------------------------ */
@@ -101,6 +103,11 @@ private:
     void drawDetail(App& app, u32 alpha, float dy);
     void drawMetaLine(App& app, const db::GameEntry& g, float x, float capsTop,
                       float maxW, u32 alpha);
+    void drawStates(App& app, u32 alpha, float dy);
+    void openStates(App& app);
+    void updateStates(App& app, float dt);
+    void closeStates();
+    void loadStatePreview(App& app);
     void drawOptions(App& app);
     void drawPicker(App& app);
     void drawViewMenu(App& app);
@@ -119,6 +126,7 @@ private:
     std::string   m_query;                 /* active search, Library only */
     int  m_systemTotal = 0;                /* all games in the system, unfiltered */
     bool m_empty = false;                  /* no games anywhere: show setup help */
+    bool m_allHidden = false;              /* games exist, every system is off */
     bool m_romRootMissing = false;
     bool m_listDirty = false;              /* favorites changed under a filter */
     u32 m_lastIndexGen = 0;   /* index generation, not count — a count-preserving
@@ -155,6 +163,20 @@ private:
     bool          m_detailHasSave = false;
     int           m_detailRow = 0;
     bool          m_detailExpanded = false;
+
+    /* Save States, inside Game Detail: the slots, the selected one's full
+     * preview (loaded once the selection settles), and a two-press delete. */
+    bool            m_states = false;
+    int             m_detailStateCount = 0;
+    int             m_stateIdx = 0;
+    save::SlotInfo  m_stateSlots[save::SLOTS];
+    gfx::Texture    m_preview;
+    int             m_previewW = 0, m_previewH = 0;
+    int             m_previewSlot = -1;
+    bool            m_previewLegacy = false;   /* header thumbnail only */
+    float           m_previewSettle = 0.f;
+    bool            m_confirmStateDelete = false;
+    float           m_dt = 0.f;               /* this frame's delta, for layers */
 
     /* Options overlay. */
     db::GameEntry m_optionsGame;

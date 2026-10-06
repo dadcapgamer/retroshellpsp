@@ -10,7 +10,7 @@ namespace rs::ui {
 
 enum class Icon : u8 {
     Play, Star, Info, Return, Player, Card, Gear, Gauge, Speaker, Library,
-    Count
+    Gamepad, Stack, Count
 };
 
 constexpr float ICON_SIZE = 11.f;

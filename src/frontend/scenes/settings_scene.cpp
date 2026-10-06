@@ -8,6 +8,8 @@
 #include "frontend/scenes/setup_scene.h"
 #include "frontend/ui/chrome.h"
 #include "frontend/ui/icons.h"
+#include "frontend/core_registry.h"
+#include "frontend/database/systems.h"
 #include "platform/psp/power.h"
 #include "runtime/config.h"
 
@@ -35,6 +37,7 @@ struct CategoryDef {
 };
 const CategoryDef CATS[] = {
     {"Appearance", "APPEARANCE", ui::Icon::Gear, {0, 1, 2, 3, -1}},
+    {"Systems", "SYSTEMS", ui::Icon::Gamepad, {-1, -1, -1, -1, -1}},
     {"Performance", "PERFORMANCE", ui::Icon::Gauge, {4, 5, 6, 7, -1}},
     {"Audio", "AUDIO", ui::Icon::Speaker, {10, -1, -1, -1, -1}},
     {"Library", "LIBRARY", ui::Icon::Library, {8, 9, -1, -1, -1}},
@@ -47,6 +50,8 @@ constexpr float SIDE_X = L::MARGIN, SIDE_W = 160.f, SIDE_ROW = 24.f;
 constexpr float PANEL_X = 184.f, PANEL_W = L::RIGHT - PANEL_X;
 constexpr float PANEL_H = L::CONTENT_BOTTOM - TOP;
 constexpr float ROW_H = 22.f;
+constexpr float ROWS_TOP = 30.f;             /* below the panel title */
+constexpr int   VISIBLE_ROWS = 7;
 
 int cpuStepIndex(int mhz) {
     for (int i = 0; i < 3; i++)
@@ -55,6 +60,7 @@ int cpuStepIndex(int mhz) {
 }
 
 bool isAction(int row) { return row == 8 || row == 9; }
+
 }  // namespace
 
 void SettingsScene::enter(App& app) {
@@ -63,22 +69,57 @@ void SettingsScene::enter(App& app) {
     m_index = 0;
     m_entrance.start(0.18f);
     m_catFade.t = 1.f;
+    m_systems.clear();
+    for (int sys = 0; sys < db::SYSTEM_COUNT; sys++)
+        if (!app.cores().coresFor(db::System(sys)).empty())
+            m_systems.push_back(sys);
+    m_scroll = 0.f;
     m_themes = theme::availableThemes();
     m_themeIdx = 0;
     for (size_t i = 0; i < m_themes.size(); i++)
         if (m_themes[i] == app.theme().id) m_themeIdx = int(i);
 }
 
-int SettingsScene::categoryRows(int out[6]) const {
+int SettingsScene::categoryRows(int out[16]) const {
     int n = 0;
+    if (m_cat == CAT_SYSTEMS) {
+        for (int sys : m_systems)
+            if (n < 16) out[n++] = SYS_ROW + sys;
+        return n;
+    }
     for (int r : CATS[m_cat].rows)
         if (r >= 0) out[n++] = r;
     return n;
 }
 
+/* A system row cycles through its emulators, then Off. The first emulator
+ * is the automatic default, so choosing it clears any override (as setup
+ * does) and future installs keep sorting naturally. */
+void SettingsScene::adjustSystem(App& app, int system, int dir) {
+    const auto cores = app.cores().coresFor(db::System(system));
+    if (cores.empty()) return;
+    const char* coreId = db::systemInfo(db::System(system)).coreId;
+    const int options = int(cores.size()) + 1;           /* + Off */
+    int current = options - 1;
+    if (cfg::systemEnabled(coreId)) {
+        current = 0;
+        const CoreInfo* chosen = app.cores().defaultFor(db::System(system));
+        for (size_t i = 0; i < cores.size(); i++)
+            if (cores[i] == chosen) current = int(i);
+    }
+    const int next = (current + dir + options) % options;
+    if (next == options - 1) {
+        cfg::setSystemEnabled(coreId, false);
+    } else {
+        cfg::setSystemEnabled(coreId, true);
+        cfg::setSystemCore(coreId, next == 0 ? "" : cores[size_t(next)]->name.c_str());
+    }
+    cfg::save();
+}
+
 int SettingsScene::currentRow() const {
     if (!m_inContent) return -1;
-    int rows[6];
+    int rows[16];
     const int n = categoryRows(rows);
     return n ? rows[rsClamp(m_index, 0, n - 1)] : -1;
 }
@@ -88,12 +129,17 @@ void SettingsScene::switchCategory(int dir) {
     if (next == m_cat) return;
     m_cat = next;
     m_index = 0;
-    int rows[6];
+    m_scroll = 0.f;
+    int rows[16];
     if (categoryRows(rows) == 0) m_inContent = false;
     m_catFade.start(0.12f);
 }
 
 void SettingsScene::adjust(App& app, int row, int dir) {
+    if (row >= SYS_ROW) {
+        adjustSystem(app, row - SYS_ROW, dir);
+        return;
+    }
     auto& c = cfg::get();
     switch (row) {
         case ROW_THEME: {
@@ -161,6 +207,13 @@ void SettingsScene::activate(App& app, int row) {
 
 const char* SettingsScene::valueText(App& app, int row, char* buf,
                                      size_t n) const {
+    if (row >= SYS_ROW) {
+        const db::System sys = db::System(row - SYS_ROW);
+        if (!cfg::systemEnabled(db::systemInfo(sys).coreId)) return "Off";
+        const CoreInfo* core = app.cores().defaultFor(sys);
+        std::snprintf(buf, n, "%s", core ? core->name.c_str() : "On");
+        return buf;
+    }
     const auto& c = cfg::get();
     switch (row) {
         case ROW_THEME:
@@ -186,7 +239,7 @@ const char* SettingsScene::valueText(App& app, int row, char* buf,
 
 void SettingsScene::update(App& app, float dt) {
     const auto& pad = app.pad();
-    int rows[6];
+    int rows[16];
     const int n = categoryRows(rows);
 
     if (pad.isPressed(PSP_CTRL_LTRIGGER)) switchCategory(-1);
@@ -219,6 +272,8 @@ void SettingsScene::update(App& app, float dt) {
             app.switchScene(std::make_unique<HomeScene>());
     }
 
+    m_scroll = float(rsClamp(m_index - VISIBLE_ROWS / 2, 0,
+                             rsClamp(n - VISIBLE_ROWS, 0, n)));
     m_entrance.update(dt);
     m_catFade.update(dt);
 }
@@ -267,18 +322,26 @@ void SettingsScene::draw(App& app) {
                      CATS[m_cat].title, fade(pal.textPrimary, pa),
                      text::Align::Left, 1.f);
 
-    float y = TOP + 30.f + dy + pdy;
+    const float rowsTop = TOP + ROWS_TOP + dy + pdy;
     const int focusedRow = currentRow();
     char buf[48];
-    int rows[6];
+    int rows[16];
     const int n = categoryRows(rows);
-    for (int i = 0; i < n; i++, y += ROW_H) {
+    const int first = int(m_scroll);
+    const int last = rsClamp(first + VISIBLE_ROWS, 0, n);
+    float y = rowsTop;
+    if (m_cat == CAT_SYSTEMS && n == 0)
+        fonts.body.draw(r, px + 10.f, fonts.body.centerY(y, ROW_H),
+                        "No emulators installed", fade(pal.textMuted, pa));
+    for (int i = first; i < last; i++, y += ROW_H) {
         const int row = rows[i];
         ui::RowStyle style;
         style.focused = row == focusedRow;
         style.adjustable = !isAction(row) && row != ROW_ACCENT;
         const bool swatches = row == ROW_ACCENT;
-        ui::menuRow(app, px, y, pw, ROW_H, ROW_LABELS[row],
+        const char* label = row >= SYS_ROW ? ui::systemName(row - SYS_ROW)
+                                           : ROW_LABELS[row];
+        ui::menuRow(app, px, y, pw, ROW_H, label,
                     swatches ? nullptr : valueText(app, row, buf, sizeof buf),
                     style, pa);
         if (swatches) {
@@ -295,8 +358,16 @@ void SettingsScene::draw(App& app) {
                                  fade(rsHex(theme::accentOption(sw).rgb), pa));
             }
         }
-        if (!style.focused && i + 1 < n && rows[i + 1] != focusedRow)
+        if (!style.focused && i + 1 < last && rows[i + 1] != focusedRow)
             ui::rowRule(app, px, y + ROW_H - 1.f, pw, pa);
+    }
+    if (n > VISIBLE_ROWS) {
+        /* Position marker inside the panel's right edge. */
+        const float trackH = ROW_H * float(VISIBLE_ROWS);
+        const float thumb = trackH * float(VISIBLE_ROWS) / float(n);
+        const float t = float(first) / float(n - VISIBLE_ROWS);
+        r.rect(PANEL_X + PANEL_W - 4.f, ui::snap(rowsTop + (trackH - thumb) * t),
+               2.f, ui::snap(thumb), fade(pal.textMuted, pa));
     }
 
     if (m_cat == CAT_ABOUT) {

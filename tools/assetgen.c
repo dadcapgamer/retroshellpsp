@@ -1,8 +1,8 @@
 /*
  * assetgen — RetroShell host-side asset baker (runs on the build machine).
  *
- * Bakes TTF fonts into .rsf atlases (format documented below and parsed by
- * src/frontend/text/font.cpp) and generates the PBP artwork (ICON0/PIC1).
+ * Generates the PBP artwork (SPLASH/PIC1/ICON0). Font atlases (.rsf, format
+ * below, parsed by src/frontend/text/font.cpp) are baked by tools/fontbake.c.
  * Outputs are committed to the repo so contributors don't need this tool;
  * rerun it only when changing fonts or artwork.
  *
@@ -23,139 +23,12 @@
 #include <string.h>
 #include <stdint.h>
 
-#define STB_TRUETYPE_IMPLEMENTATION
-#include "../external/stb_truetype.h"
 #define STB_IMAGE_IMPLEMENTATION
 #include "../external/stb_image.h"
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "../external/stb_image_write.h"
 
 /* ------------------------------------------------------------------ */
-
-static unsigned char* read_file(const char* path, long* out_size) {
-    FILE* f = fopen(path, "rb");
-    if (!f) { fprintf(stderr, "assetgen: cannot open %s\n", path); exit(1); }
-    fseek(f, 0, SEEK_END);
-    long size = ftell(f);
-    fseek(f, 0, SEEK_SET);
-    unsigned char* buf = malloc((size_t)size);
-    if (fread(buf, 1, (size_t)size, f) != (size_t)size) {
-        fprintf(stderr, "assetgen: short read on %s\n", path); exit(1);
-    }
-    fclose(f);
-    if (out_size) *out_size = size;
-    return buf;
-}
-
-/* Codepoints baked into every atlas: printable ASCII, Latin-1 supplement,
- * and the typographic punctuation the UI uses. */
-static int build_codepoint_list(const stbtt_fontinfo* info, int* cps) {
-    static const int extras[] = {
-        0x2013, 0x2014, 0x2018, 0x2019, 0x201C, 0x201D, 0x2022, 0x2026
-    };
-    int n = 0, cp;
-    for (cp = 0x20; cp <= 0x7E; cp++)
-        if (stbtt_FindGlyphIndex(info, cp)) cps[n++] = cp;
-    for (cp = 0xA0; cp <= 0xFF; cp++)
-        if (stbtt_FindGlyphIndex(info, cp)) cps[n++] = cp;
-    for (size_t i = 0; i < sizeof(extras) / sizeof(extras[0]); i++)
-        if (stbtt_FindGlyphIndex(info, extras[i])) cps[n++] = extras[i];
-    return n;
-}
-
-/* `mono_advance` > 0 forces a fixed advance and centres every glyph in its
- * cell, giving the pixel face the monospaced firmware look of the redesign
- * mockups. Pass 0 for the face's natural proportional spacing. */
-static void bake_font_ex(const char* ttf_path, float px, int mono_advance,
-                         const char* out_path) {
-    long ttf_size;
-    unsigned char* ttf = read_file(ttf_path, &ttf_size);
-
-    stbtt_fontinfo info;
-    if (!stbtt_InitFont(&info, ttf, stbtt_GetFontOffsetForIndex(ttf, 0))) {
-        fprintf(stderr, "assetgen: bad font %s\n", ttf_path); exit(1);
-    }
-
-    int cps[512];
-    int ncp = build_codepoint_list(&info, cps);
-
-    /* Grow the atlas until everything packs. */
-    static const int sizes[][2] = {
-        {128, 128}, {256, 128}, {256, 256}, {512, 256}, {512, 512}
-    };
-    unsigned char* atlas = NULL;
-    stbtt_packedchar pcd[512];
-    int aw = 0, ah = 0, packed = 0;
-    for (size_t s = 0; s < sizeof(sizes) / sizeof(sizes[0]) && !packed; s++) {
-        aw = sizes[s][0]; ah = sizes[s][1];
-        free(atlas);
-        atlas = calloc(1, (size_t)(aw * ah));
-        stbtt_pack_context pc;
-        stbtt_PackBegin(&pc, atlas, aw, ah, aw, 1, NULL);
-        stbtt_pack_range range = {0};
-        range.font_size = px;
-        range.array_of_unicode_codepoints = cps;
-        range.num_chars = ncp;
-        range.chardata_for_range = pcd;
-        packed = stbtt_PackFontRanges(&pc, ttf, 0, &range, 1);
-        stbtt_PackEnd(&pc);
-    }
-    if (!packed) {
-        fprintf(stderr, "assetgen: %s @%.0fpx does not fit 512x512\n",
-                ttf_path, px);
-        exit(1);
-    }
-
-    float scale = stbtt_ScaleForPixelHeight(&info, px);
-    int ascent, descent, line_gap;
-    stbtt_GetFontVMetrics(&info, &ascent, &descent, &line_gap);
-
-    FILE* f = fopen(out_path, "wb");
-    if (!f) { fprintf(stderr, "assetgen: cannot write %s\n", out_path); exit(1); }
-
-    uint32_t magic = 0x31465352u; /* "RSF1" */
-    uint16_t u16v; int16_t s16v;
-    fwrite(&magic, 4, 1, f);
-    u16v = (uint16_t)aw; fwrite(&u16v, 2, 1, f);
-    u16v = (uint16_t)ah; fwrite(&u16v, 2, 1, f);
-    s16v = (int16_t)(ascent * scale + 0.5f);            fwrite(&s16v, 2, 1, f);
-    s16v = (int16_t)(descent * scale - 0.5f);           fwrite(&s16v, 2, 1, f);
-    s16v = (int16_t)((ascent - descent + line_gap) * scale + 0.5f);
-    fwrite(&s16v, 2, 1, f);
-    u16v = (uint16_t)ncp; fwrite(&u16v, 2, 1, f);
-    u16v = 0;             fwrite(&u16v, 2, 1, f);
-
-    for (int i = 0; i < ncp; i++) {
-        const stbtt_packedchar* c = &pcd[i];
-        uint32_t cp = (uint32_t)cps[i];
-        fwrite(&cp, 4, 1, f);
-        u16v = c->x0;                       fwrite(&u16v, 2, 1, f);
-        u16v = c->y0;                       fwrite(&u16v, 2, 1, f);
-        u16v = (uint16_t)(c->x1 - c->x0);   fwrite(&u16v, 2, 1, f);
-        u16v = (uint16_t)(c->y1 - c->y0);   fwrite(&u16v, 2, 1, f);
-        int xoff = (int)(c->xoff + (c->xoff < 0 ? -0.5f : 0.5f));
-        int xadv = (int)(c->xadvance + 0.5f);
-        if (mono_advance > 0) {
-            const int gw = c->x1 - c->x0;
-            xoff = gw > 0 ? (mono_advance - gw) / 2 : 0;
-            xadv = mono_advance;
-        }
-        s16v = (int16_t)xoff; fwrite(&s16v, 2, 1, f);
-        s16v = (int16_t)(c->yoff + (c->yoff < 0 ? -0.5f : 0.5f)); fwrite(&s16v, 2, 1, f);
-        s16v = (int16_t)xadv; fwrite(&s16v, 2, 1, f);
-        s16v = 0;                             fwrite(&s16v, 2, 1, f);
-    }
-    fwrite(atlas, 1, (size_t)(aw * ah), f);
-    fclose(f);
-
-    printf("baked %-28s %3dpx  %dx%d  %d glyphs\n", out_path, (int)px, aw, ah, ncp);
-    free(atlas);
-    free(ttf);
-}
-
-static void bake_font(const char* ttf_path, float px, const char* out_path) {
-    bake_font_ex(ttf_path, px, 0, out_path);
-}
 
 /* ---------------- PBP artwork ------------------------------------- */
 
@@ -238,27 +111,14 @@ int main(int argc, char** argv) {
     }
     const char* fdir = argv[1];
     const char* out = argv[2];
-    char ttf[1024], rsf[1024];
+    /* Font atlases are baked by tools/fontbake.c (FreeType hinting keeps
+     * small sizes crisp on the LCD); this tool only bakes the PBP artwork. */
+    (void)fdir;
+    if (fonts_only) {
+        fprintf(stderr, "assetgen: fonts are baked by tools/fontbake.c\n");
+        return 0;
+    }
 
-    /* One family, IBM Plex Mono, in two weights (see docs/ARCHITECTURE.md,
-     * "Typography"). Every atlas is embedded in the EBOOT and so comes
-     * straight out of the core arena; add a size only when a role needs it. */
-    snprintf(ttf, sizeof ttf, "%s/IBMPlexMono-SemiBold.ttf", fdir);
-    snprintf(rsf, sizeof rsf, "%s/fonts/font_display.rsf", out);
-    bake_font(ttf, 18, rsf);          /* Home system name, Detail title */
-    snprintf(rsf, sizeof rsf, "%s/fonts/font_title.rsf", out);
-    bake_font(ttf, 15, rsf);          /* wordmark, pane and state titles */
-    snprintf(rsf, sizeof rsf, "%s/fonts/font_body_strong.rsf", out);
-    bake_font(ttf, 13, rsf);          /* focused rows, card titles */
-
-    snprintf(ttf, sizeof ttf, "%s/IBMPlexMono-Regular.ttf", fdir);
-    snprintf(rsf, sizeof rsf, "%s/fonts/font_body.rsf", out);
-    bake_font(ttf, 13, rsf);          /* list rows, actions, settings */
-    snprintf(rsf, sizeof rsf, "%s/fonts/font_small.rsf", out);
-    bake_font(ttf, 11, rsf);          /* metadata, status, counts */
-    snprintf(rsf, sizeof rsf, "%s/fonts/font_tiny.rsf", out);
-    bake_font(ttf, 10, rsf);          /* chips, section labels, legend */
-
-    if (!fonts_only) make_pbp_art(out);
+    make_pbp_art(out);
     return 0;
 }

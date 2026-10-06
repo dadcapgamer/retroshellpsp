@@ -23,7 +23,7 @@ enum HomeLayout {
 };
 
 struct Config {
-    std::string theme  = "dark";    /* "dark", "light" or a theme dir name */
+    std::string theme  = "dark";    /* a built-in id or a theme dir name */
     int  accent        = 0;         /* index into theme::accentOption */
     int  cpuMenuMhz    = 222;
     int  cpuGameMhz    = 333;
@@ -45,6 +45,9 @@ struct Config {
      * A game's own remembered core still wins, because save states are
      * core-specific. */
     std::vector<std::pair<std::string, std::string>> systemCores;
+    /* Systems the user turned off in Settings → Systems (coreIds). Their
+     * games stay indexed, but Home does not show them. */
+    std::vector<std::string> disabledSystems;
 };
 
 Config& get();
@@ -52,6 +55,8 @@ Config& get();
 /* Default-emulator override for a system, or "" for "automatic". */
 std::string systemCore(const char* coreId);
 void setSystemCore(const char* coreId, const char* coreName);   /* "" clears */
+bool systemEnabled(const char* coreId);
+void setSystemEnabled(const char* coreId, bool enabled);
 void load();
 void save();
 

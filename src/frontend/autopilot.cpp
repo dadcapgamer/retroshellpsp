@@ -146,7 +146,8 @@ constexpr Step TOUR[] = {
     {444, PSP_CTRL_CROSS,    nullptr},          /* ... Game Details */
     {465, 0,                 "t07_detail"},
     {470, PSP_CTRL_DOWN,     nullptr},
-    {480, PSP_CTRL_DOWN,     nullptr},
+    {478, PSP_CTRL_DOWN,     nullptr},
+    {484, PSP_CTRL_DOWN,     nullptr},
     {490, PSP_CTRL_CROSS,    nullptr},          /* expand details */
     {530, 0,                 "t08_detail_expanded"},
     {540, PSP_CTRL_CIRCLE,   nullptr},
@@ -230,7 +231,8 @@ constexpr Step TOUR[] = {
     {1768, PSP_CTRL_DOWN,     nullptr},
     {1774, PSP_CTRL_CROSS,    nullptr},
     {1790, PSP_CTRL_DOWN,     nullptr},
-    {1800, PSP_CTRL_DOWN,     nullptr},
+    {1798, PSP_CTRL_DOWN,     nullptr},
+    {1804, PSP_CTRL_DOWN,     nullptr},
     {1810, PSP_CTRL_CROSS,    nullptr},         /* expand */
     {1850, 0,                 "t28_detail_stats"},
     {1860, PSP_CTRL_CIRCLE,   nullptr},         /* collapse stats */
@@ -282,7 +284,8 @@ constexpr Step TOUR[] = {
      * text-only mode. */
     {2390, PSP_CTRL_CIRCLE,   nullptr},         /* Systems */
     {2430, PSP_CTRL_TRIANGLE, nullptr},         /* Settings */
-    {2440, PSP_CTRL_RTRIGGER, nullptr},
+    {2440, PSP_CTRL_RTRIGGER, nullptr},         /* Systems */
+    {2456, PSP_CTRL_RTRIGGER, nullptr},         /* Performance */
     {2480, 0,                 "t32_settings_performance"},
     {2490, PSP_CTRL_RTRIGGER, nullptr},
     {2500, PSP_CTRL_RTRIGGER, nullptr},
@@ -291,7 +294,8 @@ constexpr Step TOUR[] = {
     {2550, PSP_CTRL_LTRIGGER, nullptr},
     {2560, PSP_CTRL_LTRIGGER, nullptr},
     {2570, PSP_CTRL_LTRIGGER, nullptr},
-    {2580, PSP_CTRL_LTRIGGER, nullptr},         /* Appearance */
+    {2580, PSP_CTRL_LTRIGGER, nullptr},
+    {2585, PSP_CTRL_LTRIGGER, nullptr},         /* Appearance */
     {2590, PSP_CTRL_CROSS,    nullptr},         /* into the panel */
     {2600, PSP_CTRL_DOWN,     nullptr},
     {2610, PSP_CTRL_DOWN,     nullptr},
@@ -316,6 +320,31 @@ constexpr Step TOUR[] = {
     {2960, PSP_CTRL_DOWN,     nullptr},
     {2970, PSP_CTRL_RIGHT,    nullptr},
     {2980, PSP_CTRL_START,    nullptr},
+    /* Save States in Game Detail (the runner seeds slots 1 and 3, slot 3 in
+     * the older thumbnail-only format), then Settings → Systems. */
+    {3020, PSP_CTRL_CROSS,    nullptr},         /* Library */
+    {3050, PSP_CTRL_TRIANGLE, nullptr},
+    {3058, PSP_CTRL_DOWN,     nullptr},
+    {3066, PSP_CTRL_DOWN,     nullptr},
+    {3074, PSP_CTRL_CROSS,    nullptr},         /* Game Details */
+    {3100, 0,                 "t38_detail_states_row"},
+    {3110, PSP_CTRL_DOWN,     nullptr},         /* Save States */
+    {3118, PSP_CTRL_CROSS,    nullptr},
+    {3150, 0,                 "t39_states"},
+    {3160, PSP_CTRL_DOWN,     nullptr},
+    {3168, PSP_CTRL_DOWN,     nullptr},         /* slot 3: legacy thumbnail */
+    {3200, 0,                 "t40_states_legacy"},
+    {3210, PSP_CTRL_DOWN,     nullptr},         /* slot 4: empty */
+    {3240, 0,                 "t41_states_empty"},
+    {3250, PSP_CTRL_START,    nullptr},         /* Home */
+    {3290, PSP_CTRL_TRIANGLE, nullptr},         /* Settings */
+    {3300, PSP_CTRL_DOWN,     nullptr},         /* Systems */
+    {3330, 0,                 "t42_settings_systems"},
+    {3340, PSP_CTRL_CROSS,    nullptr},
+    {3350, PSP_CTRL_RIGHT,    nullptr},         /* Game Boy: next emulator */
+    {3380, 0,                 "t43_settings_systems_change"},
+    {3390, PSP_CTRL_LEFT,     nullptr},
+    {3400, PSP_CTRL_START,    nullptr},
 };
 constexpr const Step* SCRIPT = TOUR;
 constexpr int STEPS = int(sizeof(TOUR) / sizeof(TOUR[0]));

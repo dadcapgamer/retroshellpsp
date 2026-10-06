@@ -13,7 +13,8 @@
  *
  * Unspecified colors inherit from the built-in Light or Dark palette
  * (chosen by "dark"), so a theme can override a single color. The built-in
- * themes "dark" and "light" always exist and need no files.
+ * themes "dark", "graphite", "light" and "mist" always exist and need no
+ * files.
  */
 #pragma once
 
@@ -39,7 +40,7 @@ struct Theme {
  * to built-in dark on any error. */
 Theme loadTheme(const std::string& id);
 
-/* Discovered theme ids: always starts with "dark", "light". */
+/* Discovered theme ids: always starts with the four built-ins. */
 std::vector<std::string> availableThemes();
 
 }  // namespace rs::theme

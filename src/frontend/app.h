@@ -39,6 +39,9 @@ struct FrontendSnapshot {
     u32  pickerHash  = 0;
     /* Set when a failed launch should kick off a library rescan on return. */
     bool rescanOnHome = false;
+    /* Set by Game Details' Save States: the launched game loads this slot
+     * as soon as its core is up. -1 = start normally. */
+    int  loadStateSlot = -1;
 };
 
 class App {

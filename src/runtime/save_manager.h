@@ -4,6 +4,8 @@
  *   sram.bin              battery save, flushed on pause/exit and dirty
  *   rtc.bin               battery-backed cartridge clock/register data
  *   state<N>.rst          save state, N in 0..SLOTS-1
+ *   state<N>.prv          full-size preview of that state (optional):
+ *                         u32 magic "RSPV", u16 w, u16 h, w*h RGB565
  *
  * .rst layout (little endian):
  *   u32 magic "RSST", u32 version
@@ -16,6 +18,8 @@
 
 #include "frontend/database/game_index.h"
 #include "rs_common.h"
+
+#include <vector>
 
 namespace rs {
 class EmulatorCore;
@@ -30,10 +34,19 @@ constexpr int THUMB_H = 54;
 struct SlotInfo {
     bool exists = false;
     u32  payloadSize = 0;
+    u64  stamp = 0;          /* YYYYMMDDHHMM local, 0 when unknown */
+    char coreName[16] = {};  /* emulator that wrote the state */
 };
 
-/* Reads slot headers for the menu (cheap: header only). */
+/* Largest preview kept: covers every supported core's native frame. */
+constexpr int PREVIEW_MAX_W = 512;
+constexpr int PREVIEW_MAX_H = 512;
+
+/* Reads slot headers for the menu (cheap: header only, plus one directory
+ * listing for the timestamps). */
 void querySlots(const db::GameEntry& game, SlotInfo out[SLOTS]);
+/* Removes one slot: its state, preview and their .bak twins. */
+bool deleteState(const db::GameEntry& game, int slot);
 
 /* True when the game has any battery save, RTC data or save state. */
 bool hasAnySave(const db::GameEntry& game);
@@ -48,6 +61,14 @@ bool saveState(const db::GameEntry& game, EmulatorCore& core, int slot,
 bool loadState(const db::GameEntry& game, EmulatorCore& core, int slot);
 /* Reads just the thumbnail; returns false if the slot is empty. */
 bool loadThumb(const db::GameEntry& game, int slot, u16* out);
+/* Full-size RGB565 preview written beside a state (the game frame at its
+ * native resolution). Older states have none; loadPreview then fails and
+ * callers fall back to the header thumbnail. */
+bool savePreview(const db::GameEntry& game, int slot, const u16* pixels, int w,
+                 int h);
+bool loadPreview(const db::GameEntry& game, int slot, std::vector<u16>& out,
+                 int& w, int& h);
+void dropPreview(const db::GameEntry& game, int slot);
 
 bool savePersistent(const db::GameEntry& game, EmulatorCore& core);
 bool loadPersistent(const db::GameEntry& game, EmulatorCore& core);

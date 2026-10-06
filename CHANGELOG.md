@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased — Systems, themes, save states, sharpness
+
+- **Settings → Systems**: every system with an emulator installed gets a row;
+  Left/Right cycles its emulators and Off. Systems turned off disappear from
+  Home and Continue Playing (their games stay indexed).
+- **Two more themes**: Graphite (neutral charcoal) and Mist (cool daylight),
+  beside Dark and Light.
+- **Save States in Game Details**: every slot with when it was saved and by
+  which emulator, a large preview of the selected slot (the saved frame at
+  native resolution, shown 1:1 when it fits), X to start the game in that
+  state with the emulator that wrote it, Triangle twice to delete. States
+  saved before this build show their small thumbnail.
+- **Sharper text**: atlases are baked with FreeType hinting
+  (`tools/fontbake.c`), so stems land on whole pixels.
+- **Sharper console icons**: regenerated as hard-edged downscales of the
+  192 px masters (`tools/crisp_icons.py`) instead of smoothed exports.
+- Save-state load failures now log their reason.
+
 ## Unreleased — Visual polish
 
 Brings the whole shell to `RetroShell_Modern_PSP_Visual_Polish_Guide.md` and

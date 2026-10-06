@@ -1,5 +1,5 @@
-/** Settings: a sidebar of categories (Appearance, Performance, Audio,
- * Library, About) beside a panel of that category's rows. Right or X enters
+/** Settings: a sidebar of categories (Appearance, Systems, Performance,
+ * Audio, Library, About) beside a panel of that category's rows. Right or X enters
  * the panel, O returns to the sidebar; Left/Right change a value, X
  * activates; L/R switch category anywhere. Values persist immediately.
  */
@@ -35,11 +35,14 @@ private:
         ROW_UI_SOUNDS,
         ROW_COUNT
     };
-    enum Category { CAT_APPEARANCE, CAT_PERFORMANCE, CAT_AUDIO, CAT_LIBRARY,
-                    CAT_ABOUT, CAT_COUNT };
+    enum Category { CAT_APPEARANCE, CAT_SYSTEMS, CAT_PERFORMANCE, CAT_AUDIO,
+                    CAT_LIBRARY, CAT_ABOUT, CAT_COUNT };
+    /* Rows of the Systems category are SYS_ROW + db::System id. */
+    static constexpr int SYS_ROW = 100;
 
     /* Rows of the current category, in display order. */
-    int categoryRows(int out[6]) const;
+    int categoryRows(int out[16]) const;
+    void adjustSystem(App& app, int system, int dir);
     int currentRow() const;
     void switchCategory(int dir);
     void adjust(App& app, int row, int dir);
@@ -49,6 +52,8 @@ private:
     int  m_cat = CAT_APPEARANCE;
     bool m_inContent = false;   /* focus is on the panel, not the sidebar */
     int  m_index = 0;           /* row within the category */
+    float m_scroll = 0.f;       /* first visible row, for long categories */
+    std::vector<int> m_systems; /* systems with an emulator installed */
     ui::Tween m_entrance;
     ui::Tween m_catFade;
     std::vector<std::string> m_themes;

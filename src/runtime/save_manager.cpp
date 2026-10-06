@@ -53,15 +53,34 @@ void statePath(char* buf, size_t n, const db::GameEntry& g, int slot) {
     std::snprintf(buf, n, "%s/state%d.rst", dir, slot);
 }
 
+void previewPath(char* buf, size_t n, const db::GameEntry& g, int slot) {
+    char dir[128];
+    gameDir(dir, sizeof dir, g);
+    std::snprintf(buf, n, "%s/state%d.prv", dir, slot);
+}
+
+constexpr u32 PREVIEW_MAGIC = 0x56505352u;   /* "RSPV" */
+
+/* fs::DirEntry::mtime packing (see fs_psp.cpp) to a YYYYMMDDHHMM stamp. */
+u64 stampFromPacked(u32 t) {
+    if (!t) return 0;
+    const u64 year = 2000u + (t >> 26), month = (t >> 22) & 0xFu;
+    const u64 day = (t >> 17) & 0x1Fu, hour = (t >> 12) & 0x1Fu;
+    const u64 minute = (t >> 6) & 0x3Fu;
+    return year * 100000000ull + month * 1000000ull + day * 10000ull +
+           hour * 100ull + minute;
+}
+
 }  // namespace
 
 namespace {
 const char* const SAVE_FILES[] = {
     "sram.bin", "rtc.bin", "state0.rst", "state1.rst", "state2.rst",
-    "state3.rst", "state4.rst",
+    "state3.rst", "state4.rst", "state0.prv", "state1.prv", "state2.prv",
+    "state3.prv", "state4.prv",
 };
-static_assert(sizeof(SAVE_FILES) / sizeof(SAVE_FILES[0]) == 2 + SLOTS,
-              "SAVE_FILES must list every state slot");
+static_assert(sizeof(SAVE_FILES) / sizeof(SAVE_FILES[0]) == 2 + 2 * SLOTS,
+              "SAVE_FILES must list every state slot and its preview");
 }  // namespace
 
 bool hasAnySave(const db::GameEntry& game) {
@@ -91,6 +110,11 @@ int deleteAll(const db::GameEntry& game) {
 }
 
 void querySlots(const db::GameEntry& game, SlotInfo out[SLOTS]) {
+    /* One listing gives every slot's modification time. */
+    char dir[128];
+    gameDir(dir, sizeof dir, game);
+    std::vector<fs::DirEntry> entries;
+    fs::listDir(dir, entries);
     for (int i = 0; i < SLOTS; i++) {
         out[i] = SlotInfo{};
         char path[160];
@@ -103,8 +127,85 @@ void querySlots(const db::GameEntry& game, SlotInfo out[SLOTS]) {
              (h.thumbW == THUMB_W && h.thumbH == THUMB_H))) {
             out[i].exists = true;
             out[i].payloadSize = h.payloadSize;
+            std::memcpy(out[i].coreName, h.coreName, sizeof out[i].coreName);
+            out[i].coreName[sizeof out[i].coreName - 1] = 0;
+            char name[16];
+            std::snprintf(name, sizeof name, "state%d.rst", i);
+            for (const auto& e : entries)
+                if (e.name == name) out[i].stamp = stampFromPacked(e.mtime);
         }
     }
+}
+
+bool deleteState(const db::GameEntry& game, int slot) {
+    if (slot < 0 || slot >= SLOTS) return false;
+    char path[160], backup[168];
+    statePath(path, sizeof path, game, slot);
+    const bool existed = fs::exists(path);
+    fs::removeFile(path);
+    std::snprintf(backup, sizeof backup, "%s.bak", path);
+    fs::removeFile(backup);
+    previewPath(path, sizeof path, game, slot);
+    fs::removeFile(path);
+    std::snprintf(backup, sizeof backup, "%s.bak", path);
+    fs::removeFile(backup);
+    RS_LOGI("save: state slot %d deleted", slot);
+    return existed;
+}
+
+bool savePreview(const db::GameEntry& game, int slot, const u16* pixels, int w,
+                 int h) {
+    if (slot < 0 || slot >= SLOTS || !pixels || w <= 0 || h <= 0 ||
+        w > PREVIEW_MAX_W || h > PREVIEW_MAX_H)
+        return false;
+    const size_t bytes = 8 + size_t(w) * size_t(h) * 2;
+    std::vector<u8> blob(bytes);
+    const u32 magic = PREVIEW_MAGIC;
+    const u16 dims[2] = {u16(w), u16(h)};
+    std::memcpy(blob.data(), &magic, 4);
+    std::memcpy(blob.data() + 4, dims, 4);
+    std::memcpy(blob.data() + 8, pixels, bytes - 8);
+    char path[160];
+    previewPath(path, sizeof path, game, slot);
+    const bool ok = fs::writeFileAtomic(path, blob.data(), u32(bytes));
+    if (!ok) RS_LOGW("save: preview for slot %d not written", slot);
+    return ok;
+}
+
+void dropPreview(const db::GameEntry& game, int slot) {
+    if (slot < 0 || slot >= SLOTS) return;
+    char path[160], backup[168];
+    previewPath(path, sizeof path, game, slot);
+    fs::removeFile(path);
+    std::snprintf(backup, sizeof backup, "%s.bak", path);
+    fs::removeFile(backup);
+}
+
+bool loadPreview(const db::GameEntry& game, int slot, std::vector<u16>& out,
+                 int& w, int& h) {
+    out.clear();
+    w = h = 0;
+    if (slot < 0 || slot >= SLOTS) return false;
+    char path[160];
+    previewPath(path, sizeof path, game, slot);
+    std::vector<u8> blob;
+    if (!fs::exists(path) ||
+        !fs::readFile(path, blob, 8u + PREVIEW_MAX_W * PREVIEW_MAX_H * 2u) ||
+        blob.size() < 8)
+        return false;
+    u32 magic;
+    u16 dims[2];
+    std::memcpy(&magic, blob.data(), 4);
+    std::memcpy(dims, blob.data() + 4, 4);
+    if (magic != PREVIEW_MAGIC || !dims[0] || !dims[1] ||
+        dims[0] > PREVIEW_MAX_W || dims[1] > PREVIEW_MAX_H ||
+        blob.size() < 8 + size_t(dims[0]) * dims[1] * 2)
+        return false;
+    w = dims[0];
+    h = dims[1];
+    out.resize(size_t(w) * size_t(h));
+    std::memcpy(out.data(), blob.data() + 8, out.size() * 2);
+    return true;
 }
 
 bool saveState(const db::GameEntry& game, EmulatorCore& core, int slot,

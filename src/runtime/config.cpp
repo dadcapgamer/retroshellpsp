@@ -55,6 +55,23 @@ void setSystemCore(const char* coreId, const char* coreName) {
         s_cfg.systemCores.push_back({coreId, coreName});
 }
 
+bool systemEnabled(const char* coreId) {
+    for (const auto& id : s_cfg.disabledSystems)
+        if (id == coreId) return false;
+    return true;
+}
+
+void setSystemEnabled(const char* coreId, bool enabled) {
+    if (!safeId(coreId, 16)) return;
+    auto& list = s_cfg.disabledSystems;
+    for (auto it = list.begin(); it != list.end(); ++it)
+        if (*it == coreId) {
+            if (enabled) list.erase(it);
+            return;
+        }
+    if (!enabled) list.push_back(coreId);
+}
+
 void load() {
     cJSON* root = json::parseFile(CFG_PATH);
     if (!root) return;   /* first boot: setupDone stays false */
@@ -69,11 +86,16 @@ void load() {
             if (cJSON_IsString(it) && it->string)
                 setSystemCore(it->string, it->valuestring);
     }
+    if (const cJSON* list = cJSON_GetObjectItemCaseSensitive(root, "disabledSystems");
+        cJSON_IsArray(list)) {
+        for (const cJSON* it = list->child; it; it = it->next)
+            if (cJSON_IsString(it)) setSystemEnabled(it->valuestring, false);
+    }
     if (const cJSON* v = cJSON_GetObjectItemCaseSensitive(root, "theme");
         cJSON_IsString(v) && safeId(v->valuestring))
         s_cfg.theme = v->valuestring;
     if (const cJSON* v = cJSON_GetObjectItemCaseSensitive(root, "accent");
-        cJSON_IsNumber(v) && v->valueint >= 0 && v->valueint < 8)
+        cJSON_IsNumber(v) && v->valueint >= 0 && v->valueint < 5)
         s_cfg.accent = v->valueint;
     if (const cJSON* v = cJSON_GetObjectItemCaseSensitive(root, "cpuMenuMhz");
         cJSON_IsNumber(v) && validClock(v->valueint))
@@ -117,6 +139,9 @@ void save() {
     cJSON_AddBoolToObject(root, "showArt", s_cfg.showArt);
     cJSON_AddNumberToObject(root, "homeLayout", s_cfg.homeLayout);
     cJSON_AddBoolToObject(root, "setupDone", s_cfg.setupDone);
+    cJSON* disabled = cJSON_AddArrayToObject(root, "disabledSystems");
+    for (const auto& id : s_cfg.disabledSystems)
+        cJSON_AddItemToArray(disabled, cJSON_CreateString(id.c_str()));
     cJSON* cores = cJSON_AddObjectToObject(root, "systemCores");
     for (const auto& [id, name] : s_cfg.systemCores)
         cJSON_AddStringToObject(cores, id.c_str(), name.c_str());

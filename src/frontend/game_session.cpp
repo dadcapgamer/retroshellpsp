@@ -121,6 +121,10 @@ bool GameSession::injectFailure(const char* stage) const {
 /* ---------------------------------------------------------------------- */
 
 bool GameSession::startCore(App& app) {
+    /* Consumed here, whatever happens next, so a failed launch can never
+     * carry the request into another game. */
+    m_loadSlot = app.snapshot().loadStateSlot;
+    app.snapshot().loadStateSlot = -1;
     const CoreInfo* info = app.cores().find(m_coreName.c_str());
     if (!info) {
         std::snprintf(m_error, sizeof m_error, "core '%s' not installed",
@@ -294,6 +298,12 @@ bool GameSession::startCore(App& app) {
     if (!save::loadPersistent(m_game, m_cores.core()))
         RS_LOGW("session: persistent restore incomplete; continuing with core defaults");
     RS_LOGI("session: post-load restore complete");
+    /* Launched from Game Details to resume a particular state. */
+    if (m_loadSlot >= 0) {
+        const bool ok = save::loadState(m_game, m_cores.core(), m_loadSlot);
+        app.toast(ok ? "State loaded" : "Load failed");
+        m_loadSlot = -1;
+    }
     m_romLoaded = true;   /* only now is it safe to persist SRAM on exit */
     power::setCpuMhz(cfg::get().cpuGameMhz);
     RS_LOGI("session: game clock set to %d MHz", cfg::get().cpuGameMhz);
@@ -834,6 +844,36 @@ void GameSession::makeThumb(u16* out) const {
     }
 }
 
+/* The current frame at its native size as RGB565, for the Game Details
+ * preview. RGBA8888 frames are reduced to 565; nothing is scaled. */
+bool GameSession::makePreview(std::vector<u16>& out, int& w, int& h) const {
+    const RSVideoFrame f = const_cast<CoreManager&>(m_cores).core().frame();
+    if (!f.pixels || !f.width || !f.height ||
+        f.width > save::PREVIEW_MAX_W || f.height > save::PREVIEW_MAX_H)
+        return false;
+    w = f.width;
+    h = f.height;
+    out.resize(size_t(w) * size_t(h));
+    const u8* src = static_cast<const u8*>(f.pixels);
+    for (int y = 0; y < h; y++) {
+        const u8* row = src + size_t(y) * f.pitch;
+        u16* dst = out.data() + size_t(y) * size_t(w);
+        for (int x = 0; x < w; x++) {
+            if (f.format == RS_PIXFMT_RGBA8888) {
+                const u8* p = row + x * 4;
+                dst[x] = u16(((p[2] >> 3) << 11) | ((p[1] >> 2) << 5) | (p[0] >> 3));
+            } else {
+                const u16 pixel = reinterpret_cast<const u16*>(row)[x];
+                dst[x] = f.format == RS_PIXFMT_RGBA5551
+                    ? u16((pixel & 0x001Fu) | ((pixel & 0x03E0u) << 1) |
+                          ((pixel & 0x7C00u) << 1))
+                    : pixel;
+            }
+        }
+    }
+    return true;
+}
+
 void GameSession::updateMenu(App& app) {
     const auto& pad = app.pad();
     auto& core = m_cores.core();
@@ -879,9 +919,17 @@ void GameSession::updateMenu(App& app) {
         case RS_PAUSE_SAVE_STATE: {
             u16 thumb[save::THUMB_W * save::THUMB_H];
             makeThumb(thumb);
-            app.toast(save::saveState(m_game, core, m_slot, thumb)
-                          ? "State saved"
-                          : "Save failed");
+            const bool saved = save::saveState(m_game, core, m_slot, thumb);
+            if (saved) {
+                /* A full-size preview for Game Details; if it cannot be
+                 * written, drop the old one so it never shows a stale frame. */
+                std::vector<u16> preview;
+                int pw = 0, ph = 0;
+                if (!makePreview(preview, pw, ph) ||
+                    !save::savePreview(m_game, m_slot, preview.data(), pw, ph))
+                    save::dropPreview(m_game, m_slot);
+            }
+            app.toast(saved ? "State saved" : "Save failed");
             save::querySlots(m_game, m_slots);
             m_thumbSlot = -1;
             break;

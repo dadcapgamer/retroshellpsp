@@ -62,19 +62,29 @@ void applyColors(Palette& p, const cJSON* colors) {
     }
 }
 
-Theme builtin(bool dark) {
+struct Builtin { const char* id; const char* title; const Palette& (*palette)(); };
+const Builtin BUILTINS[] = {
+    {"dark", "Dark", &theme::dark},
+    {"graphite", "Graphite", &theme::graphite},
+    {"light", "Light", &theme::light},
+    {"mist", "Mist", &theme::mist},
+};
+
+Theme builtin(const Builtin& b) {
     Theme t;
-    t.id = dark ? "dark" : "light";
-    t.title = dark ? "Dark" : "Light";
-    t.palette = dark ? theme::dark() : theme::light();
+    t.id = b.id;
+    t.title = b.title;
+    t.palette = b.palette();
     return t;
 }
+
+Theme builtin(bool dark) { return builtin(BUILTINS[dark ? 0 : 2]); }
 
 }  // namespace
 
 Theme loadTheme(const std::string& id) {
-    if (id == "dark") return builtin(true);
-    if (id == "light") return builtin(false);
+    for (const Builtin& b : BUILTINS)
+        if (id == b.id) return builtin(b);
 
     char path[256];
     std::snprintf(path, sizeof path, "%s/themes/%s/theme.json", fs::ROOT,
@@ -119,7 +129,8 @@ Theme loadTheme(const std::string& id) {
 }
 
 std::vector<std::string> availableThemes() {
-    std::vector<std::string> out = {"dark", "light"};
+    std::vector<std::string> out;
+    for (const Builtin& b : BUILTINS) out.push_back(b.id);
     char dir[128];
     std::snprintf(dir, sizeof dir, "%s/themes", fs::ROOT);
     std::vector<fs::DirEntry> entries;
