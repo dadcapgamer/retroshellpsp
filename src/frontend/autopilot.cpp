@@ -316,7 +316,10 @@ constexpr Step TOUR[] = {
     {3200, 0,                 "t40_states_legacy"},
     {3210, PSP_CTRL_DOWN,     nullptr},         /* slot 4: empty */
     {3240, 0,                 "t41_states_empty"},
-    {3250, PSP_CTRL_START,    nullptr},         /* Home */
+    {3242, PSP_CTRL_DOWN,     nullptr},         /* slot 5 */
+    {3246, PSP_CTRL_DOWN,     nullptr},         /* Delete All Save Data */
+    {3268, 0,                 "t41b_states_delete_all"},
+    {3274, PSP_CTRL_START,    nullptr},         /* Home */
     {3290, PSP_CTRL_TRIANGLE, nullptr},         /* Settings */
     {3300, PSP_CTRL_DOWN,     nullptr},         /* Systems */
     {3330, 0,                 "t42_settings_systems"},

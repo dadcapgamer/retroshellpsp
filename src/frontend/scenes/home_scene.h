@@ -49,8 +49,7 @@ private:
      * is in it. Cheats and manuals have no data source yet, so they are not
      * offered rather than offered and refused. */
     enum DetailAction : int {
-        DA_PLAY, DA_STATES, DA_FAVORITE, DA_EMULATOR, DA_DELETE_SAVE,
-        DA_REMOVE_RECENT
+        DA_PLAY, DA_STATES, DA_FAVORITE, DA_EMULATOR, DA_REMOVE_RECENT
     };
     int  detailActions(int out[8]) const;
 
@@ -157,7 +156,7 @@ private:
     bool          m_detailHasSave = false;
     int           m_detailRow = 0;
     bool          m_detailInRecents = false;
-    bool          m_confirmDelete = false;   /* Delete Save Data: second X */
+    bool          m_confirmDelete = false;   /* Delete All Save Data: second X */
     float         m_detailScroll = 0.f;      /* first visible action row */
 
     /* Save States, inside Game Detail: the slots, the selected one's full

@@ -464,36 +464,17 @@ int HomeScene::detailActions(int out[8]) const {
     out[n++] = DA_STATES;
     out[n++] = DA_FAVORITE;
     if (m_selMultiCore) out[n++] = DA_EMULATOR;
-    out[n++] = DA_DELETE_SAVE;
     if (m_detailInRecents) out[n++] = DA_REMOVE_RECENT;
     return n;
 }
 
 void HomeScene::activateDetail(App& app, int action) {
     const db::GameEntry game = m_detailGame;
-    if (action != DA_DELETE_SAVE) m_confirmDelete = false;
     switch (action) {
         case DA_PLAY:     launch(app, game); break;
         case DA_STATES:   openStates(app); break;
         case DA_FAVORITE: toggleFavorite(app, game); break;
         case DA_EMULATOR: openCorePicker(app, game); break;
-        case DA_DELETE_SAVE:
-            if (!m_detailHasSave) {
-                app.toast("No save data to delete");
-            } else if (!m_confirmDelete) {
-                m_confirmDelete = true;      /* second X confirms */
-            } else {
-                const int removed = save::deleteAll(game);
-                m_confirmDelete = false;
-                m_detailHasSave = false;
-                save::querySlots(game, m_stateSlots);
-                m_detailStateCount = 0;
-                char msg[48];
-                std::snprintf(msg, sizeof msg, "Deleted %d save file%s",
-                              removed, removed == 1 ? "" : "s");
-                app.toast(msg);
-            }
-            break;
         case DA_REMOVE_RECENT:
             if (app.library().removeRecent(game.pathHash)) {
                 rebuildRecents(app);
@@ -605,7 +586,7 @@ void HomeScene::updateDetail(App& app) {
     const int prev = m_detailRow;
     if (pad.navPressed(PSP_CTRL_UP) && m_detailRow > 0) m_detailRow--;
     if (pad.navPressed(PSP_CTRL_DOWN) && m_detailRow < n - 1) m_detailRow++;
-    if (m_detailRow != prev) m_confirmDelete = false;
+    (void)prev;
     if (pad.isPressed(PSP_CTRL_CIRCLE)) {
         m_nav.back();
         return;
@@ -625,6 +606,7 @@ void HomeScene::openStates(App& app) {
     save::querySlots(m_detailGame, m_stateSlots);   /* explicit action: one read */
     m_states = true;
     m_confirmStateDelete = false;
+    m_confirmDelete = false;
     m_stateIdx = 0;
     for (int i = 0; i < save::SLOTS; i++)
         if (m_stateSlots[i].exists) { m_stateIdx = i; break; }
@@ -670,13 +652,43 @@ void HomeScene::loadStatePreview(App& app) {
 
 void HomeScene::updateStates(App& app, float dt) {
     const auto& pad = app.pad();
+    /* Below the slots, and only when there is something to delete, sits
+     * Delete All Save Data — kept off Game Detail so it is never one stray
+     * press away. */
+    const int last = save::SLOTS - 1 + (m_detailHasSave ? 1 : 0);
     const int prev = m_stateIdx;
+    m_stateIdx = rsClamp(m_stateIdx, 0, last);
     if (pad.navPressed(PSP_CTRL_UP) && m_stateIdx > 0) m_stateIdx--;
-    if (pad.navPressed(PSP_CTRL_DOWN) && m_stateIdx < save::SLOTS - 1)
-        m_stateIdx++;
+    if (pad.navPressed(PSP_CTRL_DOWN) && m_stateIdx < last) m_stateIdx++;
     if (m_stateIdx != prev) {
         m_confirmStateDelete = false;
+        m_confirmDelete = false;
         m_previewSettle = SETTLE_SECONDS;
+    }
+    if (m_stateIdx == save::SLOTS) {
+        if (pad.isPressed(PSP_CTRL_CIRCLE)) {
+            closeStates();
+            return;
+        }
+        if (pad.isPressed(PSP_CTRL_CROSS)) {
+            if (!m_confirmDelete) {
+                m_confirmDelete = true;      /* second X deletes */
+            } else {
+                const int removed = save::deleteAll(m_detailGame);
+                m_confirmDelete = false;
+                m_detailHasSave = false;
+                save::querySlots(m_detailGame, m_stateSlots);
+                m_detailStateCount = 0;
+                m_stateIdx = 0;
+                m_previewSlot = -1;
+                m_previewSettle = 0.f;
+                char msg[48];
+                std::snprintf(msg, sizeof msg, "Deleted %d save file%s",
+                              removed, removed == 1 ? "" : "s");
+                app.toast(msg);
+            }
+        }
+        return;
     }
     if (m_previewSlot != m_stateIdx) {
         m_previewSettle -= dt;
@@ -700,6 +712,9 @@ void HomeScene::updateStates(App& app, float dt) {
             save::deleteState(m_detailGame, m_stateIdx);
             m_confirmStateDelete = false;
             save::querySlots(m_detailGame, m_stateSlots);
+            m_detailStateCount = 0;
+            for (const auto& s2 : m_stateSlots)
+                if (s2.exists) m_detailStateCount++;
             m_detailHasSave = save::hasAnySave(m_detailGame);
             m_previewSlot = -1;
             m_previewSettle = 0.f;
@@ -1380,28 +1395,33 @@ void HomeScene::drawDetail(App& app, u32 a, float dy) {
     const db::GameEntry& g = m_detailGame;
     const bool favorite = app.library().isFavorite(g.pathHash);
 
-    /* Left: framed artwork, then the description in its own quiet box. */
-    ui::card(app, DETAIL_ART_X, DETAIL_ART_Y + dy, DETAIL_ART_W, DETAIL_ART_H, a);
+    /* Left: framed artwork, and the description beneath it only when one
+     * exists — without one the artwork takes the whole column, so nothing
+     * on screen is a placeholder. */
+    const bool hasDesc = !m_selMeta.description.empty();
+    const float artH = hasDesc ? DETAIL_ART_H
+                               : L::CONTENT_BOTTOM - DETAIL_ART_Y;
+    ui::card(app, DETAIL_ART_X, DETAIL_ART_Y + dy, DETAIL_ART_W, artH, a);
     if (const gfx::Texture* art = app.boxart().peek(g))
         ui::artWell(app, *art, DETAIL_ART_X + 1.f, DETAIL_ART_Y + 1.f + dy,
-                    DETAIL_ART_W - 2.f, DETAIL_ART_H - 2.f, a);
+                    DETAIL_ART_W - 2.f, artH - 2.f, a);
     else
         ui::artFallback(app, int(g.system), DETAIL_ART_X + 1.f,
-                        DETAIL_ART_Y + 1.f + dy, DETAIL_ART_W - 2.f,
-                        DETAIL_ART_H - 2.f, a);
-    ui::card(app, DETAIL_ART_X, DETAIL_DESC_Y + dy, DETAIL_ART_W, DETAIL_DESC_H,
-             a);
-    const bool noDesc = m_selMeta.description.empty();
-    const std::string desc = noDesc ? std::string("No description available.")
-                                    : m_selMeta.description;
-    const int descLines =
-        ui::wrappedLineCount(fonts.small, DETAIL_ART_W - 20.f, 3, desc);
-    const float descTop = DETAIL_DESC_Y + (DETAIL_DESC_H -
-                                           float(descLines) * 14.f + 7.f) * .5f;
-    drawWrapped(fonts.small, r, DETAIL_ART_X + 10.f,
-                capsAt(fonts.small, ui::snap(descTop)) + dy,
-                DETAIL_ART_W - 20.f, 14.f, 3, desc,
-                fade(noDesc ? pal.textMuted : pal.textSecondary, a));
+                        DETAIL_ART_Y + 1.f + dy, DETAIL_ART_W - 2.f, artH - 2.f,
+                        a);
+    if (hasDesc) {
+        ui::card(app, DETAIL_ART_X, DETAIL_DESC_Y + dy, DETAIL_ART_W,
+                 DETAIL_DESC_H, a);
+        const std::string& desc = m_selMeta.description;
+        const int descLines =
+            ui::wrappedLineCount(fonts.small, DETAIL_ART_W - 20.f, 3, desc);
+        const float descTop = DETAIL_DESC_Y +
+            (DETAIL_DESC_H - float(descLines) * 14.f + 7.f) * .5f;
+        drawWrapped(fonts.small, r, DETAIL_ART_X + 10.f,
+                    capsAt(fonts.small, ui::snap(descTop)) + dy,
+                    DETAIL_ART_W - 20.f, 14.f, 3, desc,
+                    fade(pal.textSecondary, a));
+    }
 
     /* Right: title (two lines at most), system, chips. */
     const std::string& title = g.shown();
@@ -1438,8 +1458,6 @@ void HomeScene::drawDetail(App& app, u32 a, float dy) {
             ui::formatRelative(last, m_now, when, sizeof when);
             std::snprintf(buf, sizeof buf, "Played %s", when);
             add(buf);
-        } else {
-            add("Not played yet");
         }
         if (const u32 seconds = app.library().playSeconds(g.pathHash)) {
             ui::formatPlaytime(seconds, buf, sizeof buf);
@@ -1473,8 +1491,7 @@ void HomeScene::drawDetail(App& app, u32 a, float dy) {
         const float ry = actionsY + float(vi) * L::ROW_H;
         ui::RowStyle style;
         style.focused = i == m_detailRow;
-        style.chevron = act != DA_DELETE_SAVE && act != DA_REMOVE_RECENT &&
-                        act != DA_FAVORITE;
+        style.chevron = act != DA_REMOVE_RECENT && act != DA_FAVORITE;
         style.strong = act == DA_PLAY;
         const char* label = "";
         std::string value;
@@ -1496,12 +1513,6 @@ void HomeScene::drawDetail(App& app, u32 a, float dy) {
                 label = "Emulator";
                 style.icon = int(ui::Icon::Gamepad);
                 if (m_selCore) value = m_selCore->name;
-                break;
-            case DA_DELETE_SAVE:
-                label = m_confirmDelete ? "Press X again to delete"
-                                        : "Delete Save Data";
-                style.icon = int(ui::Icon::Card);
-                style.disabled = !m_detailHasSave;
                 break;
             case DA_REMOVE_RECENT:
                 label = "Remove from Continue";
@@ -1531,12 +1542,29 @@ void HomeScene::drawStates(App& app, u32 a, float dy) {
     const auto& fonts = app.fonts();
     constexpr float PX = L::MARGIN, PY = 34.f, PW = 272.f, PH = 204.f;
     constexpr float LX = PX + PW + 12.f, LW = L::RIGHT - LX;
-    constexpr float SLOT_H = 32.f;
+    constexpr float SLOT_H = 28.f;
+    const bool onDeleteAll = m_stateIdx >= save::SLOTS;
 
     ui::card(app, PX, PY + dy, PW, PH, a);
     const float ix = PX + 1.f, iy = PY + 1.f + dy, iw = PW - 2.f, ih = PH - 2.f;
-    const save::SlotInfo& sel = m_stateSlots[m_stateIdx];
-    if (m_preview.valid() && m_previewSlot == m_stateIdx && m_previewW > 0) {
+    const save::SlotInfo& sel = m_stateSlots[onDeleteAll ? 0 : m_stateIdx];
+    if (onDeleteAll) {
+        /* Say plainly what goes, where the preview would be. */
+        r.rect(ix, iy, iw, ih, fade(pal.surface2, a));
+        const float cx = ix + iw * .5f;
+        ui::pixelFrame(r, cx - 12.f, iy + 46.f, 25.f, 25.f, 2, 3,
+                       fade(pal.danger, a));
+        r.rect(cx - 1.f, iy + 52.f, 3.f, 8.f, fade(pal.danger, a));
+        r.rect(cx - 1.f, iy + 62.f, 3.f, 3.f, fade(pal.danger, a));
+        fonts.title.draw(r, cx, fonts.title.centerY(iy + 86.f, 10.f),
+                         "Delete all save data", fade(pal.textPrimary, a),
+                         text::Align::Center);
+        drawWrapped(fonts.small, r, cx, fonts.small.centerY(iy + 108.f, 7.f),
+                    iw - 40.f, 14.f, 3,
+                    "Removes this game's battery save (your in-game "
+                    "progress) and every save state. This cannot be undone.",
+                    fade(pal.textSecondary, a), text::Align::Center);
+    } else if (m_preview.valid() && m_previewSlot == m_stateIdx && m_previewW > 0) {
         r.rect(ix, iy, iw, ih, fade(rsHex(0x000000), a));
         /* Largest whole-number scale that fits keeps pixels square and
          * sharp; a frame larger than the well scales down smoothly. The old
@@ -1577,30 +1605,42 @@ void HomeScene::drawStates(App& app, u32 a, float dy) {
         if (focused) ui::focusFill(app, LX, y, LW, SLOT_H, a);
         else if (i + 1 < save::SLOTS && i + 1 != m_stateIdx)
             ui::rowRule(app, LX, y + SLOT_H - 1.f, LW, a);
+        const bool confirming = focused && m_confirmStateDelete;
         const u32 ink = focused ? pal.onAccent : pal.textPrimary;
         const u32 sub = focused ? rsWithAlpha(pal.onAccent, 200)
                                 : pal.textSecondary;
         char name[16];
         std::snprintf(name, sizeof name, "Slot %d", i + 1);
         const text::Font& face = focused ? fonts.bodyStrong : fonts.body;
-        face.draw(r, LX + 10.f, capsAt(face, y + 7.f), name,
+        face.draw(r, LX + 10.f, capsAt(face, y + 6.f), name,
                   fade(slot.exists ? ink : (focused ? ink : pal.textMuted), a));
         if (slot.exists) {
             char when[24];
             if (slot.stamp) ui::formatRelative(slot.stamp, m_now, when, sizeof when);
             else std::snprintf(when, sizeof when, "Saved");
-            fonts.small.draw(r, LX + LW - 10.f, capsAt(fonts.small, y + 8.f), when,
+            fonts.small.draw(r, LX + LW - 10.f, capsAt(fonts.small, y + 7.f), when,
                              fade(sub, a), text::Align::Right);
-            drawEllipsized(fonts.small, r, LX + 10.f, capsAt(fonts.small, y + 20.f),
-                           LW - 20.f, slot.coreName, fade(sub, a));
+            drawEllipsized(fonts.small, r, LX + 10.f, capsAt(fonts.small, y + 18.f),
+                           LW - 20.f,
+                           confirming ? std::string("Press triangle again to delete")
+                                      : std::string(slot.coreName),
+                           fade(sub, a));
         } else {
-            fonts.small.draw(r, LX + 10.f, capsAt(fonts.small, y + 20.f), "Empty",
+            fonts.small.draw(r, LX + 10.f, capsAt(fonts.small, y + 18.f), "Empty",
                              fade(focused ? sub : pal.textDisabled, a));
         }
     }
-    if (m_confirmStateDelete)
-        fonts.small.draw(r, LX, capsAt(fonts.small, top + SLOT_H * save::SLOTS + 8.f),
-                         "Press triangle again to delete", fade(pal.danger, a));
+    if (m_detailHasSave) {
+        /* Last, set apart and in the danger colour. */
+        const float y = top + SLOT_H * float(save::SLOTS) + 6.f;
+        const bool focused = onDeleteAll;
+        if (focused) ui::focusFill(app, LX, y, LW, L::ROW_H, a);
+        else r.rect(LX + 6.f, y - 3.f, LW - 12.f, 1.f, fade(pal.line, a));
+        const text::Font& face = focused ? fonts.bodyStrong : fonts.body;
+        face.draw(r, LX + 10.f, face.centerY(y, L::ROW_H),
+                  focused && m_confirmDelete ? "Press X again" : "Delete All Save Data",
+                  fade(focused ? pal.onAccent : pal.danger, a));
+    }
 }
 
 void HomeScene::drawPicker(App& app) {
@@ -1816,6 +1856,12 @@ void HomeScene::drawLegend(App& app) {
             break;
         }
         case nav::Layer::Detail: {
+            if (m_states && m_stateIdx >= save::SLOTS) {
+                const App::Hint hints[] = {{B::Cross, "Delete"},
+                                           {B::Circle, "Back"}};
+                app.drawHintBar(hints, 2);
+                break;
+            }
             if (m_states) {
                 const bool has = m_stateSlots[m_stateIdx].exists;
                 App::Hint hints[3];
