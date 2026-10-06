@@ -6,7 +6,7 @@ testing is still pending.
 
 | Section | Status |
 |---|---|
-| 1 Interaction model | Done. X plays from the Library and Continue; Game Details is the second row of Options. Select opens the View menu. |
+| 1 Interaction model | Done. X plays from the Library and Continue; Triangle opens Game Detail, which holds every per-game action. Select opens the View menu. |
 | 2 Systems / 3 Continue / 4 Library | Done. Per-system selection, filter and sort remembered. |
 | 5 Resilience | Duplicates, regions, revisions, hacks, translations, homebrew and discs disambiguated; tested with 2,000+ games. |
 | 6 Artwork fallback | Artwork, then screenshot, then system placeholder, then text-only. |

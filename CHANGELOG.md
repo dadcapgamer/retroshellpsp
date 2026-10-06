@@ -2,6 +2,10 @@
 
 ## Unreleased — Systems, themes, save states, sharpness
 
+- **Triangle opens Game Detail** directly; the Options popup is gone and its
+  actions (Delete Save Data, Remove from Continue, Emulator) live on the
+  Detail screen. The "Game Details" row is replaced by a facts line under
+  the title (last played, play time, version, size); Return is O.
 - **Settings → Systems**: every system with an emulator installed gets a row;
   Left/Right cycles its emulators and Off. Systems turned off disappear from
   Home and Continue Playing (their games stay indexed).

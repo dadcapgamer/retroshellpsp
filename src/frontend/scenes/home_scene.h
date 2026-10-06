@@ -39,22 +39,20 @@ public:
     void shutdown(App& app) override;
 
 private:
-    enum class Overlay : u8 { None, Options, CorePicker, ViewMenu, Search,
-                              Error };
+    enum class Overlay : u8 { None, CorePicker, ViewMenu, Search, Error };
 
     /* View menu rows; Clear only exists while a search is active. */
     enum ViewRow : int { VR_SHOW, VR_SORT, VR_SEARCH, VR_CLEAR, VR_BACK };
 
-    /* Options menu rows. Cheats and manuals have no data source yet, so
-     * they are not offered rather than offered and refused. */
-    enum Option : int {
-        OPT_PLAY, OPT_FAVORITE, OPT_DETAILS, OPT_DELETE_SAVE,
-        OPT_REMOVE_RECENT, OPT_BACK, OPT_COUNT
+    /* Game Detail actions. The list is built per game: Emulator appears only
+     * when the system has a choice, Remove from Continue only when the game
+     * is in it. Cheats and manuals have no data source yet, so they are not
+     * offered rather than offered and refused. */
+    enum DetailAction : int {
+        DA_PLAY, DA_STATES, DA_FAVORITE, DA_EMULATOR, DA_DELETE_SAVE,
+        DA_REMOVE_RECENT
     };
-    /* Game Detail action rows: one dominant action, a short list after it. */
-    enum DetailRow : int {
-        DET_PLAY, DET_STATES, DET_FAVORITE, DET_DETAILS, DET_RETURN, DET_COUNT
-    };
+    int  detailActions(int out[8]) const;
 
     /* --- data ------------------------------------------------------------ */
     void rebuildSystems(App& app);
@@ -75,14 +73,11 @@ private:
     void updateContinue(App& app);
     void updateLibrary(App& app);
     void updateDetail(App& app);
-    void updateOptions(App& app);
     void updatePicker(App& app);
     void switchSystem(App& app, int dir);
     void launch(App& app, const db::GameEntry& game);
     void toggleFavorite(App& app, const db::GameEntry& game);
-    void openOptions(App& app, const db::GameEntry& game);
     void openDetail(App& app, const db::GameEntry& game);
-    void activateOption(App& app, int row);
     void activateDetail(App& app, int row);
     void openCorePicker(App& app, const db::GameEntry& game);
     void openSettings(App& app);
@@ -108,7 +103,6 @@ private:
     void updateStates(App& app, float dt);
     void closeStates();
     void loadStatePreview(App& app);
-    void drawOptions(App& app);
     void drawPicker(App& app);
     void drawViewMenu(App& app);
     void drawSearch(App& app);
@@ -162,7 +156,9 @@ private:
     db::GameEntry m_detailGame;
     bool          m_detailHasSave = false;
     int           m_detailRow = 0;
-    bool          m_detailExpanded = false;
+    bool          m_detailInRecents = false;
+    bool          m_confirmDelete = false;   /* Delete Save Data: second X */
+    float         m_detailScroll = 0.f;      /* first visible action row */
 
     /* Save States, inside Game Detail: the slots, the selected one's full
      * preview (loaded once the selection settles), and a two-press delete. */
@@ -178,11 +174,6 @@ private:
     bool            m_confirmStateDelete = false;
     float           m_dt = 0.f;               /* this frame's delta, for layers */
 
-    /* Options overlay. */
-    db::GameEntry m_optionsGame;
-    int           m_optionsRow = 0;
-    bool          m_confirmDelete = false;
-    bool          m_optionsHasSave = false;
     ui::Tween     m_overlayFade;
 
     /* View menu and search entry. */

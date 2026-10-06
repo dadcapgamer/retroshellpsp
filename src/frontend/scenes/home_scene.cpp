@@ -59,8 +59,6 @@ constexpr float DETAIL_ART_W = 180.f, DETAIL_ART_H = 140.f;
 constexpr float DETAIL_DESC_Y = 182.f, DETAIL_DESC_H = 56.f;
 constexpr float DETAIL_X = 208.f;
 constexpr float DETAIL_W = L::RIGHT - DETAIL_X;
-constexpr float DETAIL_ACTIONS_Y = 106.f;
-constexpr float DETAIL_ROW = 24.f;
 
 constexpr float SHIFT = 24.f;             /* vertical layer travel */
 constexpr float SLIDE = 36.f;             /* horizontal system-switch travel */
@@ -424,9 +422,9 @@ void HomeScene::updateError(App& app) {
 void HomeScene::toggleFavorite(App& app, const db::GameEntry& game) {
     app.library().toggleFavorite(game.pathHash);
     if (m_view.filter == db::ViewFilter::Favorites) m_listDirty = true;
-    /* The Options row and the star already show the new state; a toast would
-     * also cover the bottom of the popup. */
-    if (m_overlay == Overlay::None)
+    /* In Game Detail the Favorites row already shows the new state; the
+     * lists only have a small star, so they get a toast. */
+    if (m_overlay == Overlay::None && m_nav.layer != nav::Layer::Detail)
         app.toast(app.library().isFavorite(game.pathHash)
                       ? "Added to Favorites" : "Removed from Favorites");
 }
@@ -439,21 +437,15 @@ void HomeScene::openSettings(App& app) {
     app.switchScene(std::make_unique<SettingsScene>());
 }
 
-void HomeScene::openOptions(App& app, const db::GameEntry& game) {
-    (void)app;
-    m_optionsGame = game;
-    m_optionsRow = 0;
-    m_confirmDelete = false;
-    m_optionsHasSave = save::hasAnySave(game);
-    m_overlay = Overlay::Options;
-    m_overlayFade.start(0.16f);
-}
-
 void HomeScene::openDetail(App& app, const db::GameEntry& game) {
     m_detailGame = game;
     m_detailRow = 0;
-    m_detailExpanded = false;
+    m_detailScroll = 0.f;
+    m_confirmDelete = false;
     m_detailHasSave = save::hasAnySave(game);
+    m_detailInRecents = false;
+    for (u32 h : app.library().recents())
+        if (h == game.pathHash) m_detailInRecents = true;
     closeStates();
     /* Slot headers only (five small reads), for the Save States count. */
     save::querySlots(game, m_stateSlots);
@@ -466,64 +458,51 @@ void HomeScene::openDetail(App& app, const db::GameEntry& game) {
     hydrateSelection(app);       /* explicit action: no settle delay */
 }
 
-void HomeScene::activateOption(App& app, int row) {
-    const db::GameEntry game = m_optionsGame;
-    if (row != OPT_DELETE_SAVE) m_confirmDelete = false;
-    switch (row) {
-        case OPT_PLAY:
-            m_overlay = Overlay::None;
-            launch(app, game);
-            break;
-        case OPT_FAVORITE:
-            toggleFavorite(app, game);
-            break;
-        case OPT_DETAILS:
-            m_overlay = Overlay::None;
-            openDetail(app, game);
-            break;
-        case OPT_DELETE_SAVE:
-            if (!m_optionsHasSave) {
+int HomeScene::detailActions(int out[8]) const {
+    int n = 0;
+    out[n++] = DA_PLAY;
+    out[n++] = DA_STATES;
+    out[n++] = DA_FAVORITE;
+    if (m_selMultiCore) out[n++] = DA_EMULATOR;
+    out[n++] = DA_DELETE_SAVE;
+    if (m_detailInRecents) out[n++] = DA_REMOVE_RECENT;
+    return n;
+}
+
+void HomeScene::activateDetail(App& app, int action) {
+    const db::GameEntry game = m_detailGame;
+    if (action != DA_DELETE_SAVE) m_confirmDelete = false;
+    switch (action) {
+        case DA_PLAY:     launch(app, game); break;
+        case DA_STATES:   openStates(app); break;
+        case DA_FAVORITE: toggleFavorite(app, game); break;
+        case DA_EMULATOR: openCorePicker(app, game); break;
+        case DA_DELETE_SAVE:
+            if (!m_detailHasSave) {
                 app.toast("No save data to delete");
             } else if (!m_confirmDelete) {
                 m_confirmDelete = true;      /* second X confirms */
             } else {
                 const int removed = save::deleteAll(game);
                 m_confirmDelete = false;
-                m_optionsHasSave = false;
                 m_detailHasSave = false;
+                save::querySlots(game, m_stateSlots);
+                m_detailStateCount = 0;
                 char msg[48];
                 std::snprintf(msg, sizeof msg, "Deleted %d save file%s",
                               removed, removed == 1 ? "" : "s");
                 app.toast(msg);
             }
             break;
-        case OPT_REMOVE_RECENT: {
-            if (!app.library().removeRecent(game.pathHash)) {
-                app.toast("Not in Continue Playing");
-                break;
+        case DA_REMOVE_RECENT:
+            if (app.library().removeRecent(game.pathHash)) {
+                rebuildRecents(app);
+                m_detailInRecents = false;
+                app.toast("Removed from Continue Playing");
+                int rows[8];
+                m_detailRow = rsClamp(m_detailRow, 0, detailActions(rows) - 1);
             }
-            rebuildRecents(app);
-            m_nav.clamp(int(m_systems.size()), gamesInCurrent(),
-                        int(m_recents.size()));
-            app.toast("Removed from Continue Playing");
-            m_overlay = Overlay::None;
             break;
-        }
-        case OPT_BACK:
-        default:
-            m_overlay = Overlay::None;
-            break;
-    }
-}
-
-void HomeScene::activateDetail(App& app, int row) {
-    const db::GameEntry& game = m_detailGame;
-    switch (row) {
-        case DET_PLAY:     launch(app, game); break;
-        case DET_STATES:   openStates(app); break;
-        case DET_FAVORITE: toggleFavorite(app, game); break;
-        case DET_DETAILS:  m_detailExpanded = !m_detailExpanded; break;
-        case DET_RETURN:   m_nav.back(); break;
     }
 }
 
@@ -574,7 +553,7 @@ void HomeScene::updateContinue(App& app) {
     const db::GameEntry* game = focusedGame();
     if (!game) return;
     if (pad.isPressed(PSP_CTRL_CROSS)) launch(app, *game);
-    else if (pad.isPressed(PSP_CTRL_TRIANGLE)) openOptions(app, *game);
+    else if (pad.isPressed(PSP_CTRL_TRIANGLE)) openDetail(app, *game);
     else if (pad.isPressed(PSP_CTRL_SQUARE)) toggleFavorite(app, *game);
 }
 
@@ -608,10 +587,10 @@ void HomeScene::updateLibrary(App& app) {
     }
     const db::GameEntry* game = focusedGame();
     if (!game) return;
-    /* X plays; the full Game Detail view is one row into Options. */
+    /* X plays; Triangle opens the game's Detail view. */
     if (pad.isPressed(PSP_CTRL_CROSS)) launch(app, *game);
     else if (pad.isPressed(PSP_CTRL_SQUARE)) toggleFavorite(app, *game);
-    else if (pad.isPressed(PSP_CTRL_TRIANGLE)) openOptions(app, *game);
+    else if (pad.isPressed(PSP_CTRL_TRIANGLE)) openDetail(app, *game);
 }
 
 void HomeScene::updateDetail(App& app) {
@@ -620,12 +599,15 @@ void HomeScene::updateDetail(App& app) {
         updateStates(app, m_dt);
         return;
     }
+    int actions[8];
+    const int n = detailActions(actions);
+    m_detailRow = rsClamp(m_detailRow, 0, n - 1);
+    const int prev = m_detailRow;
     if (pad.navPressed(PSP_CTRL_UP) && m_detailRow > 0) m_detailRow--;
-    if (pad.navPressed(PSP_CTRL_DOWN) && m_detailRow < DET_COUNT - 1)
-        m_detailRow++;
+    if (pad.navPressed(PSP_CTRL_DOWN) && m_detailRow < n - 1) m_detailRow++;
+    if (m_detailRow != prev) m_confirmDelete = false;
     if (pad.isPressed(PSP_CTRL_CIRCLE)) {
-        if (m_detailExpanded) m_detailExpanded = false;
-        else m_nav.back();
+        m_nav.back();
         return;
     }
     if (pad.isPressed(PSP_CTRL_START)) {
@@ -633,9 +615,7 @@ void HomeScene::updateDetail(App& app) {
         return;
     }
     if (pad.isPressed(PSP_CTRL_SQUARE)) toggleFavorite(app, m_detailGame);
-    if (pad.isPressed(PSP_CTRL_TRIANGLE) && m_detailExpanded && m_selMultiCore)
-        openCorePicker(app, m_detailGame);
-    if (pad.isPressed(PSP_CTRL_CROSS)) activateDetail(app, m_detailRow);
+    if (pad.isPressed(PSP_CTRL_CROSS)) activateDetail(app, actions[m_detailRow]);
 }
 
 /* --- Save States (Game Detail) ------------------------------------------ */
@@ -752,20 +732,6 @@ void HomeScene::updateStates(App& app, float dt) {
             openError(app, game, raw);
         }
     }
-}
-
-void HomeScene::updateOptions(App& app) {
-    const auto& pad = app.pad();
-    const int prev = m_optionsRow;
-    if (pad.navPressed(PSP_CTRL_UP) && m_optionsRow > 0) m_optionsRow--;
-    if (pad.navPressed(PSP_CTRL_DOWN) && m_optionsRow < OPT_COUNT - 1)
-        m_optionsRow++;
-    if (m_optionsRow != prev) m_confirmDelete = false;
-    if (pad.isPressed(PSP_CTRL_CIRCLE) || pad.isPressed(PSP_CTRL_TRIANGLE)) {
-        m_overlay = Overlay::None;
-        return;
-    }
-    if (pad.isPressed(PSP_CTRL_CROSS)) activateOption(app, m_optionsRow);
 }
 
 void HomeScene::openCorePicker(App& app, const db::GameEntry& game) {
@@ -963,7 +929,6 @@ void HomeScene::update(App& app, float dt) {
     }
 
     if (m_overlay == Overlay::CorePicker) updatePicker(app);
-    else if (m_overlay == Overlay::Options) updateOptions(app);
     else if (m_overlay == Overlay::ViewMenu) updateViewMenu(app);
     else if (m_overlay == Overlay::Search) updateSearch(app);
     else if (m_overlay == Overlay::Error) updateError(app);
@@ -1456,72 +1421,104 @@ void HomeScene::drawDetail(App& app, u32 a, float dy) {
         ui::icon(r, ui::Icon::Star, DETAIL_X + chipsW + 4.f,
                  y + (ui::CHIP_H - ui::ICON_SIZE) * .5f + dy,
                  fade(pal.textSecondary, a));
-    const float actionsY =
-        ui::snap(std::fmax(DETAIL_ACTIONS_Y, y + ui::CHIP_H + 12.f)) + dy;
+    y += ui::CHIP_H + 8.f;
 
-    if (m_detailExpanded) {
-        /* Game Details: facts only, every row exists because the data does. */
-        char buf[64];
-        float sy = actionsY;
-        auto stat = [&](const char* key, const char* value) {
-            fonts.small.draw(r, DETAIL_X + 10.f, fonts.small.centerY(sy, 16.f),
-                             key, fade(pal.textMuted, a));
-            drawEllipsized(fonts.small, r, DETAIL_X + 104.f,
-                           fonts.small.centerY(sy, 16.f), DETAIL_W - 114.f,
-                           value, fade(pal.textPrimary, a));
-            sy += 16.f;
+    /* One quiet line of facts: when it was last played, how long, which
+     * dump, how big — only what is known. */
+    {
+        std::string facts;
+        auto add = [&](const std::string& part) {
+            if (part.empty()) return;
+            if (!facts.empty()) facts += " \xC2\xB7 ";
+            facts += part;
         };
-        ui::formatRelative(app.library().lastPlayed(g.pathHash), m_now, buf,
-                           sizeof buf);
-        stat("Last played", buf);
+        char buf[40];
+        if (const u64 last = app.library().lastPlayed(g.pathHash)) {
+            char when[24];
+            ui::formatRelative(last, m_now, when, sizeof when);
+            std::snprintf(buf, sizeof buf, "Played %s", when);
+            add(buf);
+        } else {
+            add("Not played yet");
+        }
         if (const u32 seconds = app.library().playSeconds(g.pathHash)) {
             ui::formatPlaytime(seconds, buf, sizeof buf);
-            stat("Play time", buf);
+            add(std::string(buf) + " total");
         }
-        std::snprintf(buf, sizeof buf, "%d", app.library().playCount(g.pathHash));
-        stat("Play count", buf);
-        stat("Emulator", m_selCore ? m_selCore->name.c_str() : "Automatic");
+        add(g.variant);
         if (g.size >= 1024u * 1024u)
             std::snprintf(buf, sizeof buf, "%.1f MB", double(g.size) / 1048576.0);
         else
             std::snprintf(buf, sizeof buf, "%u KB", unsigned(g.size / 1024u));
-        stat("ROM size", buf);
-        stat("Save data", m_detailHasSave ? "Present" : "None");
-        if (!g.variant.empty()) stat("Version", g.variant.c_str());
-        /* The cleaned title hides the file's real name; keep it findable. */
-        stat("File", g.name.c_str());
-        return;
+        add(buf);
+        drawEllipsized(fonts.small, r, DETAIL_X, capsAt(fonts.small, y) + dy,
+                       DETAIL_W, facts, fade(pal.textMuted, a));
+        y += 7.f + 9.f;
     }
 
-    /* Actions: icon rows with hairlines between, one accent fill with a
-     * chevron. Play leads, in SemiBold, and names the emulator it will use. */
-    const char* labels[DET_COUNT] = {
-        "Play",
-        "Save States",
-        favorite ? "Remove from Favorites" : "Add to Favorites",
-        "Game Details",
-        m_nav.detailFrom == nav::Layer::Continue ? "Return" : "Return to Library",
-    };
-    const ui::Icon icons[DET_COUNT] = {ui::Icon::Play, ui::Icon::Stack,
-                                       ui::Icon::Star, ui::Icon::Info,
-                                       ui::Icon::Return};
+    /* Actions: everything you can do with this game, icon rows with
+     * hairlines between and one accent fill. The list scrolls only when a
+     * two-line title leaves less room than it needs. */
+    int actions[8];
+    const int n = detailActions(actions);
+    const float actionsY = ui::snap(y) + dy;
+    const int visible = rsClamp(int((L::CONTENT_BOTTOM - y) / L::ROW_H), 1, n);
+    const int first = rsClamp(m_detailRow - visible + 1, 0, n - visible);
     char stateCount[16];
     std::snprintf(stateCount, sizeof stateCount, "%d / %d", m_detailStateCount,
                   save::SLOTS);
-    for (int i = 0; i < DET_COUNT; i++) {
-        const float ry = actionsY + float(i) * DETAIL_ROW;
+    for (int vi = 0; vi < visible; vi++) {
+        const int i = first + vi;
+        const int act = actions[i];
+        const float ry = actionsY + float(vi) * L::ROW_H;
         ui::RowStyle style;
         style.focused = i == m_detailRow;
-        style.chevron = true;
-        style.strong = i == DET_PLAY;
-        style.icon = int(icons[i]);
+        style.chevron = act != DA_DELETE_SAVE && act != DA_REMOVE_RECENT &&
+                        act != DA_FAVORITE;
+        style.strong = act == DA_PLAY;
+        const char* label = "";
         std::string value;
-        if (i == DET_PLAY && m_selCore && m_selMultiCore) value = m_selCore->name;
-        if (i == DET_STATES) value = stateCount;
-        ui::menuRow(app, DETAIL_X, ry, DETAIL_W, DETAIL_ROW, labels[i],
+        switch (act) {
+            case DA_PLAY:
+                label = "Play";
+                style.icon = int(ui::Icon::Play);
+                break;
+            case DA_STATES:
+                label = "Save States";
+                style.icon = int(ui::Icon::Stack);
+                value = stateCount;
+                break;
+            case DA_FAVORITE:
+                label = favorite ? "Remove from Favorites" : "Add to Favorites";
+                style.icon = int(ui::Icon::Star);
+                break;
+            case DA_EMULATOR:
+                label = "Emulator";
+                style.icon = int(ui::Icon::Gamepad);
+                if (m_selCore) value = m_selCore->name;
+                break;
+            case DA_DELETE_SAVE:
+                label = m_confirmDelete ? "Press X again to delete"
+                                        : "Delete Save Data";
+                style.icon = int(ui::Icon::Card);
+                style.disabled = !m_detailHasSave;
+                break;
+            case DA_REMOVE_RECENT:
+                label = "Remove from Continue";
+                style.icon = int(ui::Icon::Close);
+                break;
+        }
+        ui::menuRow(app, DETAIL_X, ry, DETAIL_W, L::ROW_H, label,
                     value.empty() ? nullptr : value.c_str(), style, a);
-        if (!style.focused && i + 1 < DET_COUNT && i + 1 != m_detailRow)
-            ui::rowRule(app, DETAIL_X, ry + DETAIL_ROW - 1.f, DETAIL_W, a);
+        if (!style.focused && vi + 1 < visible && i + 1 != m_detailRow)
+            ui::rowRule(app, DETAIL_X, ry + L::ROW_H - 1.f, DETAIL_W, a);
+    }
+    if (n > visible) {
+        const float trackH = L::ROW_H * float(visible);
+        const float thumb = trackH * float(visible) / float(n);
+        const float t = float(first) / float(n - visible);
+        r.rect(L::RIGHT - 1.f, ui::snap(actionsY + (trackH - thumb) * t), 2.f,
+               ui::snap(thumb), fade(pal.textMuted, a));
     }
 }
 
@@ -1604,46 +1601,6 @@ void HomeScene::drawStates(App& app, u32 a, float dy) {
     if (m_confirmStateDelete)
         fonts.small.draw(r, LX, capsAt(fonts.small, top + SLOT_H * save::SLOTS + 8.f),
                          "Press triangle again to delete", fade(pal.danger, a));
-}
-
-void HomeScene::drawOptions(App& app) {
-    const float t = ui::easeOutCubic(m_overlayFade.t);
-    const u32 a = u32(t * 255.f);
-    ui::backdrop(app, a);
-
-    const db::GameEntry& game = m_optionsGame;
-    const bool favorite = app.library().isFavorite(game.pathHash);
-    bool inRecents = false;
-    for (u32 h : app.library().recents())
-        if (h == game.pathHash) inRecents = true;
-
-    constexpr float GAP = 7.f;     /* rule before Back */
-    const PanelBox b = centeredPanel(
-        248.f, PANEL_HEAD + L::ROW_H * float(OPT_COUNT) + GAP + 6.f, t);
-    ui::panel(app, b.x, b.y, b.w, b.h, a);
-    panelHeading(app, b, "OPTIONS", game.shown(), badge(int(game.system)), a);
-
-    const char* labels[OPT_COUNT] = {
-        "Play",
-        favorite ? "Remove from Favorites" : "Add to Favorites",
-        "Game Details",
-        m_confirmDelete ? "Press X again to delete" : "Delete Save Data",
-        "Remove from Continue", "Back",
-    };
-    for (int i = 0; i < OPT_COUNT; i++) {
-        float y = b.y + PANEL_HEAD + float(i) * L::ROW_H;
-        if (i == OPT_BACK) {
-            app.renderer().rect(b.x + 10.f, y + 3.f, b.w - 20.f, 1.f,
-                                fade(app.pal().line, a));
-            y += GAP;
-        }
-        ui::RowStyle style;
-        style.focused = i == m_optionsRow;
-        style.disabled = (i == OPT_DELETE_SAVE && !m_optionsHasSave) ||
-                         (i == OPT_REMOVE_RECENT && !inRecents);
-        ui::menuRow(app, b.x + 3.f, y, b.w - 6.f, L::ROW_H, labels[i], nullptr,
-                    style, a);
-    }
 }
 
 void HomeScene::drawPicker(App& app) {
@@ -1807,11 +1764,6 @@ void HomeScene::drawLegend(App& app) {
         app.drawHintBar(hints, 2);
         return;
     }
-    if (m_overlay == Overlay::Options) {
-        const App::Hint hints[] = {{B::Cross, "Select"}, {B::Circle, "Close"}};
-        app.drawHintBar(hints, 2);
-        return;
-    }
     if (m_overlay == Overlay::ViewMenu) {
         const App::Hint hints[] = {
             {B::DpadLeftRight, "Change"}, {B::Cross, "Select"},
@@ -1849,7 +1801,7 @@ void HomeScene::drawLegend(App& app) {
         case nav::Layer::Continue: {
             const App::Hint hints[] = {
                 {B::Cross, "Play"}, {B::Square, "Favorite"},
-                {B::Triangle, "Options"}, {B::Circle, "Back"},
+                {B::Triangle, "Details"}, {B::Circle, "Back"},
             };
             app.drawHintBar(hints, 4);
             break;
@@ -1857,7 +1809,7 @@ void HomeScene::drawLegend(App& app) {
         case nav::Layer::Library: {
             const App::Hint hints[] = {
                 {B::Cross, "Play"}, {B::Square, "Favorite"},
-                {B::Triangle, "Options"}, {B::Select, "View"},
+                {B::Triangle, "Details"}, {B::Select, "View"},
                 {B::Circle, "Back"},
             };
             app.drawHintBar(hints, 5);
@@ -1874,21 +1826,11 @@ void HomeScene::drawLegend(App& app) {
                 app.drawHintBar(hints, n);
                 break;
             }
-            if (m_detailExpanded && m_selMultiCore) {
-                const App::Hint hints[] = {
-                    {B::Triangle, "Change Emulator"}, {B::Circle, "Back"},
-                };
-                app.drawHintBar(hints, 2);
-            } else if (m_detailExpanded) {
-                const App::Hint hints[] = {{B::Circle, "Back"}};
-                app.drawHintBar(hints, 1);
-            } else {
-                const App::Hint hints[] = {
-                    {B::Cross, "Select"}, {B::Square, "Favorite"},
-                    {B::Circle, "Back"},
-                };
-                app.drawHintBar(hints, 3);
-            }
+            const App::Hint hints[] = {
+                {B::Cross, "Select"}, {B::Square, "Favorite"},
+                {B::Circle, "Back"},
+            };
+            app.drawHintBar(hints, 3);
             break;
         }
     }
@@ -1922,8 +1864,7 @@ void HomeScene::draw(App& app) {
 
     drawLegend(app);
 
-    if (m_overlay == Overlay::Options) drawOptions(app);
-    else if (m_overlay == Overlay::CorePicker) drawPicker(app);
+    if (m_overlay == Overlay::CorePicker) drawPicker(app);
     else if (m_overlay == Overlay::ViewMenu) drawViewMenu(app);
     else if (m_overlay == Overlay::Search) drawSearch(app);
 }

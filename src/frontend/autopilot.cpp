@@ -35,9 +35,10 @@ constexpr Step GAME_SCRIPT[] = {
     {150,  0,                 "home"},
     {229,  PSP_CTRL_CROSS,    nullptr},   /* open the target system */
     {240,  0,                 "list_target"},
-    {248,  PSP_CTRL_TRIANGLE, nullptr},   /* selected-game quick actions */
+    {248,  PSP_CTRL_TRIANGLE, nullptr},   /* Game Detail */
     {260,  0,                 "quick_actions"},
-    {264,  PSP_CTRL_DOWN,     nullptr},   /* Favorite */
+    {264,  PSP_CTRL_DOWN,     nullptr},
+    {266,  PSP_CTRL_DOWN,     nullptr},   /* Favorite */
     {268,  PSP_CTRL_CROSS,    nullptr},
     {272,  PSP_CTRL_CIRCLE,   nullptr},
     {280,  PSP_CTRL_CROSS,    nullptr},   /* Library: X plays (default core) */
@@ -140,25 +141,21 @@ constexpr Step TOUR[] = {
     {350, PSP_CTRL_DOWN,     nullptr},
     {360, PSP_CTRL_DOWN,     nullptr},
     {410, 0,                 "t06_library_moved"},
-    {420, PSP_CTRL_TRIANGLE, nullptr},          /* Options ... */
-    {428, PSP_CTRL_DOWN,     nullptr},
-    {436, PSP_CTRL_DOWN,     nullptr},
-    {444, PSP_CTRL_CROSS,    nullptr},          /* ... Game Details */
+    {420, PSP_CTRL_TRIANGLE, nullptr},          /* Game Detail */
     {465, 0,                 "t07_detail"},
     {470, PSP_CTRL_DOWN,     nullptr},
     {478, PSP_CTRL_DOWN,     nullptr},
     {484, PSP_CTRL_DOWN,     nullptr},
-    {490, PSP_CTRL_CROSS,    nullptr},          /* expand details */
-    {530, 0,                 "t08_detail_expanded"},
-    {540, PSP_CTRL_CIRCLE,   nullptr},
-    {550, PSP_CTRL_CIRCLE,   nullptr},          /* back to Library */
+    {490, PSP_CTRL_DOWN,     nullptr},          /* Delete Save Data */
+    {530, 0,                 "t08_detail_actions"},
+    {540, PSP_CTRL_CIRCLE,   nullptr},          /* back to Library */
     {590, 0,                 "t09_library_back"},
     {600, PSP_CTRL_RIGHT,    nullptr},          /* GBA Library, in place */
     {640, 0,                 "t10_library_gba"},
     {650, PSP_CTRL_SQUARE,   nullptr},          /* favorite */
     {670, 0,                 "t11_favorite"},
-    {680, PSP_CTRL_TRIANGLE, nullptr},          /* options */
-    {710, 0,                 "t12_options"},
+    {680, PSP_CTRL_TRIANGLE, nullptr},          /* Game Detail */
+    {710, 0,                 "t12_detail_gba"},
     {720, PSP_CTRL_DOWN,     nullptr},
     {730, PSP_CTRL_DOWN,     nullptr},
     {740, PSP_CTRL_DOWN,     nullptr},
@@ -166,8 +163,8 @@ constexpr Step TOUR[] = {
     {760, PSP_CTRL_DOWN,     nullptr},
     {770, PSP_CTRL_DOWN,     nullptr},
     {780, PSP_CTRL_DOWN,     nullptr},
-    {820, 0,                 "t13_options_back_row"},
-    {830, PSP_CTRL_CIRCLE,   nullptr},          /* close popup */
+    {820, 0,                 "t13_detail_last_row"},
+    {830, PSP_CTRL_CIRCLE,   nullptr},          /* back to Library */
     {840, PSP_CTRL_LTRIGGER, nullptr},          /* shoulder: previous system */
     {880, 0,                 "t14_library_shoulder"},
     {890, PSP_CTRL_CIRCLE,   nullptr},          /* Systems */
@@ -180,10 +177,7 @@ constexpr Step TOUR[] = {
      * cursor, so Play reaches the "ROM file not found" state. */
     {990,  PSP_CTRL_CIRCLE,   nullptr},         /* Systems (GBC) */
     {1030, PSP_CTRL_CROSS,    nullptr},         /* Library */
-    {1060, PSP_CTRL_TRIANGLE, nullptr},         /* Options -> Game Details */
-    {1066, PSP_CTRL_DOWN,     nullptr},
-    {1072, PSP_CTRL_DOWN,     nullptr},
-    {1078, PSP_CTRL_CROSS,    nullptr},
+    {1060, PSP_CTRL_TRIANGLE, nullptr},         /* Game Detail */
     {1096, 0,                 "t17_detail_clean"},
     {1100, PSP_CTRL_CROSS,    nullptr},         /* Play -> missing ROM */
     {1140, 0,                 "t18_error_rom_missing"},
@@ -227,16 +221,8 @@ constexpr Step TOUR[] = {
     {1740, PSP_CTRL_CROSS,    nullptr},
     {1750, PSP_CTRL_CIRCLE,   nullptr},
     {1756, PSP_CTRL_TRIANGLE, nullptr},         /* Detail of top game */
-    {1762, PSP_CTRL_DOWN,     nullptr},
-    {1768, PSP_CTRL_DOWN,     nullptr},
-    {1774, PSP_CTRL_CROSS,    nullptr},
-    {1790, PSP_CTRL_DOWN,     nullptr},
-    {1798, PSP_CTRL_DOWN,     nullptr},
-    {1804, PSP_CTRL_DOWN,     nullptr},
-    {1810, PSP_CTRL_CROSS,    nullptr},         /* expand */
     {1850, 0,                 "t28_detail_stats"},
-    {1860, PSP_CTRL_CIRCLE,   nullptr},         /* collapse stats */
-    {1870, PSP_CTRL_CIRCLE,   nullptr},         /* Library */
+    {1860, PSP_CTRL_CIRCLE,   nullptr},         /* Library */
     /* Real-world names and the artwork fallbacks: search "POK" (sibling art
      * and metadata for Pokemon Crystal), then "MET" (no cover, but a player
      * screenshot exists). */
@@ -255,9 +241,6 @@ constexpr Step TOUR[] = {
     {2000, PSP_CTRL_CROSS,    nullptr},
     {2060, 0,                 "t29_pokemon_list"},
     {2064, PSP_CTRL_TRIANGLE, nullptr},         /* Detail */
-    {2070, PSP_CTRL_DOWN,     nullptr},
-    {2076, PSP_CTRL_DOWN,     nullptr},
-    {2082, PSP_CTRL_CROSS,    nullptr},
     {2110, 0,                 "t30_pokemon_detail"},
     {2120, PSP_CTRL_CIRCLE,   nullptr},
     {2130, PSP_CTRL_SELECT,   nullptr},
@@ -310,7 +293,7 @@ constexpr Step TOUR[] = {
     {2790, PSP_CTRL_CIRCLE,   nullptr},
     {2800, PSP_CTRL_UP,       nullptr},         /* Continue */
     {2840, PSP_CTRL_TRIANGLE, nullptr},
-    {2870, 0,                 "t37_continue_options"},
+    {2870, 0,                 "t37_continue_detail"},
     {2880, PSP_CTRL_CIRCLE,   nullptr},
     {2890, PSP_CTRL_DOWN,     nullptr},         /* Systems */
     {2900, PSP_CTRL_TRIANGLE, nullptr},         /* Settings: artwork back on */
@@ -323,10 +306,7 @@ constexpr Step TOUR[] = {
     /* Save States in Game Detail (the runner seeds slots 1 and 3, slot 3 in
      * the older thumbnail-only format), then Settings → Systems. */
     {3020, PSP_CTRL_CROSS,    nullptr},         /* Library */
-    {3050, PSP_CTRL_TRIANGLE, nullptr},
-    {3058, PSP_CTRL_DOWN,     nullptr},
-    {3066, PSP_CTRL_DOWN,     nullptr},
-    {3074, PSP_CTRL_CROSS,    nullptr},         /* Game Details */
+    {3050, PSP_CTRL_TRIANGLE, nullptr},         /* Game Detail */
     {3100, 0,                 "t38_detail_states_row"},
     {3110, PSP_CTRL_DOWN,     nullptr},         /* Save States */
     {3118, PSP_CTRL_CROSS,    nullptr},

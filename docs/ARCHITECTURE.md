@@ -150,14 +150,16 @@ for cores and (eventually) UI sounds.
    Systems  <  >  rail, L/R change system                  (home)
               v Down / X
         Library            vertical list, L/R switch system in place
-              v Options > Game Details (X on a game plays it)
+              v Triangle on a game (X on a game plays it)
         Game Detail        art, metadata, Play / Favorite / ...
 ```
 
 Horizontal always changes system, vertical moves within or between layers,
 X plays (Library, Continue) or enters (Systems), O goes back, Square
 favorites, Triangle opens Options (Systems: Settings) and Start returns Home.
-Game Detail is the second row of Options. Continue Playing shows exactly three
+Triangle on a game opens its Game Detail, which holds every action for it
+(Play, Save States, Favorite, Emulator, Delete Save Data, Remove from
+Continue) and a line of facts under the title. Continue Playing shows exactly three
 cards at a time. The rail lists only systems that have games. The last game
 highlighted in each system is remembered per system and persisted in
 `library.json` (`lastSelected`, memory-only while browsing and flushed when
