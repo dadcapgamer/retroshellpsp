@@ -16,10 +16,10 @@ index cb84cc7..b23e537 100644
  
  
 diff --git a/psp/psp.cpp b/psp/psp.cpp
-index 25a8683..56ed0a6 100644
+index 25a8683..ba128c4 100644
 --- a/psp/psp.cpp
 +++ b/psp/psp.cpp
-@@ -258,6 +258,42 @@ extern struct SCheatData Cheat;
+@@ -258,6 +258,45 @@ extern struct SCheatData Cheat;
  
  
  const char *S9xGetSaveFilename( const char *e );
@@ -39,6 +39,9 @@ index 25a8683..56ed0a6 100644
 + * only (never per frame) to ms0:/RETROSHELL/session/snes9xtyl.log. The last
 + * "result:" line is what RetroShell shows if the session ended early. */
 +#include <stdarg.h>
++extern "C" int sctrlHENApplyMemory(u32 p2);
++extern "C" int kuKernelGetModel(void);
++static int rs_memory_unlock = 1;      /* result of sctrlHENApplyMemory */
 +#define RS_ADAPTER_LOG "ms0:/RETROSHELL/session/snes9xtyl.log"
 +static unsigned int rs_frames;        /* frames emulated this session */
 +static char rs_result[96];            /* why the session ended early */
@@ -62,7 +65,7 @@ index 25a8683..56ed0a6 100644
  
  int os9x_apu_ratio,os9x_fpslimit;
  int os9x_usballowed;
-@@ -432,6 +468,12 @@ int psp_ExitCheck(){
+@@ -432,6 +471,12 @@ int psp_ExitCheck(){
  }
  static void ErrorExit(const char *msg)
  {
@@ -75,7 +78,7 @@ index 25a8683..56ed0a6 100644
  	FILE* f;
  	char tmp_str[256];
  	sprintf(tmp_str,"%s/erorr.txt",LaunchDir);
-@@ -480,6 +522,20 @@ static void update_pad(){
+@@ -480,6 +525,20 @@ static void update_pad(){
  	os9x_snespad=0;
  	os9x_specialaction=0;
  
@@ -96,7 +99,7 @@ index 25a8683..56ed0a6 100644
  #ifndef HOME_HOOK
  	if ((os9x_inputs[PSP_TL_TR])&&(os9x_padvalue & PSP_CTRL_LTRIGGER)&&(os9x_padvalue & PSP_CTRL_RTRIGGER)) {
  		os9x_snespad|=os9x_inputs[PSP_TL_TR];
-@@ -533,6 +589,9 @@ static void update_pad(){
+@@ -533,6 +592,9 @@ static void update_pad(){
  
  	os9x_specialaction=os9x_snespad&0xFFFF0000;
  	os9x_snespad&=0xFFFF;
@@ -106,7 +109,7 @@ index 25a8683..56ed0a6 100644
  
  	// NET STUFF HERE
  	//  Standard PACKET is 8 bytes.
-@@ -1796,14 +1855,17 @@ const char *S9xGetFilename( const char *e )
+@@ -1796,14 +1858,17 @@ const char *S9xGetFilename( const char *e )
  ////////////////////////////////////////////////////////////////////////////////////////
  //
  ////////////////////////////////////////////////////////////////////////////////////////
@@ -128,7 +131,7 @@ index 25a8683..56ed0a6 100644
  	src = strrchr(Memory.ROMFilename, '/');
  	p = strrchr(src, '.');
  	while(src < p) *dst++ = *src++;
-@@ -1813,6 +1875,34 @@ const char *S9xGetSaveFilename( const char *e ) {
+@@ -1813,6 +1878,34 @@ const char *S9xGetSaveFilename( const char *e ) {
  	return (filename);
  }
  
@@ -163,7 +166,7 @@ index 25a8683..56ed0a6 100644
  ////////////////////////////////////////////////////////////////////////////////////////
  //
  ////////////////////////////////////////////////////////////////////////////////////////
-@@ -2124,6 +2214,18 @@ void S9xInitDisplay(  )
+@@ -2124,6 +2217,18 @@ void S9xInitDisplay(  )
  //
  ////////////////////////////////////////////////////////////////////////////////////////
  void S9xExit (){
@@ -182,7 +185,7 @@ index 25a8683..56ed0a6 100644
  	g_bLoop=0;
  #if 0
  	// Cleanup the games resources etc (if required)
-@@ -2237,6 +2339,9 @@ extern "C" {
+@@ -2237,6 +2342,9 @@ extern "C" {
  ////////////////////////////////////////////////////////////////////////////////////////
  void S9xProcessEvents( bool8 block ) {
  	static int cpt=0;
@@ -192,7 +195,7 @@ index 25a8683..56ed0a6 100644
  	if (!(cpt&2047)) scePowerTick(0); //send powertick to avoid auto off
  	if (!(cpt&2047)) {//check every 34s
  		//check if battery is low
-@@ -2256,7 +2361,14 @@ void S9xProcessEvents( bool8 block ) {
+@@ -2256,7 +2364,14 @@ void S9xProcessEvents( bool8 block ) {
  		}
  		//initUSBdrivers();
  
@@ -207,7 +210,7 @@ index 25a8683..56ed0a6 100644
  
  #ifndef FW3X
  		endUSBdrivers();
-@@ -2403,7 +2515,7 @@ void S9xProcessEvents( bool8 block ) {
+@@ -2403,7 +2518,7 @@ void S9xProcessEvents( bool8 block ) {
  		}
  		before_pause();
  
@@ -216,7 +219,22 @@ index 25a8683..56ed0a6 100644
  			if (inputBox(s9xTYL_msg[MENU_STATE_CONFIRMLOAD])) {
  				msgBoxLines(s9xTYL_msg[MENU_STATE_ISLOADING], 10);
  				os9x_load(".zat");
-@@ -2666,6 +2778,21 @@ int main(int argc,char **argv) {
+@@ -2642,6 +2757,14 @@ static int user_main(SceSize args, void* argp);
+ //
+ ////////////////////////////////////////////////////////////////////////////////////////
+ int main(int argc,char **argv) {
++#ifdef RETROSHELL_ADAPTER
++	/* Snes9xTYL needs more than the 24 MB a PSP application gets by
++	 * default (12 MB image + 12 MB heap, then its thread stacks). The XMB
++	 * grants the PSP-2000+'s extended memory from PARAM.SFO's MEMSIZE, but
++	 * a launch from another application does not, so unlock it here, before
++	 * anything else allocates. Harmless when already unlocked (-2). */
++	rs_memory_unlock = sctrlHENApplyMemory(52);
++#endif
+ 	// Kernel mode thread
+ 	/* Install our custom exception handler. If this was NULL then the default would be used */
+ #ifndef NOKERNEL
+@@ -2666,6 +2789,24 @@ int main(int argc,char **argv) {
  	launch_rom[0]=0;
  	if (argc > 1 && argv[1] && strlen(argv[1]) < sizeof(launch_rom))
  		strcpy(launch_rom, argv[1]);
@@ -225,6 +243,9 @@ index 25a8683..56ed0a6 100644
 +	if (retroshell_adapter.active) {
 +		sceIoRemove(RS_ADAPTER_LOG);
 +		rs_log("start: argc %d, rom %s", argc, launch_rom);
++		rs_log("model: PSP-%d000, extended memory unlock %d, free %u KB",
++		       kuKernelGetModel() + 1, rs_memory_unlock,
++		       (unsigned)(sceKernelTotalFreeMemSize() / 1024));
 +		/* Anchor for mapping logged addresses back to the build's ELF. */
 +		rs_log("anchor: S9xExit at %p", (void*)&S9xExit);
 +		if (rs_adapter_prepare_save_paths(&retroshell_adapter, "SNES") < 0) {
@@ -238,13 +259,23 @@ index 25a8683..56ed0a6 100644
    /* Clear the existing profile regs */
  	//pspDebugProfilerClear();
  	/* Enable profiling */
-@@ -2759,9 +2886,25 @@ int main(int argc,char **argv) {
+@@ -2759,9 +2900,35 @@ int main(int argc,char **argv) {
              PSP_THREAD_ATTR_USER|PSP_THREAD_ATTR_VFPU, NULL);
  
    // start user thread, then wait for it to do everything else
 +#ifdef RETROSHELL_ADAPTER
-+  rs_log("emulation thread: %08x", (unsigned)g_mainthread);
-+  if (g_mainthread < 0) rs_fail("could not start the emulation thread");
++  rs_log("emulation thread: %08x (largest free block %u KB)",
++         (unsigned)g_mainthread, (unsigned)(sceKernelMaxFreeMemSize() / 1024));
++  if (g_mainthread < 0) {
++    /* The stock 256 KB stack still runs Snes9xTYL; better than not at all. */
++    g_mainthread = sceKernelCreateThread("User Mode Thread", user_main, 0x9,
++            256 * 1024, PSP_THREAD_ATTR_USER|PSP_THREAD_ATTR_VFPU, NULL);
++    rs_log("emulation thread, 256 KB stack: %08x", (unsigned)g_mainthread);
++  }
++  if (g_mainthread < 0)
++    rs_fail(kuKernelGetModel() == 0
++                ? "not enough memory on a PSP-1000"
++                : "could not start the emulation thread");
 +#endif
    sceKernelStartThread(g_mainthread, 0, NULL);
    sceKernelWaitThreadEnd(g_mainthread, NULL);
@@ -264,7 +295,7 @@ index 25a8683..56ed0a6 100644
    sceKernelExitGame();
    return 0;
  }
-@@ -3781,7 +3924,7 @@ static int init_snes_rom() {
+@@ -3781,7 +3948,7 @@ static int init_snes_rom() {
  		msgBoxLines(s9xTYL_msg[ERR_LOADING_ROM], 60 * 2);
  		return -1;
  	} else {
@@ -273,7 +304,7 @@ index 25a8683..56ed0a6 100644
  
  		if (!bypass_rom_settings) {
  			if (int ret=load_rom_settings(Memory.ROMCRC32)) {
-@@ -4041,6 +4184,14 @@ static int user_main(SceSize args, void* argp) {
+@@ -4041,6 +4208,14 @@ static int user_main(SceSize args, void* argp) {
  	if (launch_rom[0]) {
  		strcpy(rom_filename, launch_rom);
  		open_snes_rom();
@@ -288,7 +319,7 @@ index 25a8683..56ed0a6 100644
  	} else if (os9x_autostart) {
  		strcpy(rom_filename, romPath);
  		strncat(rom_filename, lastRom, 255 - strlen(romPath));
-@@ -4270,3 +4421,192 @@ time_t GetCurrentTime()
+@@ -4270,3 +4445,192 @@ time_t GetCurrentTime()
  	cur_time += os9x_timezone * 60 + os9x_daylsavings * 3600;
  	return cur_time;
  }
