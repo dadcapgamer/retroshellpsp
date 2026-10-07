@@ -13,6 +13,7 @@
 #pragma once
 
 #include "frontend/core_manager.h"
+#include "frontend/core_options.h"
 #include "frontend/launch_notice.h"
 #include "core_api/rs_pause_menu.h"
 #include "frontend/database/game_index.h"
@@ -47,6 +48,11 @@ private:
     void finishPeriodicSram();
     static int sramWriter(void* arg);
     void updateMenu(App& app);
+    /* Emulator Settings: a panel inside the pause menu. */
+    void openSettings();
+    void updateSettings(App& app);
+    void drawSettings(App& app, u32 alpha);
+    void applyAndRestart(App& app);
     void drawFrame(App& app);
     void drawMenu(App& app);
     void openMenu(App& app);
@@ -56,6 +62,12 @@ private:
     void makeThumb(u16* out) const;
     bool makePreview(std::vector<u16>& out, int& w, int& h) const;
     int  m_loadSlot = -1;          /* state to load once the core is up */
+    bool m_settingsOpen = false;
+    int  m_settingsRow = 0;
+    int  m_optCount = 0;
+    const coreopt::Option* m_opts[coreopt::MAX_PER_CORE] = {};
+    int  m_optValue[coreopt::MAX_PER_CORE] = {};
+    int  m_optStart[coreopt::MAX_PER_CORE] = {};   /* as the game started */
     u32  mapButtons(const input::Pad& pad) const;
     bool injectFailure(const char* stage) const;
     launch::Action failureAction(App& app) const;

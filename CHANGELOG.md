@@ -2,6 +2,15 @@
 
 ## Unreleased — Systems, themes, save states, sharpness
 
+- **Emulator Settings** in the pause menu: per-game options for each built-in
+  emulator (PicoDrive renderer, sound quality and sprite limit; gpSP sound
+  and colour correction; Snes9x filter and flicker; QuickNES, PCE Fast,
+  Gambatte and SMS Plus options). Apply & Restart restarts the game with the
+  new settings and puts you back exactly where you were (a hidden carry-over
+  save state, deleted once used).
+- Fix: per-game core options that a core reads during initialisation (such
+  as PicoDrive's renderer) were ignored — the active game was set only after
+  the core had loaded.
 - **Console icons** are now exact integer box downscales of the masters: the
   previous hard-edged reduction broke thin outlines on the device.
 - **L1 / R1 hints** where the shoulders work: the ends of the Home rail, the

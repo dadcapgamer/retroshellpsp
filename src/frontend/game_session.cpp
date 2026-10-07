@@ -125,6 +125,12 @@ bool GameSession::startCore(App& app) {
      * carry the request into another game. */
     m_loadSlot = app.snapshot().loadStateSlot;
     app.snapshot().loadStateSlot = -1;
+    /* This game's emulator settings, read once (not on a frame path). */
+    m_optCount = coreopt::forCore(m_coreName.c_str(), m_opts);
+    for (int i = 0; i < m_optCount; i++) {
+        const std::string v = cfg::gameOption(m_game.pathHash, m_opts[i]->key);
+        m_optValue[i] = m_optStart[i] = coreopt::indexOf(*m_opts[i], v.c_str());
+    }
     const CoreInfo* info = app.cores().find(m_coreName.c_str());
     if (!info) {
         std::snprintf(m_error, sizeof m_error, "core '%s' not installed",
@@ -164,6 +170,9 @@ bool GameSession::startCore(App& app) {
     m_arenaReady = false;
 #endif
     bool loaded = false;
+    /* Before the core loads: some cores (PicoDrive's renderer) read their
+     * options during initialisation, and must already see this game's. */
+    host::setActiveGame(m_game.pathHash);
     if (!injectFailure("missing_prx"))
         loaded = m_cores.loadCore(*info);
 #ifndef RS_STATIC_CORES
@@ -287,7 +296,6 @@ bool GameSession::startCore(App& app) {
     /* 4. Boot the core. */
     if (injectFailure("corrupt_rom") && romData && romSize)
         romData[0] ^= 0xFF;
-    host::setActiveGame(m_game.pathHash);
     if (injectFailure("rom_rejection") ||
         !m_cores.core().loadROM(m_game.path.c_str(), romData, romSize)) {
         std::snprintf(m_error, sizeof m_error, "core rejected rom");
@@ -301,7 +309,13 @@ bool GameSession::startCore(App& app) {
     /* Launched from Game Details to resume a particular state. */
     if (m_loadSlot >= 0) {
         const bool ok = save::loadState(m_game, m_cores.core(), m_loadSlot);
-        app.toast(ok ? "State loaded" : "Load failed");
+        if (m_loadSlot == save::RESUME_SLOT) {
+            /* Back from Apply & Restart: the carry-over state is spent. */
+            save::deleteState(m_game, save::RESUME_SLOT);
+            app.toast(ok ? "Settings applied" : "Settings applied; restarted");
+        } else {
+            app.toast(ok ? "State loaded" : "Load failed");
+        }
         m_loadSlot = -1;
     }
     m_romLoaded = true;   /* only now is it safe to persist SRAM on exit */
@@ -788,6 +802,7 @@ void GameSession::openMenu(App& app) {
     }
     resetPerfWindow();
     m_state = State::Menu;
+    m_settingsOpen = false;
     m_menuRow = RS_PAUSE_RESUME;
     m_menuPos.snap(0.f);
     m_menuScroll.snap(0.f);
@@ -888,9 +903,66 @@ bool GameSession::makePreview(std::vector<u16>& out, int& w, int& h) const {
     return true;
 }
 
+/* --- Emulator Settings ---------------------------------------------------- */
+
+void GameSession::openSettings() {
+    m_settingsOpen = true;
+    m_settingsRow = 0;
+}
+
+void GameSession::updateSettings(App& app) {
+    const auto& pad = app.pad();
+    const int rows = m_optCount + 1;            /* + Apply & Restart */
+    if (pad.navPressed(PSP_CTRL_UP) && m_settingsRow > 0) m_settingsRow--;
+    if (pad.navPressed(PSP_CTRL_DOWN) && m_settingsRow < rows - 1) m_settingsRow++;
+    bool changed = false;
+    for (int i = 0; i < m_optCount; i++)
+        changed |= m_optValue[i] != m_optStart[i];
+
+    if (m_settingsRow < m_optCount) {
+        int dir = 0;
+        if (pad.navPressed(PSP_CTRL_LEFT)) dir = -1;
+        if (pad.navPressed(PSP_CTRL_RIGHT) || pad.isPressed(PSP_CTRL_CROSS)) dir = 1;
+        if (dir) {
+            const coreopt::Option& o = *m_opts[m_settingsRow];
+            int& v = m_optValue[m_settingsRow];
+            v = (v + dir + o.count) % o.count;
+            /* Stored per game straight away (paused: Memory Stick I/O is fine
+             * here); the core reads it when the game next starts. */
+            cfg::setGameOption(m_game.pathHash, o.key, o.values[v].value);
+        }
+    } else if (pad.isPressed(PSP_CTRL_CROSS) && changed) {
+        applyAndRestart(app);
+        return;
+    }
+    if (pad.isPressed(PSP_CTRL_CIRCLE)) {
+        m_settingsOpen = false;
+        if (changed) app.toast("Applies next time the game starts");
+    }
+}
+
+/* Settings reach a libretro core only when it loads, so restart the game —
+ * carrying it across in a hidden save state, so nothing is lost. */
+void GameSession::applyAndRestart(App& app) {
+    const bool carried =
+        save::saveState(m_game, m_cores.core(), save::RESUME_SLOT, nullptr);
+    if (!carried) RS_LOGW("session: settings restart without a carry-over state");
+    auto& snap = app.snapshot();
+    snap.relaunchHash = m_game.pathHash;
+    std::snprintf(snap.relaunchCore, sizeof snap.relaunchCore, "%s",
+                  m_coreName.c_str());
+    snap.loadStateSlot = carried ? save::RESUME_SLOT : -1;
+    m_settingsOpen = false;
+    exitToHome(app);
+}
+
 void GameSession::updateMenu(App& app) {
     const auto& pad = app.pad();
     auto& core = m_cores.core();
+    if (m_settingsOpen) {
+        updateSettings(app);
+        return;
+    }
 
     if (pad.navPressed(PSP_CTRL_UP) && m_menuRow > 0) m_menuRow--;
     if (pad.navPressed(PSP_CTRL_DOWN) &&
@@ -995,11 +1067,11 @@ void GameSession::updateMenu(App& app) {
             break;
         }
         case RS_PAUSE_EMULATOR_SETTINGS:
-            /* Libretro PRX cores expose runtime options, but they do not own
-             * a second UI. Keep the shared row present so navigation remains
-             * identical; adapter-based emulators route this row to their
-             * original settings screen. */
-            app.toast("No additional emulator settings");
+            /* A curated set of the core's own options (core_options.h).
+             * Adapter-based emulators route this row to their original
+             * settings screen instead. */
+            if (m_optCount > 0) openSettings();
+            else app.toast("No additional emulator settings");
             break;
         case RS_PAUSE_EXIT:
             exitToHome(app);
@@ -1159,6 +1231,10 @@ void GameSession::drawMenu(App& app) {
      * menu is part of RetroShell, not a separate overlay style. */
     r.rect(0, 0, RS_SCREEN_W, RS_SCREEN_H, rsWithAlpha(pal.bg, u32(k * 200.f)));
     app.drawTopBar(a);
+    if (m_settingsOpen) {
+        drawSettings(app, a);
+        return;
+    }
 
     constexpr int VISIBLE = PAUSE_VISIBLE_ROWS;
     constexpr float HEAD = 36.f;
@@ -1242,6 +1318,62 @@ void GameSession::drawMenu(App& app) {
         {ui::prim::Button::Circle, "Resume"},
     };
     app.drawHintBar(hints, 3, /*solid=*/true);
+}
+
+void GameSession::drawSettings(App& app, u32 a) {
+    namespace L = ui::layout;
+    using ui::fade;
+    auto& r = app.renderer();
+    const auto& pal = app.pal();
+    const auto& fonts = app.fonts();
+    constexpr float HEAD = 36.f, PX = L::MARGIN, PW = 300.f;
+    const int rows = m_optCount + 1;
+    const float ph = HEAD + L::ROW_H * float(rows) + 7.f + 6.f;
+    const float py = L::CONTENT_TOP;
+    ui::panel(app, PX, py, PW, ph, a);
+    ui::label(app, PX + 10.f, fonts.tiny.centerY(py + 9.f, 6.f),
+              "EMULATOR SETTINGS", fade(pal.textMuted, a));
+    ui::label(app, PX + PW - 10.f, fonts.tiny.centerY(py + 9.f, 6.f),
+              m_coreName.c_str(), fade(pal.textMuted, a), text::Align::Right);
+    ui::drawEllipsized(fonts.bodyStrong, r, PX + 10.f,
+                       fonts.bodyStrong.centerY(py + 20.f, 8.f), PW - 20.f,
+                       m_game.shown(), fade(pal.textPrimary, a));
+
+    bool changed = false;
+    for (int i = 0; i < m_optCount; i++) {
+        changed |= m_optValue[i] != m_optStart[i];
+        ui::RowStyle style;
+        style.focused = i == m_settingsRow;
+        style.adjustable = true;
+        const coreopt::Option& o = *m_opts[i];
+        ui::menuRow(app, PX + 3.f, py + HEAD + float(i) * L::ROW_H, PW - 6.f,
+                    L::ROW_H, o.label, o.values[m_optValue[i]].label, style, a);
+    }
+    const float ay = py + HEAD + float(m_optCount) * L::ROW_H + 7.f;
+    r.rect(PX + 10.f, ay - 4.f, PW - 20.f, 1.f, fade(pal.line, a));
+    ui::RowStyle apply;
+    apply.focused = m_settingsRow == m_optCount;
+    apply.disabled = !changed;
+    apply.strong = changed;
+    ui::menuRow(app, PX + 3.f, ay, PW - 6.f, L::ROW_H, "Apply & Restart",
+                nullptr, apply, a);
+
+    /* Say what Apply does, beside the panel, in plain words. */
+    ui::drawWrapped(fonts.small, r, PX + PW + 14.f,
+                    fonts.small.centerY(py + 4.f, 7.f), L::RIGHT - PX - PW - 14.f,
+                    14.f, 8,
+                    changed ? "Settings take effect when the game restarts. "
+                              "Apply & Restart picks up exactly where you are."
+                            : "Changes are saved for this game only.",
+                    fade(pal.textSecondary, a));
+
+    using B = ui::prim::Button;
+    const App::Hint hints[] = {
+        apply.focused ? App::Hint{B::Cross, "Apply"}
+                      : App::Hint{B::DpadLeftRight, "Change"},
+        {B::Circle, "Back"},
+    };
+    app.drawHintBar(hints, 2, /*solid=*/true);
 }
 
 void GameSession::draw(App& app) {

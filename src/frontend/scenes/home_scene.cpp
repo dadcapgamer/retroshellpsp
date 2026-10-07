@@ -918,6 +918,25 @@ void HomeScene::updateSearch(App& app) {
 
 void HomeScene::update(App& app, float dt) {
     m_dt = dt;
+    /* Emulator Settings "Apply & Restart": straight back into the game.
+     * Done here, not in enter(), because a scene switch requested while the
+     * previous transition is still finishing would be dropped. */
+    if (const u32 hash = app.snapshot().relaunchHash) {
+        app.snapshot().relaunchHash = 0;
+        const db::GameEntry* game = app.index().byHash(hash);
+        const CoreInfo* core = app.cores().find(app.snapshot().relaunchCore);
+        if (game && core) {
+            const db::GameEntry copy = *game;
+            app.launchGame(copy, core);
+            char raw[96];
+            if (app.takeLaunchError(raw, sizeof raw)) {
+                app.snapshot().loadStateSlot = -1;
+                openError(app, copy, raw);
+            }
+            return;
+        }
+        app.snapshot().loadStateSlot = -1;
+    }
     /* A finished background scan invalidates every held GameEntry*. */
     if (app.index().generation() != m_lastIndexGen) {
         const int previousSystem = currentSystemId();

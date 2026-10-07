@@ -91,6 +91,27 @@ constexpr Step GAME_SCRIPT[] = {
     {1750, PSP_CTRL_DOWN,     nullptr},         /* Load state */
     {1760, PSP_CTRL_CROSS,    nullptr},
     {1900, 0,                 "relaunch_state"},
+    /* Emulator Settings: change the first option, then Apply & Restart,
+     * which must bring the game back where it was. */
+    {1910, PSP_CTRL_LTRIGGER | PSP_CTRL_RTRIGGER | PSP_CTRL_SELECT,
+                                    nullptr},
+    {1920, PSP_CTRL_DOWN,     nullptr},
+    {1924, PSP_CTRL_DOWN,     nullptr},
+    {1928, PSP_CTRL_DOWN,     nullptr},
+    {1932, PSP_CTRL_DOWN,     nullptr},
+    {1936, PSP_CTRL_DOWN,     nullptr},
+    {1940, PSP_CTRL_DOWN,     nullptr},
+    {1944, PSP_CTRL_DOWN,     nullptr},
+    {1948, PSP_CTRL_CROSS,    nullptr},         /* Emulator Settings */
+    {1968, 0,                 "emu_settings"},
+    {1974, PSP_CTRL_RIGHT,    nullptr},
+    {1988, 0,                 "emu_settings_changed"},
+    {1994, PSP_CTRL_DOWN,     nullptr},
+    {1998, PSP_CTRL_DOWN,     nullptr},
+    {2002, PSP_CTRL_DOWN,     nullptr},
+    {2006, PSP_CTRL_DOWN,     nullptr},
+    {2010, PSP_CTRL_CROSS,    nullptr},         /* Apply & Restart */
+    {2340, 0,                 "settings_restarted"},
 };
 #if defined(RS_AUTOPILOT_SETUP)
 /* First-run setup capture. Mode 1 has games and two emulators for GBC (the

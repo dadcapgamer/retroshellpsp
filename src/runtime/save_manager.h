@@ -28,6 +28,10 @@ class EmulatorCore;
 namespace rs::save {
 
 constexpr int SLOTS = 5;
+/* A hidden slot after the visible ones: it carries a running game across an
+ * Emulator Settings "Apply & Restart" and is deleted once loaded. Never
+ * listed by querySlots. */
+constexpr int RESUME_SLOT = SLOTS;
 constexpr int THUMB_W = 96;
 constexpr int THUMB_H = 54;
 

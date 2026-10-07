@@ -42,6 +42,11 @@ struct FrontendSnapshot {
     /* Set by Game Details' Save States: the launched game loads this slot
      * as soon as its core is up. -1 = start normally. */
     int  loadStateSlot = -1;
+    /* Emulator Settings "Apply & Restart": Home relaunches this game with
+     * this core as soon as it is up (loadStateSlot then carries it back to
+     * where it was). 0 = nothing pending. */
+    u32  relaunchHash = 0;
+    char relaunchCore[32] = {};
 };
 
 class App {

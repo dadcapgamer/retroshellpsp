@@ -138,7 +138,7 @@ void querySlots(const db::GameEntry& game, SlotInfo out[SLOTS]) {
 }
 
 bool deleteState(const db::GameEntry& game, int slot) {
-    if (slot < 0 || slot >= SLOTS) return false;
+    if (slot < 0 || slot > RESUME_SLOT) return false;
     char path[160], backup[168];
     statePath(path, sizeof path, game, slot);
     const bool existed = fs::exists(path);
@@ -210,7 +210,7 @@ bool loadPreview(const db::GameEntry& game, int slot, std::vector<u16>& out,
 
 bool saveState(const db::GameEntry& game, EmulatorCore& core, int slot,
                const u16* thumb) {
-    if (slot < 0 || slot >= SLOTS) return false;
+    if (slot < 0 || slot > RESUME_SLOT) return false;
     RS_LOGI("save: state slot %d querying core size", slot);
     const u32 maxSize = core.stateSize();
     if (!maxSize || maxSize > MAX_STATE_BYTES) {
@@ -261,7 +261,7 @@ bool saveState(const db::GameEntry& game, EmulatorCore& core, int slot,
 }
 
 bool loadState(const db::GameEntry& game, EmulatorCore& core, int slot) {
-    if (slot < 0 || slot >= SLOTS) return false;
+    if (slot < 0 || slot > RESUME_SLOT) return false;
     RS_LOGI("save: state slot %d preparing load", slot);
     char path[160];
     statePath(path, sizeof path, game, slot);
