@@ -28,10 +28,6 @@ class EmulatorCore;
 namespace rs::save {
 
 constexpr int SLOTS = 5;
-/* A hidden slot after the visible ones: it carries a running game across an
- * Emulator Settings "Apply & Restart" and is deleted once loaded. Never
- * listed by querySlots. */
-constexpr int RESUME_SLOT = SLOTS;
 constexpr int THUMB_W = 96;
 constexpr int THUMB_H = 54;
 
@@ -51,6 +47,9 @@ constexpr int PREVIEW_MAX_H = 512;
 void querySlots(const db::GameEntry& game, SlotInfo out[SLOTS]);
 /* Removes one slot: its state, preview and their .bak twins. */
 bool deleteState(const db::GameEntry& game, int slot);
+/* Deletes the hidden slot-6 state the first Apply & Restart build left
+ * behind, if there is one. */
+void dropLegacyResumeState(const db::GameEntry& game);
 
 /* True when the game has any battery save, RTC data or save state. */
 bool hasAnySave(const db::GameEntry& game);

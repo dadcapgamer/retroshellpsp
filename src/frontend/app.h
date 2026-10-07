@@ -47,6 +47,8 @@ struct FrontendSnapshot {
      * where it was). 0 = nothing pending. */
     u32  relaunchHash = 0;
     char relaunchCore[32] = {};
+    /* That relaunch applies new settings: the game says so once it is up. */
+    bool settingsRestart = false;
 };
 
 class App {

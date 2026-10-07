@@ -931,11 +931,13 @@ void HomeScene::update(App& app, float dt) {
             char raw[96];
             if (app.takeLaunchError(raw, sizeof raw)) {
                 app.snapshot().loadStateSlot = -1;
+                app.snapshot().settingsRestart = false;
                 openError(app, copy, raw);
             }
             return;
         }
         app.snapshot().loadStateSlot = -1;
+        app.snapshot().settingsRestart = false;
     }
     /* A finished background scan invalidates every held GameEntry*. */
     if (app.index().generation() != m_lastIndexGen) {

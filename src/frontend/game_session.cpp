@@ -22,6 +22,7 @@
 #include <pspkernel.h>
 
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <algorithm>
 
@@ -31,6 +32,8 @@ namespace {
 
 /* Pause rows on screen at once; the list scrolls past that. */
 constexpr int PAUSE_VISIBLE_ROWS = 8;
+/* Emulator Settings option rows on screen; Apply & Restart sits below. */
+constexpr int SETTINGS_VISIBLE_ROWS = 6;
 constexpr u32 MENU_COMBO = PSP_CTRL_LTRIGGER | PSP_CTRL_RTRIGGER;
 constexpr float SRAM_FLUSH_SECONDS = 10.f;
 constexpr int MAX_WALL_CATCHUP = 3;
@@ -74,6 +77,11 @@ constexpr u32 AUDIO_RECOVERY_EXIT  = audio::OUTPUT_BLOCK_FRAMES * 14u;
 constexpr u32 AUDIO_BALANCED_EXIT  = audio::OUTPUT_BLOCK_FRAMES * 10u;
 constexpr u32 AUDIO_FROGGBA_EXIT   = audio::OUTPUT_BLOCK_FRAMES * 12u;
 constexpr u32 AUDIO_PRIME_TARGET   = AUDIO_RECOVERY_EXIT;
+/* Emulator Settings "Audio buffer": Large and Max raise every recovery
+ * watermark by ~23 / ~46 ms, trading latency for fewer crackles. Max still
+ * exits recovery at 22 of the ring's 32 blocks. */
+constexpr u32 AUDIO_EXTRA_LARGE    = audio::OUTPUT_BLOCK_FRAMES * 4u;
+constexpr u32 AUDIO_EXTRA_MAX      = audio::OUTPUT_BLOCK_FRAMES * 8u;
 constexpr u32 MIN_CORE_HEADROOM = 2u * 1024u * 1024u;
 constexpr u32 MIN_BUFFERED_CORE_HEADROOM = 1u * 1024u * 1024u;
 constexpr u32 MAX_ROM_BYTES = 16u * 1024u * 1024u;
@@ -125,12 +133,18 @@ bool GameSession::startCore(App& app) {
      * carry the request into another game. */
     m_loadSlot = app.snapshot().loadStateSlot;
     app.snapshot().loadStateSlot = -1;
+    const bool settingsRestart = app.snapshot().settingsRestart;
+    app.snapshot().settingsRestart = false;
     /* This game's emulator settings, read once (not on a frame path). */
     m_optCount = coreopt::forCore(m_coreName.c_str(), m_opts);
     for (int i = 0; i < m_optCount; i++) {
         const std::string v = cfg::gameOption(m_game.pathHash, m_opts[i]->key);
         m_optValue[i] = m_optStart[i] = coreopt::indexOf(*m_opts[i], v.c_str());
+        if (m_opts[i]->live) applyLiveOption(*m_opts[i], m_optValue[i]);
     }
+    /* Apply & Restart once carried games in a hidden slot after the visible
+     * ones; it now saves to a slot the player picks. Drop any leftover. */
+    save::dropLegacyResumeState(m_game);
     const CoreInfo* info = app.cores().find(m_coreName.c_str());
     if (!info) {
         std::snprintf(m_error, sizeof m_error, "core '%s' not installed",
@@ -309,14 +323,18 @@ bool GameSession::startCore(App& app) {
     /* Launched from Game Details to resume a particular state. */
     if (m_loadSlot >= 0) {
         const bool ok = save::loadState(m_game, m_cores.core(), m_loadSlot);
-        if (m_loadSlot == save::RESUME_SLOT) {
-            /* Back from Apply & Restart: the carry-over state is spent. */
-            save::deleteState(m_game, save::RESUME_SLOT);
-            app.toast(ok ? "Settings applied" : "Settings applied; restarted");
+        if (settingsRestart) {
+            char msg[48];
+            std::snprintf(msg, sizeof msg, ok ? "Settings applied \xC2\xB7 Slot %d"
+                                              : "Settings applied; slot %d failed",
+                          m_loadSlot + 1);
+            app.toast(msg);
         } else {
             app.toast(ok ? "State loaded" : "Load failed");
         }
         m_loadSlot = -1;
+    } else if (settingsRestart) {
+        app.toast("Settings applied");
     }
     m_romLoaded = true;   /* only now is it safe to persist SRAM on exit */
     power::setCpuMhz(cfg::get().cpuGameMhz);
@@ -345,6 +363,9 @@ bool GameSession::startCore(App& app) {
     else
         RS_LOGI("session: deep recovery cap %d, exit %u frames",
                 MAX_DEEP_RECOVERY, unsigned(AUDIO_RECOVERY_EXIT));
+    RS_LOGI("session: frame skip %s, audio buffer +%u frames",
+            m_frameSkip ? "fixed" : "auto", unsigned(m_audioExtra));
+    if (m_frameSkip) RS_LOGI("session: frame skip draws 1 in %d", m_frameSkip + 1);
     RS_LOGI("session: '%s' running (%u KB arena free)", m_game.name.c_str(),
             unsigned(mem::available() / 1024));
     /* No Memory Stick writes from the logger while the game runs. */
@@ -607,10 +628,10 @@ void GameSession::updateRunning(App& app, float dt) {
         : froggbaRecovery ? MAX_FROGGBA_RECOVERY
         : gpspRecovery ? MAX_GPSP_RECOVERY
                        : MAX_DEEP_RECOVERY;
-    const u32 recoveryExit = pceRecovery
+    const u32 recoveryExit = m_audioExtra + (pceRecovery
         ? AUDIO_BALANCED_EXIT
         : (froggbaRecovery || gpspRecovery)
-              ? AUDIO_FROGGBA_EXIT : AUDIO_RECOVERY_EXIT;
+              ? AUDIO_FROGGBA_EXIT : AUDIO_RECOVERY_EXIT);
     m_emuAccum += dt;
     int framesDue = int(m_emuAccum / period);
     framesDue = rsClamp(framesDue, 0, MAX_WALL_CATCHUP);
@@ -621,9 +642,9 @@ void GameSession::updateRunning(App& app, float dt) {
      * vblank paced. Suppressing the entire batch would then freeze video
      * forever because the exit threshold can never be reached. */
     const u32 bufferedAudio = audio::buffered();
-    if (snesRecovery && bufferedAudio < AUDIO_SNES_EMERGENCY)
+    if (snesRecovery && bufferedAudio < AUDIO_SNES_EMERGENCY + m_audioExtra)
         recoveryFrameCap = MAX_SNES_EMERGENCY_RECOVERY;
-    if (!m_audioRecovery && bufferedAudio < AUDIO_RECOVERY_ENTER)
+    if (!m_audioRecovery && bufferedAudio < AUDIO_RECOVERY_ENTER + m_audioExtra)
         m_audioRecovery = true;
     else if (m_audioRecovery && bufferedAudio >= recoveryExit)
         m_audioRecovery = false;
@@ -642,7 +663,14 @@ void GameSession::updateRunning(App& app, float dt) {
          * intermediate images and present the newest. This guarantees
          * forward visual progress even when recovery cannot reach its high
          * watermark on native hardware. */
-        const bool renderVideo = (ran == framesDue - 1);
+        bool renderVideo = (ran == framesDue - 1);
+        /* Emulator Settings "Frame skip" N: draw at most one frame in N+1,
+         * counted across batches, so slow games spend the time emulating. */
+        if (m_frameSkip > 0) {
+            if (renderVideo && m_skipPhase < m_frameSkip) renderVideo = false;
+            if (renderVideo) m_skipPhase = 0;
+            else m_skipPhase++;
+        }
         const u32 sequenceBefore = m_cores.core().frame().sequence;
         m_cores.core().runFrame(buttons, renderVideo);
         const u32 frameUs = sceKernelGetSystemTimeLow() - frameStart;
@@ -823,14 +851,15 @@ void GameSession::resetPerfWindow() {
 
 void GameSession::primeAudio() {
     int primedFrames = 0;
-    while (audio::buffered() < AUDIO_PRIME_TARGET && primedFrames < 8) {
+    const u32 target = AUDIO_PRIME_TARGET + m_audioExtra;
+    while (audio::buffered() < target && primedFrames < 12) {
         m_cores.core().runFrame(0, /*renderVideo=*/false);
         primedFrames++;
     }
     m_emuAccum = 0.f;
-    m_audioRecovery = audio::buffered() < AUDIO_RECOVERY_EXIT;
+    m_audioRecovery = audio::buffered() < AUDIO_RECOVERY_EXIT + m_audioExtra;
     RS_LOGI("audio: primed %d frames to %u/%u", primedFrames,
-            unsigned(audio::buffered()), unsigned(AUDIO_PRIME_TARGET));
+            unsigned(audio::buffered()), unsigned(target));
 }
 
 void GameSession::resumeGame(bool discardAudio) {
@@ -839,7 +868,7 @@ void GameSession::resumeGame(bool discardAudio) {
         audio::clear();
         primeAudio();
     } else {
-        m_audioRecovery = audio::buffered() < AUDIO_RECOVERY_ENTER;
+        m_audioRecovery = audio::buffered() < AUDIO_RECOVERY_ENTER + m_audioExtra;
     }
     audio::setPaused(false);
     m_emuAccum = 0.f;
@@ -907,17 +936,42 @@ bool GameSession::makePreview(std::vector<u16>& out, int& w, int& h) const {
 
 void GameSession::openSettings() {
     m_settingsOpen = true;
+    m_confirmOpen = false;
     m_settingsRow = 0;
+    m_settingsScroll.snap(0.f);
+}
+
+/* A RetroShell option takes effect in the running session at once. */
+void GameSession::applyLiveOption(const coreopt::Option& o, int value) {
+    const char* v = o.values[value].value;
+    if (std::strcmp(o.key, coreopt::FRAMESKIP_KEY) == 0) {
+        m_frameSkip = std::atoi(v);          /* "auto" -> 0 */
+        m_skipPhase = 0;
+    } else if (std::strcmp(o.key, coreopt::AUDIO_BUFFER_KEY) == 0) {
+        m_audioExtra = std::strcmp(v, "max") == 0     ? AUDIO_EXTRA_MAX
+                       : std::strcmp(v, "large") == 0 ? AUDIO_EXTRA_LARGE
+                                                      : 0u;
+    }
+}
+
+/* True once an option that needs a restart differs from how the game
+ * started. Live options never need one. */
+bool GameSession::restartPending() const {
+    for (int i = 0; i < m_optCount; i++)
+        if (!m_opts[i]->live && m_optValue[i] != m_optStart[i]) return true;
+    return false;
 }
 
 void GameSession::updateSettings(App& app) {
+    if (m_confirmOpen) {
+        updateConfirm(app);
+        return;
+    }
     const auto& pad = app.pad();
     const int rows = m_optCount + 1;            /* + Apply & Restart */
     if (pad.navPressed(PSP_CTRL_UP) && m_settingsRow > 0) m_settingsRow--;
     if (pad.navPressed(PSP_CTRL_DOWN) && m_settingsRow < rows - 1) m_settingsRow++;
-    bool changed = false;
-    for (int i = 0; i < m_optCount; i++)
-        changed |= m_optValue[i] != m_optStart[i];
+    const bool pending = restartPending();
 
     if (m_settingsRow < m_optCount) {
         int dir = 0;
@@ -930,28 +984,83 @@ void GameSession::updateSettings(App& app) {
             /* Stored per game straight away (paused: Memory Stick I/O is fine
              * here); the core reads it when the game next starts. */
             cfg::setGameOption(m_game.pathHash, o.key, o.values[v].value);
+            if (o.live) applyLiveOption(o, v);
         }
-    } else if (pad.isPressed(PSP_CTRL_CROSS) && changed) {
-        applyAndRestart(app);
+    } else if (pad.isPressed(PSP_CTRL_CROSS) && pending) {
+        /* Ask first: keep progress in a save state, or restart clean. */
+        m_confirmOpen = true;
+        m_confirmRow = 0;
+        m_confirmSlot = m_slot;
         return;
     }
     if (pad.isPressed(PSP_CTRL_CIRCLE)) {
         m_settingsOpen = false;
-        if (changed) app.toast("Applies next time the game starts");
+        if (pending) app.toast("Applies next time the game starts");
     }
 }
 
-/* Settings reach a libretro core only when it loads, so restart the game —
- * carrying it across in a hidden save state, so nothing is lost. */
-void GameSession::applyAndRestart(App& app) {
-    const bool carried =
-        save::saveState(m_game, m_cores.core(), save::RESUME_SLOT, nullptr);
-    if (!carried) RS_LOGW("session: settings restart without a carry-over state");
+void GameSession::updateConfirm(App& app) {
+    const auto& pad = app.pad();
+    if (pad.navPressed(PSP_CTRL_UP) && m_confirmRow > 0) m_confirmRow--;
+    if (pad.navPressed(PSP_CTRL_DOWN) && m_confirmRow < 2) m_confirmRow++;
+    if (m_confirmRow == 0) {
+        if (pad.navPressed(PSP_CTRL_LEFT) && m_confirmSlot > 0) m_confirmSlot--;
+        if (pad.navPressed(PSP_CTRL_RIGHT) && m_confirmSlot < save::SLOTS - 1)
+            m_confirmSlot++;
+    }
+    if (pad.isPressed(PSP_CTRL_CIRCLE)) {
+        m_confirmOpen = false;
+        return;
+    }
+    if (!pad.isPressed(PSP_CTRL_CROSS)) return;
+    switch (m_confirmRow) {
+        case 0:
+            /* Never restart after a failed save: the progress would go. */
+            if (!saveToSlot(m_confirmSlot)) {
+                app.toast("Save failed");
+                save::querySlots(m_game, m_slots);
+                return;
+            }
+            restartWithSettings(app, m_confirmSlot);
+            break;
+        case 1:
+            restartWithSettings(app, -1);
+            break;
+        default:
+            m_confirmOpen = false;
+            break;
+    }
+}
+
+/* Save state `slot` with its thumbnail and Game Details preview. */
+bool GameSession::saveToSlot(int slot) {
+    u16 thumb[save::THUMB_W * save::THUMB_H];
+    makeThumb(thumb);
+    const bool saved = save::saveState(m_game, m_cores.core(), slot, thumb);
+    if (saved) {
+        /* A full-size preview for Game Details; if it cannot be written,
+         * drop the old one so it never shows a stale frame. */
+        std::vector<u16> preview;
+        int pw = 0, ph = 0;
+        if (!makePreview(preview, pw, ph) ||
+            !save::savePreview(m_game, slot, preview.data(), pw, ph))
+            save::dropPreview(m_game, slot);
+    }
+    return saved;
+}
+
+/* Settings reach a libretro core only when it loads, so restart the game:
+ * from save state `slot`, or from power-on when slot is -1. */
+void GameSession::restartWithSettings(App& app, int slot) {
     auto& snap = app.snapshot();
     snap.relaunchHash = m_game.pathHash;
     std::snprintf(snap.relaunchCore, sizeof snap.relaunchCore, "%s",
                   m_coreName.c_str());
-    snap.loadStateSlot = carried ? save::RESUME_SLOT : -1;
+    snap.loadStateSlot = slot;
+    snap.settingsRestart = true;
+    RS_LOGI("session: restarting with new settings (%s)",
+            slot >= 0 ? "from a save state" : "cold");
+    m_confirmOpen = false;
     m_settingsOpen = false;
     exitToHome(app);
 }
@@ -1003,18 +1112,7 @@ void GameSession::updateMenu(App& app) {
             resumeGame();
             break;
         case RS_PAUSE_SAVE_STATE: {
-            u16 thumb[save::THUMB_W * save::THUMB_H];
-            makeThumb(thumb);
-            const bool saved = save::saveState(m_game, core, m_slot, thumb);
-            if (saved) {
-                /* A full-size preview for Game Details; if it cannot be
-                 * written, drop the old one so it never shows a stale frame. */
-                std::vector<u16> preview;
-                int pw = 0, ph = 0;
-                if (!makePreview(preview, pw, ph) ||
-                    !save::savePreview(m_game, m_slot, preview.data(), pw, ph))
-                    save::dropPreview(m_game, m_slot);
-            }
+            const bool saved = saveToSlot(m_slot);
             app.toast(saved ? "State saved" : "Save failed");
             save::querySlots(m_game, m_slots);
             m_thumbSlot = -1;
@@ -1091,6 +1189,12 @@ void GameSession::update(App& app, float dt) {
                                           0, RS_PAUSE_ITEM_COUNT -
                                                  PAUSE_VISIBLE_ROWS)));
             m_menuScroll.update(dt, 14.f);
+            if (m_settingsOpen) {
+                m_settingsScroll.to(float(rsClamp(
+                    m_settingsRow - SETTINGS_VISIBLE_ROWS / 2, 0,
+                    std::max(0, m_optCount - SETTINGS_VISIBLE_ROWS))));
+                m_settingsScroll.update(dt, 14.f);
+            }
             m_menuFade.update(dt);
             updateMenu(app);
             break;
@@ -1327,8 +1431,9 @@ void GameSession::drawSettings(App& app, u32 a) {
     const auto& pal = app.pal();
     const auto& fonts = app.fonts();
     constexpr float HEAD = 36.f, PX = L::MARGIN, PW = 300.f;
-    const int rows = m_optCount + 1;
-    const float ph = HEAD + L::ROW_H * float(rows) + 7.f + 6.f;
+    const int shown = std::min(m_optCount, SETTINGS_VISIBLE_ROWS);
+    const float listH = L::ROW_H * float(shown);
+    const float ph = HEAD + listH + 7.f + L::ROW_H + 6.f;
     const float py = L::CONTENT_TOP;
     ui::panel(app, PX, py, PW, ph, a);
     ui::label(app, PX + 10.f, fonts.tiny.centerY(py + 9.f, 6.f),
@@ -1339,32 +1444,46 @@ void GameSession::drawSettings(App& app, u32 a) {
                        fonts.bodyStrong.centerY(py + 20.f, 8.f), PW - 20.f,
                        m_game.shown(), fade(pal.textPrimary, a));
 
-    bool changed = false;
+    const bool pending = restartPending();
+    const float listY = py + HEAD;
+    const float scroll = m_settingsScroll.v;
+    r.setScissor(int(PX), int(listY), int(PW), int(listH));
     for (int i = 0; i < m_optCount; i++) {
-        changed |= m_optValue[i] != m_optStart[i];
+        const float rowY = ui::snap(listY + (float(i) - scroll) * L::ROW_H);
+        if (rowY + L::ROW_H <= listY || rowY >= listY + listH) continue;
         ui::RowStyle style;
-        style.focused = i == m_settingsRow;
+        style.focused = !m_confirmOpen && i == m_settingsRow;
         style.adjustable = true;
         const coreopt::Option& o = *m_opts[i];
-        ui::menuRow(app, PX + 3.f, py + HEAD + float(i) * L::ROW_H, PW - 6.f,
-                    L::ROW_H, o.label, o.values[m_optValue[i]].label, style, a);
+        ui::menuRow(app, PX + 3.f, rowY, PW - 6.f, L::ROW_H, o.label,
+                    o.values[m_optValue[i]].label, style, a);
     }
-    const float ay = py + HEAD + float(m_optCount) * L::ROW_H + 7.f;
+    r.resetScissor();
+    const float ay = listY + listH + 7.f;
     r.rect(PX + 10.f, ay - 4.f, PW - 20.f, 1.f, fade(pal.line, a));
     ui::RowStyle apply;
-    apply.focused = m_settingsRow == m_optCount;
-    apply.disabled = !changed;
-    apply.strong = changed;
+    apply.focused = !m_confirmOpen && m_settingsRow == m_optCount;
+    apply.disabled = !pending;
+    apply.strong = pending;
     ui::menuRow(app, PX + 3.f, ay, PW - 6.f, L::ROW_H, "Apply & Restart",
                 nullptr, apply, a);
 
-    /* Say what Apply does, beside the panel, in plain words. */
+    if (m_confirmOpen) {
+        drawConfirm(app, a);
+        return;
+    }
+
+    /* Say what the focused row does, beside the panel, in plain words. */
+    const bool liveRow = m_settingsRow < m_optCount && m_opts[m_settingsRow]->live;
     ui::drawWrapped(fonts.small, r, PX + PW + 14.f,
                     fonts.small.centerY(py + 4.f, 7.f), L::RIGHT - PX - PW - 14.f,
-                    14.f, 8,
-                    changed ? "Settings take effect when the game restarts. "
-                              "Apply & Restart picks up exactly where you are."
-                            : "Changes are saved for this game only.",
+                    14.f, 9,
+                    liveRow ? "Frame skip and Audio buffer apply at once. "
+                              "Raise them if a game stutters or crackles."
+                    : pending ? "These settings take effect when the game "
+                                "restarts. Apply & Restart offers to save "
+                                "a state first."
+                              : "Changes are saved for this game only.",
                     fade(pal.textSecondary, a));
 
     using B = ui::prim::Button;
@@ -1374,6 +1493,72 @@ void GameSession::drawSettings(App& app, u32 a) {
         {B::Circle, "Back"},
     };
     app.drawHintBar(hints, 2, /*solid=*/true);
+}
+
+/* Apply & Restart's question, beside the settings panel. */
+void GameSession::drawConfirm(App& app, u32 a) {
+    namespace L = ui::layout;
+    using ui::fade;
+    const auto& pal = app.pal();
+    const auto& fonts = app.fonts();
+    auto& r = app.renderer();
+    constexpr float HEAD = 36.f;
+    /* A modal over the settings panel's right edge: wide enough for
+     * "Save  < Slot 5 >" on one row. */
+    constexpr float pw = 196.f;
+    const float px = L::RIGHT - pw;
+    const float py = L::CONTENT_TOP;
+    const float listEnd = HEAD + L::ROW_H * 3.f + 6.f;
+    const float ph = listEnd + 14.f * 3.f + 8.f;   /* + three lines of help */
+    /* Settle the settings panel behind the question. */
+    r.rect(0, 0, RS_SCREEN_W, RS_SCREEN_H, rsWithAlpha(pal.bg, a * 110u / 255u));
+    ui::panel(app, px, py, pw, ph, a);
+    ui::label(app, px + 10.f, fonts.tiny.centerY(py + 9.f, 6.f),
+              "RESTART", fade(pal.textMuted, a));
+    ui::drawEllipsized(fonts.bodyStrong, r, px + 10.f,
+                       fonts.bodyStrong.centerY(py + 20.f, 8.f), pw - 20.f,
+                       "Save a state first?", fade(pal.textPrimary, a));
+    char slot[24];
+    std::snprintf(slot, sizeof slot, "Slot %d", m_confirmSlot + 1);
+    const char* labels[3] = {"Save", "Don't save", "Cancel"};
+    for (int i = 0; i < 3; i++) {
+        ui::RowStyle style;
+        style.focused = i == m_confirmRow;
+        style.adjustable = i == 0;
+        style.strong = i == 0;
+        ui::menuRow(app, px + 3.f, py + HEAD + float(i) * L::ROW_H, pw - 6.f,
+                    L::ROW_H, labels[i], i == 0 ? slot : nullptr, style, a);
+    }
+    r.rect(px + 10.f, py + listEnd, pw - 20.f, 1.f, fade(pal.line, a));
+    ui::drawWrapped(fonts.small, r, px + 10.f,
+                    fonts.small.centerY(py + listEnd + 10.f, 7.f), pw - 20.f,
+                    14.f, 3,
+                    m_confirmRow == 0
+                        ? (m_slots[m_confirmSlot].exists
+                               ? "Replaces this slot's state, then restarts "
+                                 "from it."
+                               : "Saves to this empty slot, then restarts "
+                                 "from it.")
+                    : m_confirmRow == 1
+                        ? "Restarts from power-on. Unsaved progress is lost."
+                        : "Back to Emulator Settings.",
+                    fade(pal.textSecondary, a));
+
+    using B = ui::prim::Button;
+    if (m_confirmRow == 0) {
+        const App::Hint hints[] = {
+            {B::Cross, "Save & Restart"},
+            {B::DpadLeftRight, "Slot"},
+            {B::Circle, "Cancel"},
+        };
+        app.drawHintBar(hints, 3, /*solid=*/true);
+    } else {
+        const App::Hint hints[] = {
+            {B::Cross, "Select"},
+            {B::Circle, "Cancel"},
+        };
+        app.drawHintBar(hints, 2, /*solid=*/true);
+    }
 }
 
 void GameSession::draw(App& app) {

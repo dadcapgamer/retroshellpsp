@@ -97,3 +97,11 @@ target_compile_options(launch_notice_test PRIVATE -Wall -Wextra -Werror
   -fsanitize=address,undefined -fno-omit-frame-pointer)
 target_link_options(launch_notice_test PRIVATE -fsanitize=address,undefined)
 add_test(NAME launch_notice_test COMMAND launch_notice_test)
+
+add_executable(core_options_test core_options_test.cpp)
+target_compile_features(core_options_test PRIVATE cxx_std_17)
+target_include_directories(core_options_test PRIVATE ../.. ../../src)
+target_compile_options(core_options_test PRIVATE -Wall -Wextra -Werror
+  -fsanitize=address,undefined -fno-omit-frame-pointer)
+target_link_options(core_options_test PRIVATE -fsanitize=address,undefined)
+add_test(NAME core_options_test COMMAND core_options_test)

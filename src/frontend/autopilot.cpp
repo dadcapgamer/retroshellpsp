@@ -91,8 +91,9 @@ constexpr Step GAME_SCRIPT[] = {
     {1750, PSP_CTRL_DOWN,     nullptr},         /* Load state */
     {1760, PSP_CTRL_CROSS,    nullptr},
     {1900, 0,                 "relaunch_state"},
-    /* Emulator Settings: change the first option, then Apply & Restart,
-     * which must bring the game back where it was. */
+    /* Emulator Settings: Frame skip (live) on the first row, then the
+     * core's first own option, then Apply & Restart -> "Save a state
+     * first?" -> Save, which must bring the game back from that slot. */
     {1910, PSP_CTRL_LTRIGGER | PSP_CTRL_RTRIGGER | PSP_CTRL_SELECT,
                                     nullptr},
     {1920, PSP_CTRL_DOWN,     nullptr},
@@ -104,14 +105,21 @@ constexpr Step GAME_SCRIPT[] = {
     {1944, PSP_CTRL_DOWN,     nullptr},
     {1948, PSP_CTRL_CROSS,    nullptr},         /* Emulator Settings */
     {1968, 0,                 "emu_settings"},
-    {1974, PSP_CTRL_RIGHT,    nullptr},
-    {1988, 0,                 "emu_settings_changed"},
-    {1994, PSP_CTRL_DOWN,     nullptr},
-    {1998, PSP_CTRL_DOWN,     nullptr},
-    {2002, PSP_CTRL_DOWN,     nullptr},
-    {2006, PSP_CTRL_DOWN,     nullptr},
-    {2010, PSP_CTRL_CROSS,    nullptr},         /* Apply & Restart */
-    {2340, 0,                 "settings_restarted"},
+    {1974, PSP_CTRL_RIGHT,    nullptr},         /* Frame skip -> 1 */
+    {1980, PSP_CTRL_DOWN,     nullptr},
+    {1984, PSP_CTRL_DOWN,     nullptr},
+    {1988, PSP_CTRL_RIGHT,    nullptr},         /* first core option */
+    {2000, 0,                 "emu_settings_changed"},
+    {2004, PSP_CTRL_DOWN,     nullptr},
+    {2008, PSP_CTRL_DOWN,     nullptr},
+    {2012, PSP_CTRL_DOWN,     nullptr},
+    {2016, PSP_CTRL_DOWN,     nullptr},
+    {2020, PSP_CTRL_DOWN,     nullptr},
+    {2024, PSP_CTRL_DOWN,     nullptr},
+    {2028, PSP_CTRL_CROSS,    nullptr},         /* Apply & Restart */
+    {2044, 0,                 "restart_confirm"},
+    {2050, PSP_CTRL_CROSS,    nullptr},         /* Save, then restart */
+    {2380, 0,                 "settings_restarted"},
 };
 #if defined(RS_AUTOPILOT_SETUP)
 /* First-run setup capture. Mode 1 has games and two emulators for GBC (the

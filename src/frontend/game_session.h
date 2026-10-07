@@ -52,7 +52,12 @@ private:
     void openSettings();
     void updateSettings(App& app);
     void drawSettings(App& app, u32 alpha);
-    void applyAndRestart(App& app);
+    void drawConfirm(App& app, u32 alpha);
+    void updateConfirm(App& app);
+    void applyLiveOption(const coreopt::Option& o, int value);
+    bool restartPending() const;
+    bool saveToSlot(int slot);
+    void restartWithSettings(App& app, int slot);
     void drawFrame(App& app);
     void drawMenu(App& app);
     void openMenu(App& app);
@@ -68,6 +73,15 @@ private:
     const coreopt::Option* m_opts[coreopt::MAX_PER_CORE] = {};
     int  m_optValue[coreopt::MAX_PER_CORE] = {};
     int  m_optStart[coreopt::MAX_PER_CORE] = {};   /* as the game started */
+    ui::Smooth m_settingsScroll;
+    /* Apply & Restart asks whether to save first. */
+    bool m_confirmOpen = false;
+    int  m_confirmRow = 0;         /* 0 save + restart, 1 restart, 2 cancel */
+    int  m_confirmSlot = 0;
+    /* Live RetroShell options (core_options.h). */
+    int  m_frameSkip = 0;          /* fixed skip N; 0 = Auto */
+    int  m_skipPhase = 0;          /* frames skipped since the last drawn */
+    u32  m_audioExtra = 0;         /* frames added to the audio watermarks */
     u32  mapButtons(const input::Pad& pad) const;
     bool injectFailure(const char* stage) const;
     launch::Action failureAction(App& app) const;

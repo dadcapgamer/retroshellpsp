@@ -2,12 +2,19 @@
 
 ## Unreleased — Systems, themes, save states, sharpness
 
-- **Emulator Settings** in the pause menu: per-game options for each built-in
-  emulator (PicoDrive renderer, sound quality and sprite limit; gpSP sound
-  and colour correction; Snes9x filter and flicker; QuickNES, PCE Fast,
-  Gambatte and SMS Plus options). Apply & Restart restarts the game with the
-  new settings and puts you back exactly where you were (a hidden carry-over
-  save state, deleted once used).
+- **Emulator Settings** in the pause menu: per-game options for every
+  built-in emulator. Two RetroShell options apply to every core and take
+  effect at once: **Frame skip** (Auto, or draw one frame in 2, 3 or 4) and
+  **Audio buffer** (Normal, Large, Max — more buffering, fewer crackles).
+  Each core adds its own speed and sound options: PicoDrive renderer, sound
+  quality, sprite limit, audio and FM filters; gpSP sound, colour correction
+  and dynarec; Snes9x filter, flicker and overclock; QuickNES palette, sprite
+  limit and sound quality; Gambatte resampler, frame blending and colour;
+  PCE Fast and SMS Plus options. The list scrolls when a core has more.
+- **Apply & Restart asks first**: save a state to a slot you pick and
+  restart from it, restart from power-on without saving, or cancel. A save
+  that fails never restarts the game. (The first version's hidden carry-over
+  slot is gone; any leftover file is removed on launch.)
 - Fix: per-game core options that a core reads during initialisation (such
   as PicoDrive's renderer) were ignored — the active game was set only after
   the core had loaded.
