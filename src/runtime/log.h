@@ -8,6 +8,12 @@ enum Level { Debug = 0, Info = 1, Warn = 2, Error = 3 };
 
 void init(bool toFile);
 void shutdown();
+/* While deferred, lines collect in RAM and reach the Memory Stick only when
+ * the buffer fills, on an error, or when deferral ends. GameSession defers
+ * during gameplay: on real hardware every sceIoWrite is a synchronous stick
+ * transaction on the main thread, which PPSSPP does not model. */
+void setDeferred(bool deferred);
+void flush();
 void write(int level, const char* fmt, ...)
     __attribute__((format(printf, 2, 3)));
 

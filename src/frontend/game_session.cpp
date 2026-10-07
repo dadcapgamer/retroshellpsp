@@ -333,6 +333,8 @@ bool GameSession::startCore(App& app) {
                 MAX_DEEP_RECOVERY, unsigned(AUDIO_RECOVERY_EXIT));
     RS_LOGI("session: '%s' running (%u KB arena free)", m_game.name.c_str(),
             unsigned(mem::available() / 1024));
+    /* No Memory Stick writes from the logger while the game runs. */
+    log::setDeferred(true);
     return true;
 }
 
@@ -402,6 +404,7 @@ void GameSession::systemResume(App& app) {
 void GameSession::teardown(App& app, bool restoreFrontend) {
     if (m_teardownComplete) return;
     m_teardownComplete = true;
+    log::setDeferred(false);
 
     audio::setPaused(true);
     const bool completedLaunch = m_romLoaded;
@@ -736,6 +739,15 @@ void GameSession::updateRunning(App& app, float dt) {
                     u32(m_perfSkippedFrames ? m_perfSkippedFrames : 1)),
                 unsigned(skipP95), unsigned(m_uploadedFrameSequence),
                 m_audioRecovery ? "on" : "off");
+        /* Where the window's wall time went: emulation, waiting on vblank
+         * and the GPU, and everything else (frontend work, other threads). */
+        const u32 waitUs = app.renderer().takeWaitUs();
+        const u32 emuUs = m_perfEmuUs;
+        const u32 otherUs = perfWallUs > emuUs + waitUs
+                                ? perfWallUs - emuUs - waitUs : 0;
+        RS_LOGI("perf time: emu %u ms | wait %u ms | other %u ms | wall %u ms",
+                unsigned(emuUs / 1000), unsigned(waitUs / 1000),
+                unsigned(otherUs / 1000), unsigned(perfWallUs / 1000));
         m_perfWindowStartUs = perfNowUs;
         m_perfEmuUs = 0;
         m_perfFrames = 0;
@@ -762,6 +774,7 @@ void GameSession::updateRunning(App& app, float dt) {
 void GameSession::openMenu(App& app) {
     (void)app;
     audio::setPaused(true);
+    log::setDeferred(false);   /* paused: a good moment to write the log */
     /* Keep save-state and screenshot I/O serialized with the background SRAM
      * writer. This wait occurs only after gameplay audio has been paused. */
     finishPeriodicSram();
@@ -806,6 +819,7 @@ void GameSession::primeAudio() {
 }
 
 void GameSession::resumeGame(bool discardAudio) {
+    log::setDeferred(true);
     if (discardAudio) {
         audio::clear();
         primeAudio();

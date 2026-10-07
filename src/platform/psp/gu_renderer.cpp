@@ -69,6 +69,11 @@ bool Renderer::init() {
     vram::init();
 
     sceGuInit();
+    /* Swaps take effect at the next vblank (the SDK default is the next
+     * hsync, i.e. mid-scan). beginFrame relies on this: it waits for that
+     * vblank only when a new frame would otherwise draw into a buffer that
+     * is still on screen. */
+    guSwapBuffersBehaviour(PSP_DISPLAY_SETBUF_NEXTFRAME);
     sceGuStart(GU_DIRECT, s_list);
     sceGuDrawBuffer(GU_PSM_5650, reinterpret_cast<void*>(vram::FB0_OFFSET),
                     vram::FB_STRIDE);
@@ -103,7 +108,16 @@ void Renderer::shutdown() {
 }
 
 void Renderer::beginFrame(u32 clearColor) {
+    /* The previous frame's swap is queued for the next vblank, and until
+     * that vblank the buffer we are about to draw into is still on screen.
+     * Wait only if no vblank has happened since the swap: a normal 60 Hz
+     * frame paces exactly as before, while a frame that follows a long
+     * emulation batch (the display has long since flipped) starts drawing
+     * immediately instead of idling up to a whole refresh. */
+    const u32 waitStart = sceKernelGetSystemTimeLow();
+    if (sceDisplayGetVcount() == m_swapVcount) sceDisplayWaitVblankStart();
     m_frameStart = sceKernelGetSystemTimeLow();
+    m_waitUs += m_frameStart - waitStart;
     sceGuStart(GU_DIRECT, s_list);
 
     /* sceGuClear respects the active scissor rectangle. A clip left behind
@@ -128,9 +142,11 @@ void Renderer::beginFrame(u32 clearColor) {
 void Renderer::endFrame() {
     sceKernelDcacheWritebackAll();  /* vertices written this frame */
     sceGuFinish();
+    const u32 syncStart = sceKernelGetSystemTimeLow();
     sceGuSync(0, 0);
 
     const u32 busyEnd = sceKernelGetSystemTimeLow();
+    m_waitUs += busyEnd - syncStart;
     m_frameMs = float(busyEnd - m_frameStart) * 0.001f;
     if (m_lastFrameStart != 0) {
         const float total = float(m_frameStart - m_lastFrameStart) * 0.001f;
@@ -141,12 +157,17 @@ void Renderer::endFrame() {
     }
     m_lastFrameStart = m_frameStart;
 
-    sceDisplayWaitVblankStart();
+    /* Queued for the next vblank; beginFrame waits for it only when the
+     * next frame would otherwise start drawing before it. */
     m_drawBuffer = sceGuSwapBuffers();
+    m_swapVcount = sceDisplayGetVcount();
     /* Capture the buffer after it becomes the displayed frame. Reading the
      * pre-swap draw pointer is unreliable in PPSSPP and produced stale,
      * identical screenshots even while valid core frames were presented. */
-    if (m_capturePath[0]) captureNow();
+    if (m_capturePath[0]) {
+        sceDisplayWaitVblankStart();   /* let the queued swap land first */
+        captureNow();
+    }
     if (!m_displayOn) {
         sceGuDisplay(GU_TRUE);
         m_displayOn = true;

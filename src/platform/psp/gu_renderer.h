@@ -49,7 +49,10 @@ public:
     void shutdown();
 
     void beginFrame(u32 clearColor);
-    void endFrame();            /* finish, vblank, swap */
+    void endFrame();            /* finish, GPU sync, swap at next vblank */
+    /* Microseconds spent waiting on vblank and the GPU since the last call
+     * (performance diagnostics). */
+    u32  takeWaitUs() { const u32 w = m_waitUs; m_waitUs = 0; return w; }
 
     /* Encode the frame being finished by the NEXT endFrame() to a PNG on
      * the Memory Stick (also used by the save-state thumbnail path). */
@@ -119,6 +122,8 @@ private:
     float m_fps              = 0.f;
     u32   m_lastFrameStart   = 0;
     u32   m_frameStart       = 0;
+    u32   m_swapVcount       = 0xFFFFFFFFu;  /* vblank count at the last swap */
+    u32   m_waitUs           = 0;            /* vblank + GPU sync waits */
     char  m_capturePath[128] = {};
 };
 

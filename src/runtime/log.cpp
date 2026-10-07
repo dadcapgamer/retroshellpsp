@@ -1,5 +1,6 @@
 #include "runtime/log.h"
 #include "platform/psp/fs_psp.h"
+#include "rs_common.h"
 
 #include <pspiofilemgr.h>
 
@@ -12,7 +13,21 @@ namespace rs::log {
 namespace {
 SceUID s_fd = -1;
 const char* LEVEL_TAG[4] = {"D", "I", "W", "E"};
+bool s_deferred = false;
+constexpr u32 DEFER_BYTES = 16u * 1024u;
+char s_pending[DEFER_BYTES];
+u32 s_pendingLen = 0;
 }  // namespace
+
+void flush() {
+    if (s_fd >= 0 && s_pendingLen) sceIoWrite(s_fd, s_pending, s_pendingLen);
+    s_pendingLen = 0;
+}
+
+void setDeferred(bool deferred) {
+    if (!deferred) flush();
+    s_deferred = deferred;
+}
 
 void init(bool toFile) {
     if (!toFile) return;
@@ -22,6 +37,7 @@ void init(bool toFile) {
 }
 
 void shutdown() {
+    flush();
     if (s_fd >= 0) sceIoClose(s_fd);
     s_fd = -1;
 }
@@ -41,7 +57,15 @@ void write(int level, const char* fmt, ...) {
     buf[n] = 0;
 
     std::fputs(buf, stdout);
-    if (s_fd >= 0) sceIoWrite(s_fd, buf, SceSize(n));
+    if (s_fd < 0) return;
+    if (!s_deferred) {
+        sceIoWrite(s_fd, buf, SceSize(n));
+        return;
+    }
+    if (s_pendingLen + u32(n) > DEFER_BYTES) flush();
+    std::memcpy(s_pending + s_pendingLen, buf, size_t(n));
+    s_pendingLen += u32(n);
+    if ((level & 3) == Error) flush();   /* an error may precede a crash */
 }
 
 }  // namespace rs::log
