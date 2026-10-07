@@ -1,5 +1,5 @@
 {
-  "formatVersion": 1,
+  "formatVersion": 2,
   "name": "snes9xtyl",
   "displayName": "Snes9xTYL ME (native PSP)",
   "repository": "https://github.com/OniMock/snes9xTYL.git",
@@ -8,12 +8,28 @@
   "sourceLicenseFile": "copyright.h",
   "modelSupport": "Any PSP",
   "status": "Testing",
-  "notes": "ME build with a minimal RetroShell direct-ROM launch patch. Exit returns to the XMB.",
-  "patches": ["native-emulators/snes9xtyl/direct-rom-launch.patch"],
+  "notes": "Media Engine build of Snes9xTYL with RetroShell's adapter: the L+R+Select (or HOME) pause surface, Emulator Settings opening Snes9xTYL's own menu, the shared save library and Exit returning to RetroShell.",
+  "adapterProtocol": 1,
+  "pauseMode": "embedded",
+  "pauseHotkey": "L+R+SELECT",
+  "returnMode": "loadexec",
+  "capabilities": ["pause", "resume", "saveState", "loadState", "reset", "aspectRatio", "filter", "screenshot", "emulatorSettings", "exitToShell"],
+  "patches": [
+    "native-emulators/snes9xtyl/direct-rom-launch.patch",
+    "native-emulators/snes9xtyl/retroshell-adapter.patch"
+  ],
   "payload": [
     {"source": "EBOOT.PBP", "destination": "EBOOT.PBP"},
     {"source": "homehook.prx", "destination": "homehook.prx"},
     {"source": "psp/mediaengineprx/mediaengine.prx", "destination": "mediaengine.prx"},
     {"source": "data/snesadvance.dat", "destination": "DATA/snesadvance.dat"}
+  ],
+  "localPatches": [
+    "Copy native-emulators/sdk/retroshell_adapter.[ch] and src/core_api/rs_pause_menu.h into psp/ before building",
+    "Build with `make mehome`, then `make` in psp/homehookprx and psp/mediaengineprx",
+    "psp/psp.cpp: L+R+Select (and HOME) open the RetroShell-ordered pause surface drawn with Snes9xTYL's pg primitives; Emulator Settings opens root_menu()",
+    "psp/psp.cpp, psp/psp_state.c: battery saves in RetroShell's per-game save folder, states/previews/cheats in states/snes9xtyl/, with read-only fallback to the standalone SAVES folder",
+    "psp/psp.cpp: rs_adapter_return() after the emulation thread has saved and stopped the Media Engine",
+    "makefile_multi: compile the adapter shim and link pspsystemctrl_user"
   ]
 }

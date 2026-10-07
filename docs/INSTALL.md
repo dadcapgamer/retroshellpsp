@@ -22,9 +22,12 @@ delete `ms0:/RETROSHELL/system/`: it contains user-supplied BIOS files and is
 never replaced by RetroShell release packages. ROMs, saves, settings, artwork,
 and BIOS files should be backed up before manually deleting an installation.
 
-The optional FrogGBA core requires a legally obtained GBA BIOS at
-`ms0:/RETROSHELL/system/gba_bios.bin`. gpSP remains the default GBA core and
-does not require this file with RetroShell's current build.
+The release also includes two native PSP emulators, FrogGBA (GBA) and
+Snes9xTYL (SNES), in `ms0:/RETROSHELL/emulators/`. They are optional: gpSP and
+Snes9x 2005 stay the defaults, and either native emulator can be picked per
+game from the core picker. FrogGBA requires a legally obtained GBA BIOS at
+`ms0:/RETROSHELL/system/gba_bios.bin`; gpSP does not need this file.
+Snes9xTYL shows its licence disclaimer once on first launch.
 
 To add cover art, place a PNG or JPG beside the ROM using the same base name:
 

@@ -11,6 +11,13 @@
   and dynarec; Snes9x filter, flicker and overclock; QuickNES palette, sprite
   limit and sound quality; Gambatte resampler, frame blending and colour;
   PCE Fast and SMS Plus options. The list scrolls when a core has more.
+- **FrogGBA and Snes9xTYL ship in the release**, no separate install.
+  Snes9xTYL now has the full RetroShell adapter, like FrogGBA: L+R+Select (or
+  HOME) opens RetroShell's pause menu, Emulator Settings opens Snes9xTYL's
+  own settings, saves live in RetroShell's save library, and Exit returns to
+  RetroShell instead of the XMB. Both stay labelled Testing, and gpSP and
+  Snes9x 2005 remain the defaults; pick them per game with the core picker.
+  FrogGBA still needs your own GBA BIOS in `RETROSHELL/system/gba_bios.bin`.
 - **Apply & Restart asks first**: save a state to a slot you pick and
   restart from it, restart from power-on without saving, or cancel. A save
   that fails never restarts the game. (The first version's hidden carry-over

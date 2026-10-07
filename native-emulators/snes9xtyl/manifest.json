@@ -1,11 +1,32 @@
 {
   "name": "snes9xtyl",
-  "version": "1.9.01-rs1",
+  "version": "1.9.01-rs2",
   "systems": "snes",
   "priority": 90,
   "testOnly": true,
   "psp1000Safe": true,
   "backend": "native",
+  "adapterProtocol": 1,
+  "pauseMode": "embedded",
+  "pauseHotkey": "L+R+SELECT",
+  "returnMode": "loadexec",
+  "capabilities": [
+    "pause",
+    "resume",
+    "saveState",
+    "loadState",
+    "reset",
+    "aspectRatio",
+    "filter",
+    "screenshot",
+    "emulatorSettings",
+    "exitToShell",
+    "sharedSaveLibrary"
+  ],
   "executable": "emulators/snes9xtyl/EBOOT.PBP",
-  "maxRomPath": 255
+  "maxRomPath": 255,
+  "requiredDirectories": [
+    "emulators/snes9xtyl/SAVES",
+    "emulators/snes9xtyl/PROFILES"
+  ]
 }

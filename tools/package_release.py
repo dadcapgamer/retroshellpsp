@@ -27,6 +27,26 @@ def native_adapters() -> dict[str, tuple[dict, Path]]:
     return adapters
 
 
+def bundle_native(archive: zipfile.ZipFile, name: str, package: Path) -> None:
+    """Copy a built native adapter package's files into the release.
+
+    Native emulators ship inside the release so FrogGBA and Snes9xTYL are
+    there out of the box; a missing package fails the release rather than
+    silently leaving an emulator out."""
+    if not package.is_file():
+        raise SystemExit(
+            f"missing native package {package.name}: build it with "
+            "`./build.sh adapters FROG_DIR SNES_DIR` "
+            "(see docs/NATIVE_EMULATOR_ADAPTERS.md)")
+    with zipfile.ZipFile(package) as source:
+        for item in sorted(source.infolist(), key=lambda value: value.filename):
+            path = item.filename
+            if (item.is_dir() or not path.startswith("RETROSHELL/") or
+                    ".." in Path(path).parts):
+                raise SystemExit(f"{package.name}: unsafe entry {path}")
+            add_bytes(archive, source.read(item), path)
+
+
 def native_package_descriptor(package: Path, name: str) -> dict:
     with zipfile.ZipFile(package) as archive:
         descriptor = json.loads(archive.read(
@@ -237,6 +257,8 @@ def main() -> None:
                      f"RETROSHELL/cores/{name}.json")
             add_file(archive, ROOT / core["licenseFile"],
                      f"RETROSHELL/licenses/{name}-{Path(core['licenseFile']).name}")
+        for name, (_, package) in sorted(native_adapters().items()):
+            bundle_native(archive, name, package)
         add_file(archive, ROOT / "core-provenance.lock.json",
                  "RETROSHELL/core-provenance.lock.json")
         add_file(archive, ROOT / "RELEASE_VERSION", "RETROSHELL/VERSION")

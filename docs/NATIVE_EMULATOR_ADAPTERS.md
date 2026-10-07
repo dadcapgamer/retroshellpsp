@@ -62,7 +62,20 @@ EBOOT, and refresh the core-directory index in one command:
 
 The FrogGBA directory must be the unmodified standalone PSP release directory,
 not RetroShell's retired PRX conversion. The Snes9xTYL directory must be built
-from the pinned commit after applying `direct-rom-launch.patch`. The pipeline
+from the pinned commit after applying `direct-rom-launch.patch` and then
+`retroshell-adapter.patch`, with the adapter SDK copied into `psp/`:
+
+```sh
+git apply native-emulators/snes9xtyl/direct-rom-launch.patch
+git apply native-emulators/snes9xtyl/retroshell-adapter.patch
+cp native-emulators/sdk/retroshell_adapter.[ch] src/core_api/rs_pause_menu.h psp/
+make mehome
+make -C psp/homehookprx && make -C psp/mediaengineprx
+```
+
+Both packages are bundled into the release ZIP by `tools/package_release.py`
+(`./build.sh release`): build them into `dist/core-directory/` first. A missing
+native package fails the release instead of silently leaving an emulator out. The pipeline
 checks the adapter manifests, payload paths, licenses, commit IDs, and package
 layout; hardware qualification is still required before either adapter can be
 marked included.
@@ -104,7 +117,12 @@ FrogGBA is the reference implementation. Before building its pinned source,
 copy `native-emulators/sdk/retroshell_adapter.c`, `.h`, and
 `src/core_api/rs_pause_menu.h` into `source/src`, then apply
 `native-emulators/froggba/patches/return-to-launcher.patch`.
-Snes9xTYL remains a legacy adapter until it adopts the same contract.
+Snes9xTYL implements the same contract (`retroshell-adapter.patch`): L+R+Select
+— or HOME, with the ME build's home hook — opens the shared pause surface,
+Emulator Settings opens Snes9xTYL's own menu, battery saves go to the game's
+shared folder and states, previews and cheats to `states/snes9xtyl/`, with
+read-only fallback to its standalone `SAVES` folder. On first launch it still
+shows Snes9xTYL's one-time licence disclaimer.
 
 RetroShell locates its own EBOOT by probing the documented install paths
 rather than calling `sceKernelInitFileName`, whose kernel-mode stub library
