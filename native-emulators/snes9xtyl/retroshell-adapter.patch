@@ -16,7 +16,7 @@ index cb84cc7..b23e537 100644
  
  
 diff --git a/psp/psp.cpp b/psp/psp.cpp
-index 25a8683..f86920e 100644
+index 25a8683..f2bf5d3 100644
 --- a/psp/psp.cpp
 +++ b/psp/psp.cpp
 @@ -171,7 +171,15 @@ PSP_MAIN_THREAD_STACK_SIZE_KB(256); /* smaller stack for kernel thread */
@@ -238,7 +238,23 @@ index 25a8683..f86920e 100644
  			if (inputBox(s9xTYL_msg[MENU_STATE_CONFIRMLOAD])) {
  				msgBoxLines(s9xTYL_msg[MENU_STATE_ISLOADING], 10);
  				os9x_load(".zat");
-@@ -2642,6 +2767,14 @@ static int user_main(SceSize args, void* argp);
+@@ -2486,7 +2611,15 @@ static void initvar_withdefault() {
+ 
+ 	os9x_gammavalue=0;
+ 	os9x_fastsprite=0;
++#ifdef RETROSHELL_ADAPTER
++	/* Accurate software rendering by default: the GU-accelerated engines
++	 * corrupt mid-frame background/window changes (Secret of Mana's
++	 * prologue renders wrong tiles and striped banners). Games can still
++	 * pick a faster engine in Emulator Settings; that is saved per game. */
++	os9x_softrendering=1;//accurate soft
++#else
+ 	os9x_softrendering=3;//psp accel+acur. soft
++#endif
+ 	os9x_smoothing=1;
+ 	os9x_fskipvalue=0;
+ 	os9x_autofskip_MaxSkipFrames=9;
+@@ -2642,6 +2775,14 @@ static int user_main(SceSize args, void* argp);
  //
  ////////////////////////////////////////////////////////////////////////////////////////
  int main(int argc,char **argv) {
@@ -253,7 +269,7 @@ index 25a8683..f86920e 100644
  	// Kernel mode thread
  	/* Install our custom exception handler. If this was NULL then the default would be used */
  #ifndef NOKERNEL
-@@ -2666,6 +2799,24 @@ int main(int argc,char **argv) {
+@@ -2666,6 +2807,24 @@ int main(int argc,char **argv) {
  	launch_rom[0]=0;
  	if (argc > 1 && argv[1] && strlen(argv[1]) < sizeof(launch_rom))
  		strcpy(launch_rom, argv[1]);
@@ -278,7 +294,7 @@ index 25a8683..f86920e 100644
    /* Clear the existing profile regs */
  	//pspDebugProfilerClear();
  	/* Enable profiling */
-@@ -2759,9 +2910,35 @@ int main(int argc,char **argv) {
+@@ -2759,9 +2918,35 @@ int main(int argc,char **argv) {
              PSP_THREAD_ATTR_USER|PSP_THREAD_ATTR_VFPU, NULL);
  
    // start user thread, then wait for it to do everything else
@@ -314,7 +330,7 @@ index 25a8683..f86920e 100644
    sceKernelExitGame();
    return 0;
  }
-@@ -3781,7 +3958,7 @@ static int init_snes_rom() {
+@@ -3781,7 +3966,7 @@ static int init_snes_rom() {
  		msgBoxLines(s9xTYL_msg[ERR_LOADING_ROM], 60 * 2);
  		return -1;
  	} else {
@@ -323,7 +339,7 @@ index 25a8683..f86920e 100644
  
  		if (!bypass_rom_settings) {
  			if (int ret=load_rom_settings(Memory.ROMCRC32)) {
-@@ -4041,6 +4218,14 @@ static int user_main(SceSize args, void* argp) {
+@@ -4041,6 +4226,14 @@ static int user_main(SceSize args, void* argp) {
  	if (launch_rom[0]) {
  		strcpy(rom_filename, launch_rom);
  		open_snes_rom();
@@ -338,7 +354,7 @@ index 25a8683..f86920e 100644
  	} else if (os9x_autostart) {
  		strcpy(rom_filename, romPath);
  		strncat(rom_filename, lastRom, 255 - strlen(romPath));
-@@ -4270,3 +4455,202 @@ time_t GetCurrentTime()
+@@ -4270,3 +4463,202 @@ time_t GetCurrentTime()
  	cur_time += os9x_timezone * 60 + os9x_daylsavings * 3600;
  	return cur_time;
  }
