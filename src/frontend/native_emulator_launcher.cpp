@@ -12,6 +12,7 @@
 
 #include <cstdio>
 #include <cstring>
+#include <string>
 #include <vector>
 
 namespace rs::nativeemu {
@@ -30,23 +31,52 @@ const char* const LAUNCHER_PATHS[] = {
 constexpr const char* SESSION_DIRECTORY = "ms0:/RETROSHELL/session";
 }  // namespace
 
-void consumeReturnReceipt() {
+namespace {
+/* The last "result: " line of an adapter's session log, if it wrote one. */
+bool adapterResult(const char* adapter, char* out, size_t size) {
+    char path[96];
+    std::snprintf(path, sizeof path, "%s/%s.log", SESSION_DIRECTORY, adapter);
     std::vector<u8> bytes;
-    if (!fs::readFile(protocol::SESSION_PATH.data(), bytes, 1024)) return;
+    if (!fs::readFile(path, bytes, 4096)) return false;
+    const std::string text(bytes.begin(), bytes.end());
+    const size_t at = text.rfind("result: ");
+    if (at == std::string::npos) return false;
+    const size_t start = at + 8;
+    size_t end = text.find('\n', start);
+    if (end == std::string::npos) end = text.size();
+    std::snprintf(out, size, "%.*s", int(end - start), text.c_str() + start);
+    return out[0] != 0;
+}
+}  // namespace
+
+bool consumeReturnReceipt(char* notice, size_t size) {
+    std::vector<u8> bytes;
+    if (!fs::readFile(protocol::SESSION_PATH.data(), bytes, 1024)) return false;
     char adapter[49]{};
     char state[17]{};
+    bool early = false;
     const std::string_view text(reinterpret_cast<const char*>(bytes.data()),
                                 bytes.size());
     if (protocol::parseReceipt(text, adapter, sizeof adapter,
                                state, sizeof state)) {
         RS_LOGI("native: adapter '%s' returned with state '%s'", adapter,
                 state);
-        if (std::strcmp(state, "returned") != 0)
+        if (std::strcmp(state, "returned") != 0) {
             RS_LOGW("native: previous adapter session ended unexpectedly");
+            char reason[96];
+            if (adapterResult(adapter, reason, sizeof reason)) {
+                RS_LOGW("native: %s reported: %s", adapter, reason);
+                std::snprintf(notice, size, "%s: %s", adapter, reason);
+            } else {
+                std::snprintf(notice, size, "%s closed unexpectedly", adapter);
+            }
+            early = true;
+        }
     } else {
         RS_LOGW("native: discarded malformed adapter session receipt");
     }
     fs::removeFile(protocol::SESSION_PATH.data());
+    return early;
 }
 
 int launch(const CoreInfo& core, const db::GameEntry& game) {

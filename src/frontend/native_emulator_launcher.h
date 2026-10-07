@@ -16,7 +16,10 @@ namespace rs::nativeemu {
 int launch(const CoreInfo& core, const db::GameEntry& game);
 
 /* Consumes the bounded receipt left by a native adapter when it chain-loads
- * RetroShell again. Safe to call on every boot after logging is available. */
-void consumeReturnReceipt();
+ * RetroShell again. Safe to call on every boot after logging is available.
+ * Reads and removes the last adapter session receipt. When that session
+ * ended early, writes a short user-facing reason into `notice` (from the
+ * adapter's own session log when it left one) and returns true. */
+bool consumeReturnReceipt(char* notice, size_t size);
 
 }  // namespace rs::nativeemu

@@ -114,7 +114,8 @@ bool App::init() {
     const fs::RootMigration migration = fs::migrateLegacyRoot();
     log::init(/*toFile=*/true);
     RS_LOGI("RetroShell starting");
-    nativeemu::consumeReturnReceipt();
+    char nativeNotice[128] = "";
+    nativeemu::consumeReturnReceipt(nativeNotice, sizeof nativeNotice);
     if (migration != fs::RootMigration::None) {
         const char* result = migration == fs::RootMigration::Renamed
             ? "renamed"
@@ -201,6 +202,8 @@ bool App::init() {
                           packageReport.installed == 1 ? "" : "s");
         toast(msg);
     }
+    /* A native emulator that ended early says why, last so it stays up. */
+    if (nativeNotice[0]) toast(nativeNotice);
     RS_LOGI("app: init complete in %u ms",
             unsigned((sceKernelGetSystemTimeLow() - initStart) / 1000));
     mem::logHeapUsage("after boot");
