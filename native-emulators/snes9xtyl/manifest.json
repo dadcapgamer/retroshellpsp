@@ -1,6 +1,6 @@
 {
   "name": "snes9xtyl",
-  "version": "1.9.01-rs5",
+  "version": "1.9.01-rs6",
   "systems": "snes",
   "priority": 90,
   "testOnly": true,

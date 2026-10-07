@@ -16,7 +16,7 @@ index cb84cc7..b23e537 100644
  
  
 diff --git a/psp/psp.cpp b/psp/psp.cpp
-index 25a8683..32abcbb 100644
+index 25a8683..f86920e 100644
 --- a/psp/psp.cpp
 +++ b/psp/psp.cpp
 @@ -171,7 +171,15 @@ PSP_MAIN_THREAD_STACK_SIZE_KB(256); /* smaller stack for kernel thread */
@@ -36,7 +36,7 @@ index 25a8683..32abcbb 100644
  PSP_HEAP_SIZE_KB(12000);
  #else
  PSP_HEAP_SIZE_KB(12000);
-@@ -258,6 +266,45 @@ extern struct SCheatData Cheat;
+@@ -258,6 +266,47 @@ extern struct SCheatData Cheat;
  
  
  const char *S9xGetSaveFilename( const char *e );
@@ -46,6 +46,8 @@ index 25a8683..32abcbb 100644
 +
 +#ifdef RETROSHELL_ADAPTER
 +#include "retroshell_adapter.h"
++#include <pspge.h>
++#include <pspgu.h>
 +/* RetroShell native adapter (native-emulators/sdk). Inactive unless
 + * RetroShell launched this EBOOT with its receipt in argv[3]. */
 +RSAdapterContext retroshell_adapter;
@@ -82,7 +84,7 @@ index 25a8683..32abcbb 100644
  
  int os9x_apu_ratio,os9x_fpslimit;
  int os9x_usballowed;
-@@ -432,6 +479,12 @@ int psp_ExitCheck(){
+@@ -432,6 +481,12 @@ int psp_ExitCheck(){
  }
  static void ErrorExit(const char *msg)
  {
@@ -95,7 +97,7 @@ index 25a8683..32abcbb 100644
  	FILE* f;
  	char tmp_str[256];
  	sprintf(tmp_str,"%s/erorr.txt",LaunchDir);
-@@ -480,6 +533,20 @@ static void update_pad(){
+@@ -480,6 +535,20 @@ static void update_pad(){
  	os9x_snespad=0;
  	os9x_specialaction=0;
  
@@ -116,7 +118,7 @@ index 25a8683..32abcbb 100644
  #ifndef HOME_HOOK
  	if ((os9x_inputs[PSP_TL_TR])&&(os9x_padvalue & PSP_CTRL_LTRIGGER)&&(os9x_padvalue & PSP_CTRL_RTRIGGER)) {
  		os9x_snespad|=os9x_inputs[PSP_TL_TR];
-@@ -533,6 +600,9 @@ static void update_pad(){
+@@ -533,6 +602,9 @@ static void update_pad(){
  
  	os9x_specialaction=os9x_snespad&0xFFFF0000;
  	os9x_snespad&=0xFFFF;
@@ -126,7 +128,7 @@ index 25a8683..32abcbb 100644
  
  	// NET STUFF HERE
  	//  Standard PACKET is 8 bytes.
-@@ -1796,14 +1866,17 @@ const char *S9xGetFilename( const char *e )
+@@ -1796,14 +1868,17 @@ const char *S9xGetFilename( const char *e )
  ////////////////////////////////////////////////////////////////////////////////////////
  //
  ////////////////////////////////////////////////////////////////////////////////////////
@@ -148,7 +150,7 @@ index 25a8683..32abcbb 100644
  	src = strrchr(Memory.ROMFilename, '/');
  	p = strrchr(src, '.');
  	while(src < p) *dst++ = *src++;
-@@ -1813,6 +1886,34 @@ const char *S9xGetSaveFilename( const char *e ) {
+@@ -1813,6 +1888,34 @@ const char *S9xGetSaveFilename( const char *e ) {
  	return (filename);
  }
  
@@ -183,7 +185,7 @@ index 25a8683..32abcbb 100644
  ////////////////////////////////////////////////////////////////////////////////////////
  //
  ////////////////////////////////////////////////////////////////////////////////////////
-@@ -2124,6 +2225,18 @@ void S9xInitDisplay(  )
+@@ -2124,6 +2227,18 @@ void S9xInitDisplay(  )
  //
  ////////////////////////////////////////////////////////////////////////////////////////
  void S9xExit (){
@@ -202,7 +204,7 @@ index 25a8683..32abcbb 100644
  	g_bLoop=0;
  #if 0
  	// Cleanup the games resources etc (if required)
-@@ -2237,6 +2350,9 @@ extern "C" {
+@@ -2237,6 +2352,9 @@ extern "C" {
  ////////////////////////////////////////////////////////////////////////////////////////
  void S9xProcessEvents( bool8 block ) {
  	static int cpt=0;
@@ -212,7 +214,7 @@ index 25a8683..32abcbb 100644
  	if (!(cpt&2047)) scePowerTick(0); //send powertick to avoid auto off
  	if (!(cpt&2047)) {//check every 34s
  		//check if battery is low
-@@ -2256,7 +2372,14 @@ void S9xProcessEvents( bool8 block ) {
+@@ -2256,7 +2374,14 @@ void S9xProcessEvents( bool8 block ) {
  		}
  		//initUSBdrivers();
  
@@ -227,7 +229,7 @@ index 25a8683..32abcbb 100644
  
  #ifndef FW3X
  		endUSBdrivers();
-@@ -2403,7 +2526,7 @@ void S9xProcessEvents( bool8 block ) {
+@@ -2403,7 +2528,7 @@ void S9xProcessEvents( bool8 block ) {
  		}
  		before_pause();
  
@@ -236,7 +238,7 @@ index 25a8683..32abcbb 100644
  			if (inputBox(s9xTYL_msg[MENU_STATE_CONFIRMLOAD])) {
  				msgBoxLines(s9xTYL_msg[MENU_STATE_ISLOADING], 10);
  				os9x_load(".zat");
-@@ -2642,6 +2765,14 @@ static int user_main(SceSize args, void* argp);
+@@ -2642,6 +2767,14 @@ static int user_main(SceSize args, void* argp);
  //
  ////////////////////////////////////////////////////////////////////////////////////////
  int main(int argc,char **argv) {
@@ -251,7 +253,7 @@ index 25a8683..32abcbb 100644
  	// Kernel mode thread
  	/* Install our custom exception handler. If this was NULL then the default would be used */
  #ifndef NOKERNEL
-@@ -2666,6 +2797,24 @@ int main(int argc,char **argv) {
+@@ -2666,6 +2799,24 @@ int main(int argc,char **argv) {
  	launch_rom[0]=0;
  	if (argc > 1 && argv[1] && strlen(argv[1]) < sizeof(launch_rom))
  		strcpy(launch_rom, argv[1]);
@@ -276,7 +278,7 @@ index 25a8683..32abcbb 100644
    /* Clear the existing profile regs */
  	//pspDebugProfilerClear();
  	/* Enable profiling */
-@@ -2759,9 +2908,35 @@ int main(int argc,char **argv) {
+@@ -2759,9 +2910,35 @@ int main(int argc,char **argv) {
              PSP_THREAD_ATTR_USER|PSP_THREAD_ATTR_VFPU, NULL);
  
    // start user thread, then wait for it to do everything else
@@ -312,7 +314,7 @@ index 25a8683..32abcbb 100644
    sceKernelExitGame();
    return 0;
  }
-@@ -3781,7 +3956,7 @@ static int init_snes_rom() {
+@@ -3781,7 +3958,7 @@ static int init_snes_rom() {
  		msgBoxLines(s9xTYL_msg[ERR_LOADING_ROM], 60 * 2);
  		return -1;
  	} else {
@@ -321,7 +323,7 @@ index 25a8683..32abcbb 100644
  
  		if (!bypass_rom_settings) {
  			if (int ret=load_rom_settings(Memory.ROMCRC32)) {
-@@ -4041,6 +4216,14 @@ static int user_main(SceSize args, void* argp) {
+@@ -4041,6 +4218,14 @@ static int user_main(SceSize args, void* argp) {
  	if (launch_rom[0]) {
  		strcpy(rom_filename, launch_rom);
  		open_snes_rom();
@@ -336,7 +338,7 @@ index 25a8683..32abcbb 100644
  	} else if (os9x_autostart) {
  		strcpy(rom_filename, romPath);
  		strncat(rom_filename, lastRom, 255 - strlen(romPath));
-@@ -4270,3 +4453,192 @@ time_t GetCurrentTime()
+@@ -4270,3 +4455,202 @@ time_t GetCurrentTime()
  	cur_time += os9x_timezone * 60 + os9x_daylsavings * 3600;
  	return cur_time;
  }
@@ -511,8 +513,18 @@ index 25a8683..32abcbb 100644
 +			if (!os9x_lowbat) os9x_savesnap();
 +			break;
 +		} else if (row == RS_PAUSE_EMULATOR_SETTINGS) {
-+			/* Snes9xTYL's original menu; back here when it closes. */
++			/* Snes9xTYL's original menu; back here when it closes. Its 3D
++			 * background reconfigures the GE (depth buffer, viewport,
++			 * clip planes, face order, lighting) and its fx_close() runs
++			 * outside a display list, so part of that outlives the menu
++			 * and after_pause()'s blit_reinit() does not cover it. Put
++			 * every GE register back exactly as the game left it. */
++			static PspGeContext ge_context __attribute__((aligned(16)));
++			sceGuSync(0, 0);
++			const int saved = sceGeSaveContext(&ge_context);
 +			root_menu();
++			sceGuSync(0, 0);
++			if (saved >= 0) sceGeRestoreContext(&ge_context);
 +			if (!g_bLoop || os9x_getnewfile) break;
 +			while (get_pad()) pgWaitV();
 +			old_pad = 0;
