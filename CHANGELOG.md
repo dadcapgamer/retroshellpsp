@@ -2,6 +2,14 @@
 
 ## Unreleased — Systems, themes, save states, sharpness
 
+- **Console icons** are now exact integer box downscales of the masters: the
+  previous hard-edged reduction broke thin outlines on the device.
+- **L1 / R1 hints** where the shoulders work: the ends of the Home rail, the
+  Library header (with the neighbouring systems), Continue's position and the
+  Settings legend. Start is gone from the Home legend.
+- Spacing pass: Home and Continue centred in the content band, legends in at
+  least three even columns, a little more air under the Library header and
+  the Detail chips.
 - **Triangle opens Game Detail** directly; the Options popup is gone and its
   actions (Remove from Continue, Emulator) live on the Detail screen. Delete
   All Save Data is kept out of the way, as the last row of Save States, with

@@ -70,8 +70,8 @@ by vertex color; circles are anti-aliased masks baked at boot, while shell
 surfaces are integer-aligned rects with stepped (pixel-rounded) corners so
 edges stay crisp on the LCD. Fonts are pre-baked `.rsf` atlases (see
 `tools/assetgen.c` for the format), baked with FreeType hinting by
-`tools/fontbake.c` so stems land on whole pixels. Console icons are hard-edged
-downscales of the 192 px masters (`tools/crisp_icons.py`), drawn 1:1 with
+`tools/fontbake.c` so stems land on whole pixels. Console icons are exact integer
+(alpha-weighted box) downscales of the 192 px masters (`tools/crisp_icons.py`), drawn 1:1 with
 nearest sampling.
 
 ### Typography

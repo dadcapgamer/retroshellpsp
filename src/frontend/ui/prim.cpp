@@ -166,8 +166,8 @@ bool bakeSystemIcons() {
         const unsigned char* bytes;
         unsigned int length;
     };
-    /* Pre-sized, hard-edged icons (assets/icons/consoles/<name>-24|48|64.png,
-     * generated from the 192 px masters by tools/crisp_icons.py).
+    /* Pre-sized icons (assets/icons/consoles/<name>-24|48|64.png): exact
+     * integer downscales of the 192 px masters by tools/crisp_icons.py.
      * Keep this order identical to db::System. */
     const EmbeddedPng icons[CONSOLE_COUNT][3] = {
         {{rs_asset_game_boy_24_png, rs_asset_game_boy_24_png_len},

@@ -1,16 +1,15 @@
 #!/usr/bin/env python3
-"""Hard-edged (pixel-art) downscale of the 192 px console masters.
+"""Exact integer downscale of the 192 px console masters.
 
     python3 tools/crisp_icons.py            # regenerates every -24/-48/-64.png
 
-The icons are drawn 1:1 with nearest sampling on the PSP, so any blur is in
-the image itself: a smooth (averaging) downscale blends every edge into the
-background. 192 divides evenly into 64, 48 and 24 (3x, 4x, 8x blocks).
-
-Each output pixel takes the dominant colour of its source block: colours are
-clustered per block, the most-covered opaque cluster wins and is averaged
-within itself, so edges never blend into the background and flat fills stay
-flat. Coverage below half the block becomes fully transparent."""
+The icons are drawn 1:1 with nearest sampling on the PSP, so their quality
+is decided here. 192 divides evenly into 64, 48 and 24 (3x, 4x, 8x blocks),
+and each output pixel is the alpha-weighted average of its block: colour is
+averaged only over covered texels (no dark fringe from transparent black),
+coverage becomes alpha. Lines stay continuous and edges get one pixel of
+true anti-aliasing. (A "dominant colour" hard-edged reduction was tried and
+rejected: thin outlines and curves broke into stair-steps on the device.)"""
 import zlib,struct,sys
 def rd(p):
     d=open(p,'rb').read(); i=8; idat=b''
@@ -34,24 +33,28 @@ def wr(p,w,h,px):
     raw=b''.join(b'\x00'+bytes(px[y*w*4:(y+1)*w*4]) for y in range(h))
     def ch(t,d): return struct.pack('>I',len(d))+t+d+struct.pack('>I',zlib.crc32(t+d)&0xffffffff)
     open(p,'wb').write(b'\x89PNG\r\n\x1a\n'+ch(b'IHDR',struct.pack('>IIBBBBB',w,h,8,6,0,0,0))+ch(b'IDAT',zlib.compress(raw,9))+ch(b'IEND',b''))
-def crisp(src,size,dst):
-    w,h,rows=rd(src); g=w//size; out=[]
+def crisp(src, size, dst):
+    w, h, rows = rd(src)
+    g = w // size
+    out = []
     for y in range(size):
         for x in range(size):
-            pix=[]; cov=0
+            r = gg = b = cov = 0
             for yy in range(g):
-                r=rows[y*g+yy]
+                row = rows[y * g + yy]
                 for xx in range(g):
-                    o=(x*g+xx)*4; a=r[o+3]; cov+=a
-                    if a>=160: pix.append((r[o],r[o+1],r[o+2]))
-            if cov < 128*g*g or not pix: out+=[0,0,0,0]; continue
-            # cluster: quantize to 5 bits/channel, pick the most common bucket
-            buckets={}
-            for c in pix:
-                k=(c[0]>>4,c[1]>>4,c[2]>>4); buckets.setdefault(k,[]).append(c)
-            best=max(buckets.values(),key=len)
-            out+=[sum(c[0] for c in best)//len(best),sum(c[1] for c in best)//len(best),sum(c[2] for c in best)//len(best),255]
-    wr(dst,size,size,out)
+                    o = (x * g + xx) * 4
+                    a = row[o + 3]
+                    r += row[o] * a
+                    gg += row[o + 1] * a
+                    b += row[o + 2] * a
+                    cov += a
+            if cov == 0:
+                out += [0, 0, 0, 0]
+            else:
+                out += [r // cov, gg // cov, b // cov, cov // (g * g)]
+    wr(dst, size, size, out)
+
 if __name__=="__main__":
     import glob, os
     if len(sys.argv) == 4:

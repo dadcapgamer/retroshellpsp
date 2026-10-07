@@ -393,16 +393,18 @@ void SettingsScene::draw(App& app) {
     using B = ui::prim::Button;
     if (!m_inContent) {
         const App::Hint hints[] = {
-            {B::Cross, "Select"}, {B::Circle, "Back"}, {B::Start, "Home"},
+            {B::Cross, "Select"}, {B::L1, ""}, {B::R1, "Category"},
+            {B::Circle, "Back"}, {B::Start, "Home"},
         };
-        app.drawHintBar(hints, 3);
+        app.drawHintBar(hints, 5);
     } else {
         const App::Hint hints[] = {
             {isAction(focusedRow) ? B::Cross : B::DpadLeftRight,
              isAction(focusedRow) ? "Select" : "Change"},
+            {B::L1, ""}, {B::R1, "Category"},
             {B::Circle, "Back"}, {B::Start, "Home"},
         };
-        app.drawHintBar(hints, 3);
+        app.drawHintBar(hints, 5);
     }
 }
 

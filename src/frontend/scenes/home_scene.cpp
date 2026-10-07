@@ -34,23 +34,23 @@ using ui::fade;
 constexpr int   RAIL_VISIBLE = 5;
 constexpr float RAIL_PITCH = 84.f;
 constexpr float RAIL_X0 = RS_SCREEN_W * .5f - 2.f * RAIL_PITCH;   /* slot 0 */
-constexpr float RAIL_BOX_W = 80.f, RAIL_BOX_H = 98.f, RAIL_BOX_Y = 56.f;
-constexpr float RAIL_ICON_CY = 98.f;      /* icon centre line */
-constexpr float RAIL_LABEL_Y = 139.f;     /* caps top of the badge */
+constexpr float RAIL_BOX_W = 80.f, RAIL_BOX_H = 98.f, RAIL_BOX_Y = 62.f;
+constexpr float RAIL_ICON_CY = 104.f;     /* icon centre line */
+constexpr float RAIL_LABEL_Y = 145.f;     /* caps top of the badge */
 
 /* Continue Playing: exactly three cards on screen. */
 constexpr int   CARDS_VISIBLE = 3;
 constexpr float CARD_W = 136.f, CARD_H = 152.f, CARD_ART_H = 90.f;
 constexpr float CARD_PITCH = 156.f;
-constexpr float CARD_Y = 74.f;
+constexpr float CARD_Y = 78.f;
 constexpr int   RECENT_MAX = 6;
 
 /* Library: list with thumbnails left, one preview right. */
 constexpr float LIST_X = L::MARGIN, LIST_W = 252.f;
-constexpr float LIST_TOP = 57.f, LIST_ROW = 26.f;
+constexpr float LIST_TOP = 58.f, LIST_ROW = 26.f;
 constexpr int   LIST_VISIBLE = 7;
 constexpr float THUMB = 24.f;
-constexpr float PREVIEW_X = 280.f, PREVIEW_Y = 57.f;
+constexpr float PREVIEW_X = 280.f, PREVIEW_Y = 58.f;
 constexpr float PREVIEW_W = L::RIGHT - PREVIEW_X, PREVIEW_H = 118.f;
 
 /* Game Detail: framed art and description left, title and actions right. */
@@ -670,6 +670,11 @@ void HomeScene::updateStates(App& app, float dt) {
             closeStates();
             return;
         }
+        if (pad.isPressed(PSP_CTRL_START)) {
+            closeStates();
+            m_nav.home();
+            return;
+        }
         if (pad.isPressed(PSP_CTRL_CROSS)) {
             if (!m_confirmDelete) {
                 m_confirmDelete = true;      /* second X deletes */
@@ -1140,12 +1145,22 @@ void HomeScene::drawSystems(App& app, u32 a, float dy) {
     }
     restoreContent(r);
 
+    /* L1 / R1 at the rail's ends: the shoulders change system everywhere
+     * (Home, Library), so the hint sits where the systems are. Dimmed at
+     * either end of the rail. */
     const u32 leftA = m_nav.systemPos > 0 ? a : a * 50u / 255u;
     const u32 rightA = m_nav.systemPos + 1 < n ? a : a * 50u / 255u;
-    ui::prim::chevron(r, ui::prim::Dir::Left, L::MARGIN + 8.f,
-                      RAIL_ICON_CY + dy, 6.f, 2.f, fade(pal.textPrimary, leftA));
-    ui::prim::chevron(r, ui::prim::Dir::Right, L::RIGHT - 8.f,
-                      RAIL_ICON_CY + dy, 6.f, 2.f, fade(pal.textPrimary, rightA));
+    {
+        using ui::prim::Button;
+        const float lw = ui::prim::buttonGlyphWidth(Button::L1);
+        const float rw = ui::prim::buttonGlyphWidth(Button::R1);
+        ui::prim::buttonGlyph(r, Button::L1, L::MARGIN + lw * .5f,
+                              RAIL_ICON_CY + dy, 6.f,
+                              fade(pal.textSecondary, leftA));
+        ui::prim::buttonGlyph(r, Button::R1, L::RIGHT - rw * .5f,
+                              RAIL_ICON_CY + dy, 6.f,
+                              fade(pal.textSecondary, rightA));
+    }
 
     /* Name and count crossfade in from the direction of travel. */
     const float tf = ui::easeOutCubic(m_titleFade.t);
@@ -1153,13 +1168,13 @@ void HomeScene::drawSystems(App& app, u32 a, float dy) {
     const float tdx = ui::snap((1.f - tf) * 6.f * float(m_titleDir));
     const int sys = currentSystemId();
     fonts.display.draw(r, RS_SCREEN_W * .5f + tdx,
-                       capsAt(fonts.display, 180.f) + dy,
+                       capsAt(fonts.display, 186.f) + dy,
                        upper(systemTitle(sys)).c_str(),
                        fade(pal.textPrimary, ta), text::Align::Center, 4.f);
     char count[32];
     std::snprintf(count, sizeof count, "%d GAME%s", m_systemTotal,
                   m_systemTotal == 1 ? "" : "S");
-    fonts.small.draw(r, RS_SCREEN_W * .5f + tdx, capsAt(fonts.small, 203.f) + dy,
+    fonts.small.draw(r, RS_SCREEN_W * .5f + tdx, capsAt(fonts.small, 209.f) + dy,
                      count, fade(pal.textSecondary, ta), text::Align::Center,
                      2.f);
 }
@@ -1171,17 +1186,29 @@ void HomeScene::drawContinue(App& app, u32 a, float dy) {
     const auto& fonts = app.fonts();
     const int n = int(m_recents.size());
 
-    fonts.title.draw(r, L::MARGIN, capsAt(fonts.title, 38.f) + dy,
+    fonts.title.draw(r, L::MARGIN, capsAt(fonts.title, 41.f) + dy,
                      "CONTINUE PLAYING", fade(pal.textPrimary, a),
                      text::Align::Left, 1.f);
-    fonts.small.draw(r, L::MARGIN, capsAt(fonts.small, 57.f) + dy,
+    fonts.small.draw(r, L::MARGIN, capsAt(fonts.small, 60.f) + dy,
                      "Recent games across all systems.",
                      fade(pal.textSecondary, a));
-    if (n > CARDS_VISIBLE) {
+    if (n > 1) {
+        /* Position, flanked by the shoulders that also move through it. */
+        using ui::prim::Button;
         char pos[32];
         std::snprintf(pos, sizeof pos, "%d / %d", m_nav.continueIdx + 1, n);
-        fonts.small.draw(r, L::RIGHT, capsAt(fonts.small, 40.f) + dy, pos,
+        const float cy = 46.f + dy;
+        const float rw = ui::prim::buttonGlyphWidth(Button::R1);
+        const float lw = ui::prim::buttonGlyphWidth(Button::L1);
+        float x = L::RIGHT - rw;
+        ui::prim::buttonGlyph(r, Button::R1, x + rw * .5f, cy, 6.f,
+                              fade(pal.textSecondary, a));
+        x -= 8.f;
+        fonts.small.draw(r, x, fonts.small.centerY(cy - 5.f, 10.f), pos,
                          fade(pal.textMuted, a), text::Align::Right);
+        x -= fonts.small.measure(pos) + 8.f + lw;
+        ui::prim::buttonGlyph(r, Button::L1, x + lw * .5f, cy, 6.f,
+                              fade(pal.textSecondary, a));
     }
 
     const int shown = n < CARDS_VISIBLE ? n : CARDS_VISIBLE;
@@ -1240,12 +1267,43 @@ void HomeScene::drawLibrary(App& app, u32 a, float dy) {
     const float chipW = ui::chip(app, L::MARGIN + dx, HEAD_Y + dy, badge(sys),
                                  body, true);
     const std::string heading = std::string(systemTitle(sys)) + " Library";
-    drawEllipsized(fonts.body, r, L::MARGIN + chipW + 10.f + dx,
-                   fonts.body.centerY(HEAD_Y + dy, ui::CHIP_H), 250.f, heading,
-                   fade(pal.textPrimary, body));
-    fonts.small.draw(r, L::RIGHT + dx, fonts.small.centerY(HEAD_Y + dy, ui::CHIP_H),
-                     librarySubtitle(m_view, m_query, count).c_str(),
-                     fade(pal.textSecondary, body), text::Align::Right);
+    const float headX = L::MARGIN + chipW + 10.f + dx;
+    fonts.body.draw(r, headX, fonts.body.centerY(HEAD_Y + dy, ui::CHIP_H),
+                    heading.c_str(), fade(pal.textPrimary, body));
+    const float countX = headX + fonts.body.measure(heading.c_str()) + 10.f;
+
+    /* Right: the shoulders and the systems they lead to. */
+    float right = L::RIGHT;
+    {
+        using ui::prim::Button;
+        const int sysCount = int(m_systems.size());
+        const float cy = HEAD_Y + ui::CHIP_H * .5f + dy;
+        const float ty = fonts.small.centerY(HEAD_Y + dy, ui::CHIP_H);
+        if (m_nav.systemPos + 1 < sysCount) {
+            const float gw = ui::prim::buttonGlyphWidth(Button::R1);
+            ui::prim::buttonGlyph(r, Button::R1, right - gw * .5f, cy, 6.f,
+                                  fade(pal.textSecondary, a));
+            right -= gw + 6.f;
+            const char* next = badge(m_systems[size_t(m_nav.systemPos + 1)]);
+            fonts.small.draw(r, right, ty, next, fade(pal.textMuted, a),
+                             text::Align::Right);
+            right -= fonts.small.measure(next) + 14.f;
+        }
+        if (m_nav.systemPos > 0) {
+            const char* prev = badge(m_systems[size_t(m_nav.systemPos - 1)]);
+            fonts.small.draw(r, right, ty, prev, fade(pal.textMuted, a),
+                             text::Align::Right);
+            right -= fonts.small.measure(prev) + 6.f;
+            const float gw = ui::prim::buttonGlyphWidth(Button::L1);
+            ui::prim::buttonGlyph(r, Button::L1, right - gw * .5f, cy, 6.f,
+                                  fade(pal.textSecondary, a));
+            right -= gw;
+        }
+    }
+    drawEllipsized(fonts.small, r, countX,
+                   fonts.small.centerY(HEAD_Y + dy, ui::CHIP_H),
+                   right - 12.f - countX, librarySubtitle(m_view, m_query, count),
+                   fade(pal.textMuted, body));
 
     if (count == 0) {
         /* The system has games, but this view of them is empty: say why and
@@ -1441,7 +1499,7 @@ void HomeScene::drawDetail(App& app, u32 a, float dy) {
         ui::icon(r, ui::Icon::Star, DETAIL_X + chipsW + 4.f,
                  y + (ui::CHIP_H - ui::ICON_SIZE) * .5f + dy,
                  fade(pal.textSecondary, a));
-    y += ui::CHIP_H + 8.f;
+    y += ui::CHIP_H + 10.f;
 
     /* One quiet line of facts: when it was last played, how long, which
      * dump, how big — only what is known. */
@@ -1834,7 +1892,6 @@ void HomeScene::drawLegend(App& app) {
             if (!m_recents.empty()) hints[n++] = {B::DpadUp, "Continue"};
             hints[n++] = {B::Cross, "Library"};
             hints[n++] = {B::Triangle, "Settings"};
-            hints[n++] = {B::Start, "Home"};
             app.drawHintBar(hints, n);
             break;
         }

@@ -598,8 +598,8 @@ void App::drawTopBar(u32 alpha) {
     }
 }
 
-/* One line, spread across the width: the legend sits in four (or more)
- * equal columns, so each action keeps its place from screen to screen. */
+/* One line, spread across the width in equal columns (at least three), so
+ * each action keeps its place from screen to screen. */
 void App::drawHintBar(const Hint* hints, int count, bool solid) {
     namespace L = ui::layout;
     constexpr float GLYPH_GAP = 7.f;    /* glyph to label */
@@ -621,7 +621,9 @@ void App::drawHintBar(const Hint* hints, int count, bool solid) {
     int groups = 0;
     for (int i = 0; i < count; i++)
         if (hints[i].label[0]) groups++;
-    const int columns = groups > 4 ? groups : 4;
+    /* At least three columns, so a short legend still reads left to right
+     * rather than stretching to the far edge. */
+    const int columns = groups > 3 ? groups : 3;
     const float colW = (L::RIGHT - L::MARGIN) / float(columns);
     float x = L::MARGIN + 4.f;
     int group = 0;
@@ -636,11 +638,7 @@ void App::drawHintBar(const Hint* hints, int count, bool solid) {
         font.draw(m_renderer, x + lead + GLYPH_GAP, textY, hints[i].label,
                   m_pal.textSecondary);
         group++;
-        /* The last group of a short legend (Back, Home) sits in the last
-         * column, as on every other screen. */
-        const bool lastShort = group == groups - 1 && groups < columns &&
-                               groups > 2;
-        x = L::MARGIN + 4.f + colW * float(lastShort ? columns - 1 : group);
+        x = L::MARGIN + 4.f + colW * float(group);
     }
 }
 
