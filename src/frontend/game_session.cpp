@@ -932,6 +932,13 @@ bool GameSession::makePreview(std::vector<u16>& out, int& w, int& h) const {
     return true;
 }
 
+/* Whether save-state slot `slot` was written by the running emulator. */
+bool GameSession::slotFromThisCore(int slot) const {
+    if (!m_slots[slot].coreName[0]) return true;   /* unknown: let it try */
+    return std::strncmp(m_slots[slot].coreName, m_coreName.c_str(),
+                        sizeof m_slots[slot].coreName - 1) == 0;
+}
+
 /* --- Emulator Settings ---------------------------------------------------- */
 
 void GameSession::openSettings() {
@@ -1119,7 +1126,14 @@ void GameSession::updateMenu(App& app) {
             break;
         }
         case RS_PAUSE_LOAD_STATE:
-            if (m_slots[m_slot].exists) {
+            if (m_slots[m_slot].exists && !slotFromThisCore(m_slot)) {
+                /* States are core-specific; say so instead of trying. */
+                char msg[80];
+                std::snprintf(msg, sizeof msg,
+                              "Saved with %s - load it from Game Details",
+                              m_slots[m_slot].coreName);
+                app.toast(msg);
+            } else if (m_slots[m_slot].exists) {
                 app.toast(save::loadState(m_game, core, m_slot)
                               ? "State loaded"
                               : "Load failed");
@@ -1362,11 +1376,13 @@ void GameSession::drawMenu(App& app) {
     for (int i = 0; i < RS_PAUSE_ITEM_COUNT; i++) {
         const float rowY = ui::snap(listY + (float(i) - scroll) * L::ROW_H);
         if (rowY + L::ROW_H <= listY || rowY >= listY + listH) continue;
-        char value[32] = "";
+        char value[48] = "";
         bool adjustable = false;
         if (i == RS_PAUSE_SAVE_STATE || i == RS_PAUSE_LOAD_STATE) {
-            std::snprintf(value, sizeof value, "Slot %d%s", m_slot + 1,
-                          m_slots[m_slot].exists ? "" : " \xC2\xB7 Empty");
+            const bool other = m_slots[m_slot].exists && !slotFromThisCore(m_slot);
+            std::snprintf(value, sizeof value, "Slot %d%s%s", m_slot + 1,
+                          m_slots[m_slot].exists ? "" : " \xC2\xB7 Empty",
+                          other ? " \xC2\xB7 Other core" : "");
             adjustable = true;
         } else if (i == RS_PAUSE_ASPECT_RATIO) {
             std::snprintf(value, sizeof value, "%s",
@@ -1380,7 +1396,8 @@ void GameSession::drawMenu(App& app) {
         ui::RowStyle style;
         style.focused = i == m_menuRow;
         style.adjustable = adjustable;
-        style.disabled = i == RS_PAUSE_LOAD_STATE && !m_slots[m_slot].exists;
+        style.disabled = i == RS_PAUSE_LOAD_STATE &&
+                         (!m_slots[m_slot].exists || !slotFromThisCore(m_slot));
         ui::menuRow(app, px + 3.f, rowY, pw - 6.f, L::ROW_H,
                     rs_pause_menu_label(RSPauseMenuItem(i)),
                     value[0] ? value : nullptr, style, a);

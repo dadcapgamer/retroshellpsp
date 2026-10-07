@@ -173,11 +173,12 @@ def main() -> int:
                       target_rom_dir):
         directory.mkdir(parents=True, exist_ok=True)
     shutil.copy2(eboot, game_dir / "EBOOT.PBP")
+    # The core under test is always installed; a package is added beside it
+    # (and must be a different core), so a system can offer two emulators.
+    shutil.copy2(core_prx, cores_dir / core_prx.name)
+    shutil.copy2(core_json, cores_dir / core_json.name)
     if args.core_package:
         shutil.copy2(args.core_package, cores_dir / args.core_package.name)
-    else:
-        shutil.copy2(core_prx, cores_dir / core_prx.name)
-        shutil.copy2(core_json, cores_dir / core_json.name)
     if args.mixed_storage:
         legacy_cores = seed_dir / "cores"
         legacy_cores.mkdir(parents=True, exist_ok=True)
@@ -264,10 +265,10 @@ def main() -> int:
                                  "failures 0" in text,
     }
     if args.core_package:
+        package_core = args.core_package.name.split("-", 1)[0]
         checks["core_package_installed"] = (
-            f"core package: installed {args.core}" in text and
-            (rs_dir / "cores" / f"{args.core}.prx").is_file() and
-            (rs_dir / "cores" / f"{args.core}.json").is_file())
+            f"core package: installed {package_core}" in text and
+            (rs_dir / "cores" / f"{package_core}.json").is_file())
         checks["core_package_consumed"] = not (
             rs_dir / "cores" / args.core_package.name).exists()
     if args.legacy_storage or args.mixed_storage:

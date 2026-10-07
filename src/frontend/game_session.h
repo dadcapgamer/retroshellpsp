@@ -57,6 +57,7 @@ private:
     void applyLiveOption(const coreopt::Option& o, int value);
     bool restartPending() const;
     bool saveToSlot(int slot);
+    bool slotFromThisCore(int slot) const;
     void restartWithSettings(App& app, int slot);
     void drawFrame(App& app);
     void drawMenu(App& app);

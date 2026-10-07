@@ -78,7 +78,10 @@ private:
     void toggleFavorite(App& app, const db::GameEntry& game);
     void openDetail(App& app, const db::GameEntry& game);
     void activateDetail(App& app, int row);
-    void openCorePicker(App& app, const db::GameEntry& game);
+    /* assign: Game Details > Emulator sets the game's own choice (with a
+     * "System default" row) instead of launching. */
+    void openCorePicker(App& app, const db::GameEntry& game,
+                        bool assign = false);
     void openSettings(App& app);
     void checkLaunchError(App& app, const db::GameEntry& game);
     void openError(App& app, const db::GameEntry& game, const char* raw);
@@ -140,7 +143,8 @@ private:
     int        m_titleDir = 0;
 
     /* Deferred, stick-backed data for the focused game. */
-    const CoreInfo* m_selCore = nullptr;
+    const CoreInfo* m_selCore = nullptr;      /* the core a launch uses */
+    bool            m_selCoreChosen = false;  /* the game's own choice */
     bool            m_selMultiCore = false;
     db::GameMeta    m_selMeta;
     u32             m_trackedHash = 0;
@@ -192,6 +196,10 @@ private:
     db::GameEntry m_pickerGame;
     std::vector<const CoreInfo*> m_pickerCores;
     const CoreInfo* m_pickerCurrent = nullptr;
+    /* Assign mode: row 0 is "System default", cores follow from row 1. */
+    bool            m_pickerAssign = false;
+    const CoreInfo* m_pickerDefault = nullptr;
+    const CoreInfo* m_pickerChoice = nullptr;  /* game's own choice, if any */
 };
 
 }  // namespace rs

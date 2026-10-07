@@ -120,6 +120,31 @@ constexpr Step GAME_SCRIPT[] = {
     {2044, 0,                 "restart_confirm"},
     {2050, PSP_CTRL_CROSS,    nullptr},         /* Save, then restart */
     {2380, 0,                 "settings_restarted"},
+    /* Back to Home, then Game Details > Emulator: pick this game's own core
+     * (row 0 is "System default"; only systems with two cores show it). */
+    {2390, PSP_CTRL_LTRIGGER | PSP_CTRL_RTRIGGER | PSP_CTRL_SELECT,
+                                    nullptr},
+    {2404, PSP_CTRL_DOWN,     nullptr},
+    {2408, PSP_CTRL_DOWN,     nullptr},
+    {2412, PSP_CTRL_DOWN,     nullptr},
+    {2416, PSP_CTRL_DOWN,     nullptr},
+    {2420, PSP_CTRL_DOWN,     nullptr},
+    {2424, PSP_CTRL_DOWN,     nullptr},
+    {2428, PSP_CTRL_DOWN,     nullptr},
+    {2432, PSP_CTRL_DOWN,     nullptr},
+    {2436, PSP_CTRL_DOWN,     nullptr},
+    {2440, PSP_CTRL_CROSS,    nullptr},         /* Exit */
+    {2640, PSP_CTRL_TRIANGLE, nullptr},         /* Game Details */
+    {2660, PSP_CTRL_DOWN,     nullptr},
+    {2664, PSP_CTRL_DOWN,     nullptr},
+    {2668, PSP_CTRL_DOWN,     nullptr},         /* Emulator */
+    {2676, 0,                 "detail_emulator"},
+    {2680, PSP_CTRL_CROSS,    nullptr},
+    {2696, 0,                 "emulator_picker"},
+    {2700, PSP_CTRL_DOWN,     nullptr},
+    {2704, PSP_CTRL_DOWN,     nullptr},         /* second core */
+    {2708, PSP_CTRL_CROSS,    nullptr},
+    {2726, 0,                 "emulator_chosen"},
 };
 #if defined(RS_AUTOPILOT_SETUP)
 /* First-run setup capture. Mode 1 has games and two emulators for GBC (the

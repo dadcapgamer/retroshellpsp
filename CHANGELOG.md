@@ -11,6 +11,17 @@
   and dynarec; Snes9x filter, flicker and overclock; QuickNES palette, sprite
   limit and sound quality; Gambatte resampler, frame blending and colour;
   PCE Fast and SMS Plus options. The list scrolls when a core has more.
+- **Per-game emulator choice is back**: Game Details > Emulator sets the
+  emulator for that game only (or "System default"), without launching.
+  Every other game follows the system default from Settings. Previously
+  each launch silently pinned the emulator it used, so changing the
+  default in Settings didn't reach games already played, and the Emulator
+  row showed the system default rather than the core the game really used.
+  Earlier per-game picks are not carried over; set them again once.
+- Save states made by a different emulator now say so instead of being
+  tried: the pause menu marks the slot "Other core" and points to Game
+  Details, and a state from the retired in-process FrogGBA build is refused
+  with a message rather than launching the native FrogGBA without it.
 - **FrogGBA and Snes9xTYL ship in the release**, no separate install.
   Snes9xTYL now has the full RetroShell adapter, like FrogGBA: L+R+Select (or
   HOME) opens RetroShell's pause menu, Emulator Settings opens Snes9xTYL's

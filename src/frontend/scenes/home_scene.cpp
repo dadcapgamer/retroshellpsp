@@ -10,6 +10,7 @@
 #include "platform/psp/fs_psp.h"
 #include "platform/psp/power.h"
 #include "runtime/config.h"
+#include "runtime/log.h"
 #include "runtime/save_manager.h"
 
 #include <pspctrl.h>
@@ -325,7 +326,10 @@ const db::GameMeta* HomeScene::cachedMeta(u32 hash) const {
 void HomeScene::hydrateSelection(App& app) {
     const db::GameEntry* g = focusedGame();
     if (!g || m_hydratedHash == g->pathHash) return;
-    m_selCore = app.cores().defaultFor(g->system);
+    /* What a launch will really use: the game's own choice, else the
+     * system default from Settings. */
+    m_selCore = app.cores().resolve(*g);
+    m_selCoreChosen = app.cores().overrideFor(*g) != nullptr;
     m_selMultiCore = app.cores().hasChoice(g->system);
     if (cfg::get().showArt) app.boxart().get(*g);
     if (const db::GameMeta* cached = cachedMeta(g->pathHash)) {
@@ -474,7 +478,7 @@ void HomeScene::activateDetail(App& app, int action) {
         case DA_PLAY:     launch(app, game); break;
         case DA_STATES:   openStates(app); break;
         case DA_FAVORITE: toggleFavorite(app, game); break;
-        case DA_EMULATOR: openCorePicker(app, game); break;
+        case DA_EMULATOR: openCorePicker(app, game, /*assign=*/true); break;
         case DA_REMOVE_RECENT:
             if (app.library().removeRecent(game.pathHash)) {
                 rebuildRecents(app);
@@ -736,6 +740,19 @@ void HomeScene::updateStates(App& app, float dt) {
             app.toast(msg);
             return;
         }
+        /* A native emulator keeps its own states and cannot read RetroShell's.
+         * A RetroShell state under a native core's name was written by the
+         * retired in-process build of that emulator (FrogGBA's PRX). */
+        if (core->isNative()) {
+            char msg[96];
+            std::snprintf(msg, sizeof msg,
+                          "Made by an older %s; it can't be loaded",
+                          slot.coreName);
+            app.toast(msg);
+            RS_LOGW("states: slot %d belongs to native '%s'; refused",
+                    m_stateIdx, slot.coreName);
+            return;
+        }
         app.library().flush();
         app.snapshot().layer = m_nav.layer;
         app.snapshot().systemId = currentSystemId();
@@ -754,7 +771,8 @@ void HomeScene::updateStates(App& app, float dt) {
     }
 }
 
-void HomeScene::openCorePicker(App& app, const db::GameEntry& game) {
+void HomeScene::openCorePicker(App& app, const db::GameEntry& game,
+                               bool assign) {
     m_pickerCores = app.cores().coresFor(game.system);
     if (m_pickerCores.empty()) {
         app.launchGame(game);   /* reports "no emulator installed" */
@@ -762,29 +780,48 @@ void HomeScene::openCorePicker(App& app, const db::GameEntry& game) {
         return;
     }
     m_pickerGame = game;
+    m_pickerAssign = assign;
     m_pickerCurrent = app.cores().resolve(game);
+    m_pickerDefault = app.cores().defaultFor(game.system);
+    m_pickerChoice = app.cores().overrideFor(game);
     m_overlay = Overlay::CorePicker;
     m_overlayFade.start(0.16f);
     m_pickerIdx = 0;
+    const CoreInfo* focus = assign ? m_pickerChoice : m_pickerCurrent;
     for (size_t i = 0; i < m_pickerCores.size(); i++)
-        if (m_pickerCores[i] == m_pickerCurrent) m_pickerIdx = int(i);
+        if (m_pickerCores[i] == focus) m_pickerIdx = int(i) + (assign ? 1 : 0);
 }
 
 void HomeScene::updatePicker(App& app) {
     const auto& pad = app.pad();
+    const int rows = int(m_pickerCores.size()) + (m_pickerAssign ? 1 : 0);
     if (pad.navPressed(PSP_CTRL_UP) && m_pickerIdx > 0) m_pickerIdx--;
-    if (pad.navPressed(PSP_CTRL_DOWN) &&
-        m_pickerIdx < int(m_pickerCores.size()) - 1)
+    if (pad.navPressed(PSP_CTRL_DOWN) && m_pickerIdx < rows - 1)
         m_pickerIdx++;
     if (pad.isPressed(PSP_CTRL_CIRCLE)) m_overlay = Overlay::None;
-    if (pad.isPressed(PSP_CTRL_CROSS)) {
-        m_overlay = Overlay::None;
-        /* GameSession persists the pick once the core actually boots. */
-        app.library().flush();
-        const db::GameEntry game = m_pickerGame;
-        app.launchGame(game, m_pickerCores[size_t(m_pickerIdx)]);
-        checkLaunchError(app, game);
+    if (!pad.isPressed(PSP_CTRL_CROSS)) return;
+    m_overlay = Overlay::None;
+    if (m_pickerAssign) {
+        /* Only this game; the system default stays as set in Settings. */
+        const CoreInfo* chosen =
+            m_pickerIdx == 0 ? nullptr : m_pickerCores[size_t(m_pickerIdx - 1)];
+        CoreRegistry::setOverride(m_pickerGame, chosen);
+        char msg[96];
+        if (chosen)
+            std::snprintf(msg, sizeof msg, "This game uses %s",
+                          chosen->name.c_str());
+        else
+            std::snprintf(msg, sizeof msg, "This game uses the default (%s)",
+                          m_pickerDefault ? m_pickerDefault->name.c_str() : "none");
+        app.toast(msg);
+        m_hydratedHash = 0;   /* re-read the Emulator row */
+        hydrateSelection(app);
+        return;
     }
+    app.library().flush();
+    const db::GameEntry game = m_pickerGame;
+    app.launchGame(game, m_pickerCores[size_t(m_pickerIdx)]);
+    checkLaunchError(app, game);
 }
 
 /* --- View menu: filter / sort / search ------------------------------------ */
@@ -1591,7 +1628,9 @@ void HomeScene::drawDetail(App& app, u32 a, float dy) {
             case DA_EMULATOR:
                 label = "Emulator";
                 style.icon = int(ui::Icon::Gamepad);
-                if (m_selCore) value = m_selCore->name;
+                if (m_selCore)
+                    value = m_selCoreChosen ? m_selCore->name
+                                            : m_selCore->name + " \xC2\xB7 Default";
                 break;
             case DA_REMOVE_RECENT:
                 label = "Remove from Continue";
@@ -1728,27 +1767,41 @@ void HomeScene::drawPicker(App& app) {
     ui::backdrop(app, a);
 
     constexpr int VISIBLE = 6;
-    const int visible = rsClamp(int(m_pickerCores.size()), 1, VISIBLE);
-    const int first = rsClamp(m_pickerIdx - 2, 0,
-                              int(m_pickerCores.size()) - visible);
+    const int offset = m_pickerAssign ? 1 : 0;
+    const int rows = int(m_pickerCores.size()) + offset;
+    const int visible = rsClamp(rows, 1, VISIBLE);
+    const int first = rsClamp(m_pickerIdx - 2, 0, rows - visible);
     const PanelBox b =
         centeredPanel(288.f, PANEL_HEAD + L::ROW_H * float(visible) + 6.f, t);
     ui::panel(app, b.x, b.y, b.w, b.h, a);
-    panelHeading(app, b, "RUN WITH", m_pickerGame.shown(),
-                 badge(int(m_pickerGame.system)), a);
+    panelHeading(app, b, m_pickerAssign ? "EMULATOR FOR THIS GAME" : "RUN WITH",
+                 m_pickerGame.shown(), badge(int(m_pickerGame.system)), a);
 
     float y = b.y + PANEL_HEAD;
     for (int i = first; i < first + visible; i++, y += L::ROW_H) {
-        const CoreInfo& c = *m_pickerCores[size_t(i)];
-        char value[32];
-        std::snprintf(value, sizeof value, "%s%s",
-                      &c == m_pickerCurrent ? "In use \xC2\xB7 " : "",
-                      c.isNative() ? "Native"
-                                   : (c.psp1000Safe ? "Any PSP" : "Testing"));
+        char value[48];
+        const char* label;
+        bool selected = false;
+        if (m_pickerAssign && i == 0) {
+            label = "System default";
+            std::snprintf(value, sizeof value, "%s%s",
+                          m_pickerChoice ? "" : "Current \xC2\xB7 ",
+                          m_pickerDefault ? m_pickerDefault->name.c_str() : "None");
+        } else {
+            const CoreInfo& c = *m_pickerCores[size_t(i - offset)];
+            label = c.name.c_str();
+            selected = m_pickerAssign ? &c == m_pickerChoice : &c == m_pickerCurrent;
+            std::snprintf(value, sizeof value, "%s%s",
+                          selected ? (m_pickerAssign ? "Current \xC2\xB7 "
+                                                     : "In use \xC2\xB7 ")
+                                   : "",
+                          c.isNative() ? "Native"
+                                       : (c.psp1000Safe ? "Any PSP" : "Testing"));
+        }
         ui::RowStyle style;
         style.focused = i == m_pickerIdx;
-        ui::menuRow(app, b.x + 3.f, y, b.w - 6.f, L::ROW_H, c.name.c_str(),
-                    value, style, a);
+        ui::menuRow(app, b.x + 3.f, y, b.w - 6.f, L::ROW_H, label, value, style,
+                    a);
     }
 }
 
@@ -1879,7 +1932,9 @@ void HomeScene::drawError(App& app) {
 void HomeScene::drawLegend(App& app) {
     using B = ui::prim::Button;
     if (m_overlay == Overlay::CorePicker) {
-        const App::Hint hints[] = {{B::Cross, "Play"}, {B::Circle, "Cancel"}};
+        const App::Hint hints[] = {
+            {B::Cross, m_pickerAssign ? "Select" : "Play"},
+            {B::Circle, "Cancel"}};
         app.drawHintBar(hints, 2);
         return;
     }

@@ -74,16 +74,35 @@ int CoreRegistry::countFor(db::System s) const {
     return n;
 }
 
+namespace {
+/* Per-game key for an explicit emulator choice. The older "core" key is
+ * written on every launch (the emulator last used), so it cannot tell a
+ * deliberate choice from habit and no longer decides the core: the system
+ * default from Settings applies to every game without a choice. */
+constexpr const char* CHOICE_KEY = "coreChoice";
+
+std::string chosenCore(u32 pathHash) {
+    std::string chosen = cfg::gameOption(pathHash, CHOICE_KEY);
+    /* TempGBA was replaced by FrogGBA. */
+    if (chosen == "tempgba") chosen = "froggba";
+    return chosen;
+}
+}  // namespace
+
+const CoreInfo* CoreRegistry::overrideFor(const db::GameEntry& game) const {
+    const std::string chosen = chosenCore(game.pathHash);
+    if (chosen.empty()) return nullptr;
+    const CoreInfo* c = find(chosen.c_str());
+    return c && c->serves(game.system) ? c : nullptr;
+}
+
+void CoreRegistry::setOverride(const db::GameEntry& game, const CoreInfo* core) {
+    cfg::setGameOption(game.pathHash, CHOICE_KEY, core ? core->name.c_str() : "");
+}
+
 const CoreInfo* CoreRegistry::resolve(const db::GameEntry& game) const {
-    std::string remembered = cfg::gameOption(game.pathHash, "core");
-    /* TempGBA was replaced by FrogGBA. Preserve existing per-game choices
-     * without keeping the retired module installable or visible. */
-    if (remembered == "tempgba") remembered = "froggba";
-    if (!remembered.empty()) {
-        const CoreInfo* c = find(remembered.c_str());
-        if (c && c->serves(game.system)) return c;
-        /* A remembered core that vanished falls through to the default. */
-    }
+    if (const CoreInfo* c = overrideFor(game)) return c;
+    /* A chosen core that vanished falls through to the default. */
     return defaultFor(game.system);
 }
 
@@ -102,13 +121,11 @@ const CoreInfo* CoreRegistry::defaultFor(db::System system) const {
 }
 
 bool CoreRegistry::needsChoice(const db::GameEntry& game) const {
-    std::string remembered = cfg::gameOption(game.pathHash, "core");
-    if (remembered == "tempgba") remembered = "froggba";
-    if (remembered.empty()) return false; /* deterministic default */
-    /* A remembered core that was since uninstalled must re-prompt rather
-     * than let resolve() silently substitute a different core (whose save
-     * states wouldn't match). */
-    const CoreInfo* c = find(remembered.c_str());
+    const std::string chosen = chosenCore(game.pathHash);
+    if (chosen.empty()) return false; /* follows the system default */
+    /* A chosen core that was since uninstalled must re-prompt rather than
+     * let resolve() silently substitute a different one. */
+    const CoreInfo* c = find(chosen.c_str());
     return !(c && c->serves(game.system));
 }
 

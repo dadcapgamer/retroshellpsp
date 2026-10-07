@@ -84,9 +84,15 @@ public:
      * definition of "multiple cores", shared by the picker and the UI. */
     bool hasChoice(db::System s) const { return countFor(s) >= 2; }
 
-    /* The core a plain launch would use, or nullptr when no installed core
+    /* The core a plain launch would use: the game's own choice when it has
+     * one, otherwise the system default. nullptr when no installed core
      * claims the game's system. */
     const CoreInfo* resolve(const db::GameEntry& game) const;
+    /* The game's own emulator choice (Game Details > Emulator), or nullptr
+     * when it follows the system default. Reads the per-game config. */
+    const CoreInfo* overrideFor(const db::GameEntry& game) const;
+    /* Sets the game's own choice; nullptr returns it to the system default. */
+    static void setOverride(const db::GameEntry& game, const CoreInfo* core);
     /* Deterministic system default with no per-game Memory Stick lookup. */
     const CoreInfo* defaultFor(db::System system) const;
 
