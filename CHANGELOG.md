@@ -11,6 +11,11 @@
   and dynarec; Snes9x filter, flicker and overclock; QuickNES palette, sprite
   limit and sound quality; Gambatte resampler, frame blending and colour;
   PCE Fast and SMS Plus options. The list scrolls when a core has more.
+- **Settings stick, per emulator**: aspect ratio, filter and Emulator
+  Settings are saved the moment you change them (quitting through HOME or
+  turning the PSP off no longer loses them) and apply to every game on
+  that emulator. Emulator Settings' new "Save for" row switches a game to
+  "This game only", keeping its own copy of everything.
 - **Per-game emulator choice is back**: Game Details > Emulator sets the
   emulator for that game only (or "System default"), without launching.
   Every other game follows the system default from Settings. Previously

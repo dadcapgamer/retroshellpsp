@@ -58,6 +58,8 @@ private:
     bool restartPending() const;
     bool saveToSlot(int slot);
     bool slotFromThisCore(int slot) const;
+    void setScope(App& app, bool game);
+    void flushVideoOptions();
     void restartWithSettings(App& app, int slot);
     void drawFrame(App& app);
     void drawMenu(App& app);
@@ -74,6 +76,7 @@ private:
     const coreopt::Option* m_opts[coreopt::MAX_PER_CORE] = {};
     int  m_optValue[coreopt::MAX_PER_CORE] = {};
     int  m_optStart[coreopt::MAX_PER_CORE] = {};   /* as the game started */
+    bool m_scopeGame = false;      /* settings saved for this game only */
     ui::Smooth m_settingsScroll;
     /* Apply & Restart asks whether to save first. */
     bool m_confirmOpen = false;

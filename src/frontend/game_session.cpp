@@ -34,6 +34,8 @@ namespace {
 constexpr int PAUSE_VISIBLE_ROWS = 8;
 /* Emulator Settings option rows on screen; Apply & Restart sits below. */
 constexpr int SETTINGS_VISIBLE_ROWS = 6;
+/* Row 0 of Emulator Settings is "Save for"; the options follow it. */
+constexpr int SETTINGS_FIRST_OPTION = 1;
 constexpr u32 MENU_COMBO = PSP_CTRL_LTRIGGER | PSP_CTRL_RTRIGGER;
 constexpr float SRAM_FLUSH_SECONDS = 10.f;
 constexpr int MAX_WALL_CATCHUP = 3;
@@ -138,7 +140,8 @@ bool GameSession::startCore(App& app) {
     /* This game's emulator settings, read once (not on a frame path). */
     m_optCount = coreopt::forCore(m_coreName.c_str(), m_opts);
     for (int i = 0; i < m_optCount; i++) {
-        const std::string v = cfg::gameOption(m_game.pathHash, m_opts[i]->key);
+        const std::string v =
+            cfg::option(m_game.pathHash, m_coreName.c_str(), m_opts[i]->key);
         m_optValue[i] = m_optStart[i] = coreopt::indexOf(*m_opts[i], v.c_str());
         if (m_opts[i]->live) applyLiveOption(*m_opts[i], m_optValue[i]);
     }
@@ -165,13 +168,16 @@ bool GameSession::startCore(App& app) {
 
     /* Resolve frontend settings while the menu heap is still intact.
      * Large cores must not trigger JSON parsing/allocation after load. */
-    const std::string scale = cfg::gameOption(m_game.pathHash, "scale");
+    /* Each setting is the game's own value, else its emulator's. */
+    const char* core = m_coreName.c_str();
+    m_scopeGame = cfg::gameScoped(m_game.pathHash);
+    const std::string scale = cfg::option(m_game.pathHash, core, "scale");
     m_scaleMode = scale == "1:1"     ? ScaleMode::OneToOne
                 : scale == "4:3"     ? ScaleMode::FourThree
                 : scale == "stretch" ? ScaleMode::Stretch
                                      : ScaleMode::Fit;
     m_nearestFilter =
-        cfg::gameOption(m_game.pathHash, "filter") == "nearest";
+        cfg::option(m_game.pathHash, core, "filter") == "nearest";
 
     /* 1. Evict frontend caches (the arena/vram space becomes the core's). */
     app.evictForCore();
@@ -186,7 +192,7 @@ bool GameSession::startCore(App& app) {
     bool loaded = false;
     /* Before the core loads: some cores (PicoDrive's renderer) read their
      * options during initialisation, and must already see this game's. */
-    host::setActiveGame(m_game.pathHash);
+    host::setActiveGame(m_game.pathHash, m_coreName.c_str());
     if (!injectFailure("missing_prx"))
         loaded = m_cores.loadCore(*info);
 #ifndef RS_STATIC_CORES
@@ -489,12 +495,7 @@ void GameSession::teardown(App& app, bool restoreFrontend) {
         app.library().addPlaytime(m_game.pathHash, u32(m_playSeconds));
         app.library().notePlayed(m_game.pathHash, power::localTimestamp());
         cfg::setGameOption(m_game.pathHash, "core", m_coreName.c_str());
-        if (m_videoOptionsDirty) {
-            cfg::setGameOption(m_game.pathHash, "scale",
-                               scaleOptionName(m_scaleMode));
-            cfg::setGameOption(m_game.pathHash, "filter",
-                               m_nearestFilter ? "nearest" : "linear");
-        }
+        flushVideoOptions();   /* normally already saved from the menu */
     }
 
     if (restoreFrontend && m_frontendEvicted) {
@@ -863,6 +864,7 @@ void GameSession::primeAudio() {
 }
 
 void GameSession::resumeGame(bool discardAudio) {
+    flushVideoOptions();
     log::setDeferred(true);
     if (discardAudio) {
         audio::clear();
@@ -975,22 +977,28 @@ void GameSession::updateSettings(App& app) {
         return;
     }
     const auto& pad = app.pad();
-    const int rows = m_optCount + 1;            /* + Apply & Restart */
+    /* Row 0 "Save for", then the options, then Apply & Restart. */
+    const int rows = SETTINGS_FIRST_OPTION + m_optCount + 1;
     if (pad.navPressed(PSP_CTRL_UP) && m_settingsRow > 0) m_settingsRow--;
     if (pad.navPressed(PSP_CTRL_DOWN) && m_settingsRow < rows - 1) m_settingsRow++;
     const bool pending = restartPending();
+    const int opt = m_settingsRow - SETTINGS_FIRST_OPTION;
+    int dir = 0;
+    if (pad.navPressed(PSP_CTRL_LEFT)) dir = -1;
+    if (pad.navPressed(PSP_CTRL_RIGHT) || pad.isPressed(PSP_CTRL_CROSS)) dir = 1;
 
-    if (m_settingsRow < m_optCount) {
-        int dir = 0;
-        if (pad.navPressed(PSP_CTRL_LEFT)) dir = -1;
-        if (pad.navPressed(PSP_CTRL_RIGHT) || pad.isPressed(PSP_CTRL_CROSS)) dir = 1;
+    if (m_settingsRow == 0) {
+        if (dir) setScope(app, !m_scopeGame);
+    } else if (opt < m_optCount) {
         if (dir) {
-            const coreopt::Option& o = *m_opts[m_settingsRow];
-            int& v = m_optValue[m_settingsRow];
+            const coreopt::Option& o = *m_opts[opt];
+            int& v = m_optValue[opt];
             v = (v + dir + o.count) % o.count;
-            /* Stored per game straight away (paused: Memory Stick I/O is fine
-             * here); the core reads it when the game next starts. */
-            cfg::setGameOption(m_game.pathHash, o.key, o.values[v].value);
+            /* Saved straight away (paused: Memory Stick I/O is fine here),
+             * for every game on this emulator unless this game keeps its
+             * own; the core reads it when the game next starts. */
+            cfg::storeOption(m_game.pathHash, m_coreName.c_str(), o.key,
+                             o.values[v].value);
             if (o.live) applyLiveOption(o, v);
         }
     } else if (pad.isPressed(PSP_CTRL_CROSS) && pending) {
@@ -1004,6 +1012,41 @@ void GameSession::updateSettings(App& app) {
         m_settingsOpen = false;
         if (pending) app.toast("Applies next time the game starts");
     }
+}
+
+/* "Save for": this game keeps its own copy of every setting (from what is
+ * in effect now), or goes back to following its emulator's. */
+void GameSession::setScope(App& app, bool game) {
+    const u32 hash = m_game.pathHash;
+    const char* core = m_coreName.c_str();
+    flushVideoOptions();
+    if (game) {
+        for (int i = 0; i < m_optCount; i++)
+            cfg::setGameOption(hash, m_opts[i]->key,
+                               m_opts[i]->values[m_optValue[i]].value);
+        cfg::setGameOption(hash, "scale", scaleOptionName(m_scaleMode));
+        cfg::setGameOption(hash, "filter", m_nearestFilter ? "nearest" : "linear");
+        cfg::setGameOption(hash, cfg::SCOPE_KEY, "game");
+        app.toast("Settings now saved for this game only");
+    } else {
+        cfg::setGameOption(hash, cfg::SCOPE_KEY, "");
+        for (int i = 0; i < m_optCount; i++) {
+            cfg::setGameOption(hash, m_opts[i]->key, "");
+            m_optValue[i] = coreopt::indexOf(
+                *m_opts[i], cfg::coreOption(core, m_opts[i]->key).c_str());
+            if (m_opts[i]->live) applyLiveOption(*m_opts[i], m_optValue[i]);
+        }
+        cfg::setGameOption(hash, "scale", "");
+        cfg::setGameOption(hash, "filter", "");
+        const std::string scale = cfg::coreOption(core, "scale");
+        m_scaleMode = scale == "1:1"     ? ScaleMode::OneToOne
+                    : scale == "4:3"     ? ScaleMode::FourThree
+                    : scale == "stretch" ? ScaleMode::Stretch
+                                         : ScaleMode::Fit;
+        m_nearestFilter = cfg::coreOption(core, "filter") == "nearest";
+        app.toast("Settings now follow this emulator");
+    }
+    m_scopeGame = game;
 }
 
 void GameSession::updateConfirm(App& app) {
@@ -1072,9 +1115,22 @@ void GameSession::restartWithSettings(App& app, int slot) {
     exitToHome(app);
 }
 
+/* Aspect ratio and filter changed in the pause menu are saved straight
+ * away (the game is paused, so Memory Stick I/O is fine), so quitting
+ * through HOME or a power-off keeps them. */
+void GameSession::flushVideoOptions() {
+    if (!m_videoOptionsDirty) return;
+    m_videoOptionsDirty = false;
+    cfg::storeOption(m_game.pathHash, m_coreName.c_str(), "scale",
+                     scaleOptionName(m_scaleMode));
+    cfg::storeOption(m_game.pathHash, m_coreName.c_str(), "filter",
+                     m_nearestFilter ? "nearest" : "linear");
+}
+
 void GameSession::updateMenu(App& app) {
     const auto& pad = app.pad();
     auto& core = m_cores.core();
+    flushVideoOptions();
     if (m_settingsOpen) {
         updateSettings(app);
         return;
@@ -1206,7 +1262,8 @@ void GameSession::update(App& app, float dt) {
             if (m_settingsOpen) {
                 m_settingsScroll.to(float(rsClamp(
                     m_settingsRow - SETTINGS_VISIBLE_ROWS / 2, 0,
-                    std::max(0, m_optCount - SETTINGS_VISIBLE_ROWS))));
+                    std::max(0, SETTINGS_FIRST_OPTION + m_optCount -
+                                    SETTINGS_VISIBLE_ROWS))));
                 m_settingsScroll.update(dt, 14.f);
             }
             m_menuFade.update(dt);
@@ -1448,7 +1505,8 @@ void GameSession::drawSettings(App& app, u32 a) {
     const auto& pal = app.pal();
     const auto& fonts = app.fonts();
     constexpr float HEAD = 36.f, PX = L::MARGIN, PW = 300.f;
-    const int shown = std::min(m_optCount, SETTINGS_VISIBLE_ROWS);
+    const int listRows = SETTINGS_FIRST_OPTION + m_optCount;
+    const int shown = std::min(listRows, SETTINGS_VISIBLE_ROWS);
     const float listH = L::ROW_H * float(shown);
     const float ph = HEAD + listH + 7.f + L::ROW_H + 6.f;
     const float py = L::CONTENT_TOP;
@@ -1465,12 +1523,20 @@ void GameSession::drawSettings(App& app, u32 a) {
     const float listY = py + HEAD;
     const float scroll = m_settingsScroll.v;
     r.setScissor(int(PX), int(listY), int(PW), int(listH));
-    for (int i = 0; i < m_optCount; i++) {
-        const float rowY = ui::snap(listY + (float(i) - scroll) * L::ROW_H);
+    for (int row = 0; row < listRows; row++) {
+        const float rowY = ui::snap(listY + (float(row) - scroll) * L::ROW_H);
         if (rowY + L::ROW_H <= listY || rowY >= listY + listH) continue;
         ui::RowStyle style;
-        style.focused = !m_confirmOpen && i == m_settingsRow;
+        style.focused = !m_confirmOpen && row == m_settingsRow;
         style.adjustable = true;
+        if (row == 0) {
+            style.strong = true;
+            ui::menuRow(app, PX + 3.f, rowY, PW - 6.f, L::ROW_H, "Save for",
+                        m_scopeGame ? "This game only" : "All games here",
+                        style, a);
+            continue;
+        }
+        const int i = row - SETTINGS_FIRST_OPTION;
         const coreopt::Option& o = *m_opts[i];
         ui::menuRow(app, PX + 3.f, rowY, PW - 6.f, L::ROW_H, o.label,
                     o.values[m_optValue[i]].label, style, a);
@@ -1479,7 +1545,7 @@ void GameSession::drawSettings(App& app, u32 a) {
     const float ay = listY + listH + 7.f;
     r.rect(PX + 10.f, ay - 4.f, PW - 20.f, 1.f, fade(pal.line, a));
     ui::RowStyle apply;
-    apply.focused = !m_confirmOpen && m_settingsRow == m_optCount;
+    apply.focused = !m_confirmOpen && m_settingsRow == listRows;
     apply.disabled = !pending;
     apply.strong = pending;
     ui::menuRow(app, PX + 3.f, ay, PW - 6.f, L::ROW_H, "Apply & Restart",
@@ -1491,16 +1557,26 @@ void GameSession::drawSettings(App& app, u32 a) {
     }
 
     /* Say what the focused row does, beside the panel, in plain words. */
-    const bool liveRow = m_settingsRow < m_optCount && m_opts[m_settingsRow]->live;
+    const int opt = m_settingsRow - SETTINGS_FIRST_OPTION;
+    const bool liveRow = opt >= 0 && opt < m_optCount && m_opts[opt]->live;
+    char scopeHelp[160];
+    std::snprintf(scopeHelp, sizeof scopeHelp,
+                  m_scopeGame
+                      ? "This game keeps its own settings, aspect ratio and "
+                        "filter. Switch back to follow %s's."
+                      : "Changes here, and the pause menu's aspect ratio and "
+                        "filter, apply to every game on %s.",
+                  m_coreName.c_str());
     ui::drawWrapped(fonts.small, r, PX + PW + 14.f,
                     fonts.small.centerY(py + 4.f, 7.f), L::RIGHT - PX - PW - 14.f,
                     14.f, 9,
-                    liveRow ? "Frame skip and Audio buffer apply at once. "
+                    m_settingsRow == 0 ? scopeHelp
+                    : liveRow ? "Frame skip and Audio buffer apply at once. "
                               "Raise them if a game stutters or crackles."
                     : pending ? "These settings take effect when the game "
                                 "restarts. Apply & Restart offers to save "
                                 "a state first."
-                              : "Changes are saved for this game only.",
+                              : scopeHelp,
                     fade(pal.textSecondary, a));
 
     using B = ui::prim::Button;

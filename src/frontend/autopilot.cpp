@@ -101,10 +101,12 @@ constexpr Step GAME_SCRIPT[] = {
     {1928, PSP_CTRL_DOWN,     nullptr},
     {1932, PSP_CTRL_DOWN,     nullptr},
     {1936, PSP_CTRL_DOWN,     nullptr},
+    {1938, PSP_CTRL_RIGHT,    nullptr},         /* Filter -> Sharp (saved) */
     {1940, PSP_CTRL_DOWN,     nullptr},
     {1944, PSP_CTRL_DOWN,     nullptr},
     {1948, PSP_CTRL_CROSS,    nullptr},         /* Emulator Settings */
     {1968, 0,                 "emu_settings"},
+    {1971, PSP_CTRL_DOWN,     nullptr},         /* past "Save for" */
     {1974, PSP_CTRL_RIGHT,    nullptr},         /* Frame skip -> 1 */
     {1980, PSP_CTRL_DOWN,     nullptr},
     {1984, PSP_CTRL_DOWN,     nullptr},

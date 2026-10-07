@@ -60,8 +60,28 @@ void setSystemEnabled(const char* coreId, bool enabled);
 void load();
 void save();
 
-/* Per-game overlays. Values persist immediately on set. */
+/* Per-game overlays. Values persist immediately on set; "" clears. */
 std::string gameOption(u32 pathHash, const char* key);
 void setGameOption(u32 pathHash, const char* key, const char* value);
+
+/* Per-emulator defaults (RETROSHELL/percore/<core>.json), shared by every
+ * game that core runs. Values persist immediately on set. */
+std::string coreOption(const char* core, const char* key);
+void setCoreOption(const char* core, const char* key, const char* value);
+
+/* A game setting as it applies: the game's own value, else its
+ * emulator's, else "" (the built-in default). */
+std::string option(u32 pathHash, const char* core, const char* key);
+
+/* Per-game key: "game" while a game keeps its own settings instead of
+ * following its emulator's ("This game only" in Emulator Settings). */
+constexpr const char* SCOPE_KEY = "rs_scope";
+bool gameScoped(u32 pathHash);
+
+/* Stores a changed setting where it belongs: the game's own copy while it
+ * is game-scoped, otherwise the emulator's (clearing any older per-game
+ * value that would shadow it). */
+void storeOption(u32 pathHash, const char* core, const char* key,
+                 const char* value);
 
 }  // namespace rs::cfg

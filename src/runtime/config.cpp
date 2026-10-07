@@ -32,6 +32,34 @@ void gamePath(char* buf, size_t n, u32 hash) {
     std::snprintf(buf, n, "ms0:/RETROSHELL/pergame/%08x.json", unsigned(hash));
 }
 
+bool corePath(char* buf, size_t n, const char* core) {
+    if (!safeId(core, 31)) return false;
+    std::snprintf(buf, n, "ms0:/RETROSHELL/percore/%s.json", core);
+    return true;
+}
+
+std::string readOption(const char* path, const char* key) {
+    cJSON* root = json::parseFile(path);
+    if (!root) return {};
+    std::string out;
+    if (const cJSON* v = cJSON_GetObjectItemCaseSensitive(root, key);
+        cJSON_IsString(v) && std::strlen(v->valuestring) <= 256)
+        out = v->valuestring;
+    cJSON_Delete(root);
+    return out;
+}
+
+void writeOption(const char* path, const char* dir, const char* key,
+                 const char* value) {
+    cJSON* root = json::parseFile(path);
+    if (!root) root = cJSON_CreateObject();
+    cJSON_DeleteItemFromObjectCaseSensitive(root, key);
+    cJSON_AddStringToObject(root, key, value);
+    fs::mkdirs(dir);
+    json::writeFile(path, root);
+    cJSON_Delete(root);
+}
+
 }  // namespace
 
 Config& get() { return s_cfg; }
@@ -154,27 +182,49 @@ std::string gameOption(u32 pathHash, const char* key) {
     if (!safeId(key, 64)) return {};
     char path[96];
     gamePath(path, sizeof path, pathHash);
-    cJSON* root = json::parseFile(path);
-    if (!root) return {};
-    std::string out;
-    if (const cJSON* v = cJSON_GetObjectItemCaseSensitive(root, key);
-        cJSON_IsString(v) && std::strlen(v->valuestring) <= 256)
-        out = v->valuestring;
-    cJSON_Delete(root);
-    return out;
+    return readOption(path, key);
 }
 
 void setGameOption(u32 pathHash, const char* key, const char* value) {
     if (!safeId(key, 64) || !value || std::strlen(value) > 256) return;
     char path[96];
     gamePath(path, sizeof path, pathHash);
-    cJSON* root = json::parseFile(path);
-    if (!root) root = cJSON_CreateObject();
-    cJSON_DeleteItemFromObjectCaseSensitive(root, key);
-    cJSON_AddStringToObject(root, key, value);
-    fs::mkdirs("ms0:/RETROSHELL/pergame");
-    json::writeFile(path, root);
-    cJSON_Delete(root);
+    writeOption(path, "ms0:/RETROSHELL/pergame", key, value);
+}
+
+std::string coreOption(const char* core, const char* key) {
+    char path[96];
+    if (!safeId(key, 64) || !corePath(path, sizeof path, core)) return {};
+    return readOption(path, key);
+}
+
+void setCoreOption(const char* core, const char* key, const char* value) {
+    char path[96];
+    if (!safeId(key, 64) || !value || std::strlen(value) > 256 ||
+        !corePath(path, sizeof path, core))
+        return;
+    writeOption(path, "ms0:/RETROSHELL/percore", key, value);
+}
+
+std::string option(u32 pathHash, const char* core, const char* key) {
+    std::string value = gameOption(pathHash, key);
+    if (value.empty() && core && *core) value = coreOption(core, key);
+    return value;
+}
+
+bool gameScoped(u32 pathHash) {
+    return gameOption(pathHash, SCOPE_KEY) == "game";
+}
+
+void storeOption(u32 pathHash, const char* core, const char* key,
+                 const char* value) {
+    if (gameScoped(pathHash) || !core || !*core) {
+        setGameOption(pathHash, key, value);
+        return;
+    }
+    setCoreOption(core, key, value);
+    /* An older per-game value would keep shadowing the emulator's. */
+    if (!gameOption(pathHash, key).empty()) setGameOption(pathHash, key, "");
 }
 
 }  // namespace rs::cfg

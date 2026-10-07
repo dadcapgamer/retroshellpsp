@@ -15,6 +15,7 @@ namespace rs::host {
 namespace {
 
 u32 s_gameHash = 0;
+char s_gameCore[32] = {};   /* emulator of s_gameHash, for its defaults */
 volatile u32 s_input = 0;
 
 /* Options for the active game, resolved once each and cached in fixed
@@ -145,7 +146,7 @@ const char* hostGetOption(const char* key) {
         }
         return nullptr;
     }
-    std::string value = cfg::gameOption(s_gameHash, key);
+    std::string value = cfg::option(s_gameHash, s_gameCore, key);
     std::snprintf(empty->key, sizeof empty->key, "%s", key);
     std::snprintf(empty->value, sizeof empty->value, "%s", value.c_str());
     empty->used = true;
@@ -191,8 +192,9 @@ u32 allocationFailures() {
     return s_allocFailures + mem::allocationFailures();
 }
 
-void setActiveGame(u32 pathHash) {
+void setActiveGame(u32 pathHash, const char* core) {
     s_gameHash = pathHash;
+    std::snprintf(s_gameCore, sizeof s_gameCore, "%s", core ? core : "");
     for (auto& entry : s_optCache) entry = OptionEntry{};
     s_optionCacheFullLogged = false;
 }

@@ -17,7 +17,9 @@ void beginCoreSession();
 void endCoreSession();
 u32 allocationFailures();
 
-void setActiveGame(u32 pathHash);
+/* The game (and its emulator) whose settings get_option answers with:
+ * the game's own value, else the emulator's (cfg::option). */
+void setActiveGame(u32 pathHash, const char* core = nullptr);
 void setInputState(u32 rsButtons);
 
 }  // namespace rs::host
