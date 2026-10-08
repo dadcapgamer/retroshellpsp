@@ -230,6 +230,8 @@ def main() -> int:
     branding_assets = {
         "assets/branding/retroshell-splash-2x.png": (960, 544),
         "assets/SPLASH_MASK.PNG": (480, 272),
+        "assets/SPLASH_ICONS.PNG": (480, 272),
+        "assets/branding/retroshell-xmb-background-2x.png": (960, 544),
         "assets/branding/retroshell-logo-light-2x.png": (124, 124),
         "assets/ICON0.PNG": (144, 80),
         "assets/PIC1.PNG": (480, 272),

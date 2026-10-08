@@ -1,7 +1,7 @@
 /*
  * assetgen — RetroShell host-side asset baker (runs on the build machine).
  *
- * Generates the PBP artwork (SPLASH_MASK/PIC1/ICON0). Font atlases (.rsf, format
+ * Generates the PBP artwork (SPLASH_MASK/SPLASH_ICONS/PIC1/ICON0). Font atlases (.rsf, format
  * below, parsed by src/frontend/text/font.cpp) are baked by tools/fontbake.c.
  * Outputs are committed to the repo so contributors don't need this tool;
  * rerun it only when changing fonts or artwork.
@@ -79,56 +79,122 @@ static unsigned char coverage(const unsigned char* p, const int bg[3],
     return (unsigned char)(v < 0 ? 0 : v > 255 ? 255 : v);
 }
 
+/* Area-resamples an RGBA master (premultiplied while averaging) to dst x dst
+ * pixels and composites it at (ox, oy) of a 480x272 RGBA layer with
+ * `opacity`. */
+static void place_icon(Canvas* layer, const char* path, int ox, int oy, int dst,
+                       float opacity) {
+    int w = 0, h = 0, ch = 0;
+    unsigned char* src = stbi_load(path, &w, &h, &ch, 4);
+    if (!src || w != h) {
+        fprintf(stderr, "assetgen: expected a square icon master at %s\n", path);
+        exit(1);
+    }
+    const double scale = (double)w / dst;
+    for (int y = 0; y < dst; y++) {
+        for (int x = 0; x < dst; x++) {
+            double acc[4] = {0, 0, 0, 0}, area = 0;
+            const double x0 = x * scale, x1 = (x + 1) * scale;
+            const double y0 = y * scale, y1 = (y + 1) * scale;
+            for (int sy = (int)y0; sy < (int)(y1 + 0.999) && sy < h; sy++) {
+                const double wy = (sy + 1 < y1 ? sy + 1 : y1) - (sy > y0 ? sy : y0);
+                for (int sx = (int)x0; sx < (int)(x1 + 0.999) && sx < w; sx++) {
+                    const double wx =
+                        (sx + 1 < x1 ? sx + 1 : x1) - (sx > x0 ? sx : x0);
+                    const unsigned char* p = src + (sy * w + sx) * 4;
+                    const double a = p[3] / 255.0, k = wx * wy;
+                    for (int c = 0; c < 3; c++) acc[c] += p[c] * a * k;
+                    acc[3] += a * k;
+                    area += k;
+                }
+            }
+            if (acc[3] <= 0) continue;
+            unsigned char* d = layer->px + ((oy + y) * layer->w + ox + x) * 4;
+            for (int c = 0; c < 3; c++)
+                d[c] = (unsigned char)(acc[c] / acc[3] + 0.5);
+            d[3] = (unsigned char)(acc[3] / area * opacity * 255.0 + 0.5);
+        }
+    }
+    stbi_image_free(src);
+}
+
 static void make_pbp_art(const char* out_dir) {
     char source_path[1024], output_path[1024];
     int channels = 0;
-    /* The startup splash is themed at run time (src/frontend/splash.cpp):
-     * one mask, baked from the Dark Figma frame, holds the mark + title
-     * coverage in red and the tagline's in green; the app fills the theme's
-     * background and tints them with its primary text colour and the brand
-     * tagline grey. The XMB background (PIC1) is the Dark frame itself. */
+    /* XMB background (PIC1): one fixed frame, independent of the splash. */
     snprintf(source_path, sizeof source_path,
-             "%s/branding/retroshell-splash-2x.png", out_dir);
+             "%s/branding/retroshell-xmb-background-2x.png", out_dir);
     Canvas pic1 = bake_half(source_path);
     snprintf(output_path, sizeof output_path, "%s/PIC1.PNG", out_dir);
     stbi_write_png(output_path, pic1.w, pic1.h, 4, pic1.px, pic1.w * 4);
     printf("wrote %s\n", output_path);
     free(pic1.px);
 
+    /* The startup splash (Figma "splash - new") is themed at run time by
+     * src/frontend/splash.cpp from two layers baked here:
+     *  - SPLASH_MASK: red = mark coverage, green = tagline coverage (the
+     *    tagline's 80% opacity is folded in), read from the Figma frame;
+     *  - SPLASH_ICONS: the four console icons, from RetroShell's own masters,
+     *    at the frame's positions and opacities (straight alpha). */
+    snprintf(source_path, sizeof source_path,
+             "%s/branding/retroshell-splash-2x.png", out_dir);
     int sw = 0, sh = 0;
     unsigned char* src = stbi_load(source_path, &sw, &sh, &channels, 4);
-    if (!src || sw != 960 || sh != 544) exit(1);
-    static const int BG[3] = {0x08, 0x18, 0x28};     /* Dark background */
-    static const int FG[3] = {0xF4, 0xF1, 0xE8};     /* Dark primary text */
+    if (!src || sw != 960 || sh != 544) {
+        fprintf(stderr, "assetgen: expected a 960x544 splash at %s\n",
+                source_path);
+        exit(1);
+    }
+    static const int BG[3] = {0x13, 0x15, 0x17};     /* frame background */
+    static const int FG[3] = {0xF2, 0xF1, 0xEE};     /* mark */
     static const int TAG[3] = {0xA0, 0x98, 0x86};    /* tagline grey */
-    const int TAGLINE_TOP = 350;                     /* 2x rows */
     Canvas mask = canvas_new(480, 272);
     for (int y = 0; y < 272; y++) {
         for (int x = 0; x < 480; x++) {
-            unsigned sum = 0;
+            unsigned mark = 0, tag = 0;
             for (int yy = 0; yy < 2; yy++)
                 for (int xx = 0; xx < 2; xx++) {
                     const int sy = y * 2 + yy, sx = x * 2 + xx;
                     const unsigned char* p = src + (sy * sw + sx) * 4;
-                    sum += coverage(p, BG, sy < TAGLINE_TOP ? FG : TAG);
+                    /* 2x frame boxes: mark 390..570 x 182..362, tagline
+                     * rows 366..412 (clear of the icons either side). */
+                    if (sx >= 386 && sx < 574 && sy >= 178 && sy < 366)
+                        mark += coverage(p, BG, FG);
+                    else if (sy >= 366 && sy < 414 && sx >= 180 && sx < 780)
+                        tag += coverage(p, BG, TAG);
                 }
             unsigned char* d = mask.px + (y * 480 + x) * 4;
-            const unsigned char a = (unsigned char)((sum + 2) / 4);
-            d[0] = y * 2 < TAGLINE_TOP ? a : 0;
-            d[1] = y * 2 < TAGLINE_TOP ? 0 : a;
+            d[0] = (unsigned char)((mark + 2) / 4);
+            d[1] = (unsigned char)((tag + 2) / 4);
             d[2] = 0;
             d[3] = 255;
         }
     }
     stbi_image_free(src);
     snprintf(output_path, sizeof output_path, "%s/SPLASH_MASK.PNG", out_dir);
-    /* RGB is enough; three channels compress smaller than four. */
     unsigned char* rgb = malloc(480 * 272 * 3);
     for (int i = 0; i < 480 * 272; i++)
         memcpy(rgb + i * 3, mask.px + i * 4, 3);
     stbi_write_png(output_path, 480, 272, 3, rgb, 480 * 3);
     free(rgb);
     free(mask.px);
+    printf("wrote %s\n", output_path);
+
+    /* 2x frame: 120 px icons at x 118.4 / 254.2 / 585.8 / 721.6, y 212;
+     * the outer pair at 20% opacity, the inner pair at 40%. */
+    static const struct { const char* master; int x; float opacity; } ICONS[] = {
+        {"game-boy-color", 59, 0.2f}, {"snes", 127, 0.4f},
+        {"game-gear", 293, 0.4f},     {"pc-engine", 361, 0.2f},
+    };
+    Canvas icons = canvas_new(480, 272);
+    for (int i = 0; i < 4; i++) {
+        snprintf(source_path, sizeof source_path,
+                 "%s/icons/consoles/%s-192.png", out_dir, ICONS[i].master);
+        place_icon(&icons, source_path, ICONS[i].x, 106, 60, ICONS[i].opacity);
+    }
+    snprintf(output_path, sizeof output_path, "%s/SPLASH_ICONS.PNG", out_dir);
+    stbi_write_png(output_path, 480, 272, 4, icons.px, 480 * 4);
+    free(icons.px);
     printf("wrote %s\n", output_path);
 
     /* ICON0 is authored as its own native-resolution Figma frame. Treat that
