@@ -27,6 +27,10 @@ release itself.
   and dynarec; Snes9x filter, flicker and overclock; QuickNES palette, sprite
   limit and sound quality; Gambatte resampler, frame blending and colour;
   PCE Fast and SMS Plus options. The list scrolls when a core has more.
+- **A startup splash for each theme**: Dark, Graphite, Light and Mist each
+  open on their own splash (from the Figma "Splash screens"), drawn exactly
+  as designed; custom themes use Dark's. The XMB background now uses the
+  Dark splash.
 - **RetroShell brand in the header**: the top-left mark is now the real
   RetroShell diamond (as on the splash screen and website), with the
   RetroShell wordmark, replacing the placeholder dot grid.

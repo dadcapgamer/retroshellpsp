@@ -1,7 +1,7 @@
 /*
  * assetgen — RetroShell host-side asset baker (runs on the build machine).
  *
- * Generates the PBP artwork (SPLASH/PIC1/ICON0). Font atlases (.rsf, format
+ * Generates the PBP artwork (SPLASH_<THEME>/PIC1/ICON0). Font atlases (.rsf, format
  * below, parsed by src/frontend/text/font.cpp) are baked by tools/fontbake.c.
  * Outputs are committed to the repo so contributors don't need this tool;
  * rerun it only when changing fonts or artwork.
@@ -39,25 +39,20 @@ static Canvas canvas_new(int w, int h) {
     return c;
 }
 
-static void make_pbp_art(const char* out_dir) {
-    char source_path[1024], output_path[1024];
+/* Average each 2x2 block of a 960x544 Figma export into a 480x272 canvas,
+ * so antialiased type survives the native-resolution bake. */
+static Canvas bake_half(const char* source_path) {
     int sw = 0, sh = 0, channels = 0;
-
-    /* The committed Figma export is exactly 2x PSP resolution. Average each
-     * 2x2 block so antialiased type survives the native-resolution bake. */
-    snprintf(source_path, sizeof source_path,
-             "%s/branding/retroshell-splash-2x.png", out_dir);
-    unsigned char* source =
-        stbi_load(source_path, &sw, &sh, &channels, 4);
+    unsigned char* source = stbi_load(source_path, &sw, &sh, &channels, 4);
     if (!source || sw != 960 || sh != 544) {
         fprintf(stderr, "assetgen: expected a 960x544 splash at %s\n",
                 source_path);
         exit(1);
     }
-    Canvas splash = canvas_new(480, 272);
-    for (int y = 0; y < splash.h; y++) {
-        for (int x = 0; x < splash.w; x++) {
-            unsigned char* dst = splash.px + (y * splash.w + x) * 4;
+    Canvas out = canvas_new(480, 272);
+    for (int y = 0; y < out.h; y++) {
+        for (int x = 0; x < out.w; x++) {
+            unsigned char* dst = out.px + (y * out.w + x) * 4;
             for (int c = 0; c < 4; c++) {
                 unsigned sum = 0;
                 for (int yy = 0; yy < 2; yy++)
@@ -68,14 +63,38 @@ static void make_pbp_art(const char* out_dir) {
             }
         }
     }
-    snprintf(output_path, sizeof output_path, "%s/SPLASH.PNG", out_dir);
-    stbi_write_png(output_path, splash.w, splash.h, 4, splash.px,
-                   splash.w * 4);
-    printf("wrote %s\n", output_path);
-    snprintf(output_path, sizeof output_path, "%s/PIC1.PNG", out_dir);
-    stbi_write_png(output_path, splash.w, splash.h, 4, splash.px,
-                   splash.w * 4);
-    printf("wrote %s\n", output_path);
+    stbi_image_free(source);
+    return out;
+}
+
+static void make_pbp_art(const char* out_dir) {
+    char source_path[1024], output_path[1024];
+    int channels = 0;
+    /* One startup splash per built-in theme (Figma "Splash screens"), shown
+     * in the theme the player picked. The XMB background (PIC1) is the
+     * default Dark theme's. */
+    static const char* const THEMES[][2] = {
+        {"dark", "DARK"}, {"graphite", "GRAPHITE"},
+        {"light", "LIGHT"}, {"mist", "MIST"},
+    };
+    for (int t = 0; t < 4; t++) {
+        snprintf(source_path, sizeof source_path,
+                 "%s/branding/retroshell-splash-%s-2x.png", out_dir,
+                 THEMES[t][0]);
+        Canvas splash = bake_half(source_path);
+        snprintf(output_path, sizeof output_path, "%s/SPLASH_%s.PNG", out_dir,
+                 THEMES[t][1]);
+        stbi_write_png(output_path, splash.w, splash.h, 4, splash.px,
+                       splash.w * 4);
+        printf("wrote %s\n", output_path);
+        if (t == 0) {
+            snprintf(output_path, sizeof output_path, "%s/PIC1.PNG", out_dir);
+            stbi_write_png(output_path, splash.w, splash.h, 4, splash.px,
+                           splash.w * 4);
+            printf("wrote %s\n", output_path);
+        }
+        free(splash.px);
+    }
 
     /* ICON0 is authored as its own native-resolution Figma frame. Treat that
      * export as the canonical source so a later font or splash bake cannot
@@ -89,13 +108,11 @@ static void make_pbp_art(const char* out_dir) {
         exit(1);
     }
 
-    stbi_image_free(source);
     snprintf(output_path, sizeof output_path, "%s/ICON0.PNG", out_dir);
     stbi_write_png(output_path, iw, ih, 4, icon, iw * 4);
     printf("wrote %s\n", output_path);
 
     stbi_image_free(icon);
-    free(splash.px);
 }
 
 /* ------------------------------------------------------------------ */

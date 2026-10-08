@@ -33,7 +33,7 @@
 #include "rs_asset_font_body_rsf.h"
 #include "rs_asset_font_small_rsf.h"
 #include "rs_asset_font_tiny_rsf.h"
-#include "rs_asset_splash_png.h"
+#include "frontend/splash_art.h"
 
 /* Set by the HOME-menu exit callback in main.cpp. */
 extern volatile bool g_exitRequested;
@@ -42,54 +42,21 @@ namespace rs {
 
 namespace {
 
-void drawStartupSubtitle(gfx::Renderer& renderer, const text::Font& font) {
-    constexpr const char* value = "PSP Retro Emulation";
-    constexpr float tracking = .2f;
-    const int count = int(std::strlen(value));
-    float width = count > 1 ? tracking * float(count - 1) : 0.f;
-    for (int i = 0; i < count; ++i) {
-        const char glyph[2] = {value[i], '\0'};
-        width += font.measure(glyph);
-    }
-    float x = RS_SCREEN_W * .5f - width * .5f;
-    for (int i = 0; i < count; ++i) {
-        const char glyph[2] = {value[i], '\0'};
-        font.draw(renderer, x, 181.f, glyph, rsHex(0xD79A2B));
-        x += font.measure(glyph) + tracking;
-    }
-}
-
-bool drawStartupPlate(gfx::Renderer& renderer) {
+bool drawStartupPlate(gfx::Renderer& renderer, const splash::Art& art) {
     int w = 0, h = 0, channels = 0;
-    stbi_uc* pixels = stbi_load_from_memory(
-        rs_asset_splash_png, int(rs_asset_splash_png_len),
-        &w, &h, &channels, 4);
+    stbi_uc* pixels = stbi_load_from_memory(art.png, int(art.len),
+                                            &w, &h, &channels, 4);
     gfx::Texture splash;
     const bool ready = pixels && w == RS_SCREEN_W && h == RS_SCREEN_H &&
         gfx::Renderer::createTexture(
             splash, w, h, GU_PSM_8888, pixels, /*dynamic=*/false);
     if (pixels) stbi_image_free(pixels);
 
-    renderer.beginFrame(rsHex(0xFAF5EE));
-    if (ready) {
+    renderer.beginFrame(art.bg);
+    if (ready)
         renderer.sprite(splash, 0, 0, w, h, 0, 0,
                         RS_SCREEN_W, RS_SCREEN_H, rsHex(0xFFFFFF));
-        /* Replace the authored left-to-right subtitle gradient with the same
-         * solid orange base used by BootScene. Once initialization completes,
-         * BootScene adds the animated shimmer without a visible color jump. */
-        text::Font startupFont;
-        if (startupFont.load(rs_asset_font_small_rsf,
-                             rs_asset_font_small_rsf_len)) {
-            renderer.rect(0.f, 176.f, RS_SCREEN_W, 22.f, rsHex(0xFAF5EE));
-            drawStartupSubtitle(renderer, startupFont);
-            renderer.endFrame();
-            startupFont.unload();
-        } else {
-            renderer.endFrame();
-        }
-    } else {
-        renderer.endFrame();
-    }
+    renderer.endFrame();
 
     /* This is the first and only texture allocated before the persistent UI
      * atlases. The GE has finished reading it, so reclaim its temporary VRAM
@@ -109,7 +76,11 @@ bool App::init() {
     /* Present branding before Memory Stick logging, UI atlas creation,
      * library loading, core discovery, or scanner startup. The framebuffer
      * remains visible while those slower operations complete. */
-    const bool startupPlateReady = drawStartupPlate(m_renderer);
+    /* The settings file is tiny; reading it first lets the very first
+     * frame be the splash of the player's theme. */
+    cfg::load();
+    const bool startupPlateReady =
+        drawStartupPlate(m_renderer, splash::forTheme(cfg::get().theme));
     const u32 firstFrameUs = sceKernelGetSystemTimeLow() - initStart;
     const fs::RootMigration migration = fs::migrateLegacyRoot();
     log::init(/*toFile=*/true);
