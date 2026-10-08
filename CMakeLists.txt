@@ -21,8 +21,6 @@ option(RS_AUTOPILOT "Scripted self-test: inject input and dump screenshots (debu
 set(RS_AUTOPILOT_SYSTEM_INDEX "2" CACHE STRING
     "System index for the scripted self-test (0=GB, 1=GBC, 2=GBA, 3=NES, 4=SNES, 5=MD, 6=SMS, 7=GG, 8=PCE)")
 option(RS_AUTOPILOT_TOUR "With RS_AUTOPILOT: walk every Home layer with seeded recents instead of launching a game (UI review)" OFF)
-set(RS_AUTOPILOT_SETUP "0" CACHE STRING
-    "With RS_AUTOPILOT + RS_AUTOPILOT_TOUR: capture first-run setup instead (1 = with games, 2 = empty library)")
 option(RS_SHIM_DIAG "Log one-shot libretro video diagnostics (debug only)" OFF)
 option(RS_FAILURE_INJECTION "Enable launch-stage failures selected by per-game injectFailure option" OFF)
 option(RS_INCLUDE_TEST_CORES "Build/package test-only cores such as dummy" OFF)
@@ -49,9 +47,6 @@ if(RS_AUTOPILOT)
   add_compile_definitions(RS_AUTOPILOT=1)
   if(RS_AUTOPILOT_TOUR)
     add_compile_definitions(RS_AUTOPILOT_TOUR=1)
-    if(NOT RS_AUTOPILOT_SETUP STREQUAL "0")
-      add_compile_definitions(RS_AUTOPILOT_SETUP=${RS_AUTOPILOT_SETUP})
-    endif()
   endif()
   add_compile_definitions(
     RS_AUTOPILOT_SYSTEM_INDEX=${RS_AUTOPILOT_SYSTEM_INDEX})

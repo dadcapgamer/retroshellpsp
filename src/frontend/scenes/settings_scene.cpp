@@ -5,7 +5,6 @@
 #include "rs_build_stamp.h"
 #include "frontend/app.h"
 #include "frontend/scenes/home_scene.h"
-#include "frontend/scenes/setup_scene.h"
 #include "frontend/ui/chrome.h"
 #include "frontend/ui/icons.h"
 #include "frontend/core_registry.h"
@@ -27,7 +26,7 @@ using ui::fade;
 const char* ROW_LABELS[] = {
     "Theme", "Accent color", "Time format", "Artwork", "Menu CPU clock",
     "In-game CPU clock", "Show FPS", "Auto-save", "Rescan library",
-    "Run setup again", "UI sounds",
+    "UI sounds",
 };
 struct CategoryDef {
     const char* label;
@@ -39,8 +38,8 @@ const CategoryDef CATS[] = {
     {"Appearance", "APPEARANCE", ui::Icon::Gear, {0, 1, 2, 3, -1}},
     {"Systems", "SYSTEMS", ui::Icon::Gamepad, {-1, -1, -1, -1, -1}},
     {"Performance", "PERFORMANCE", ui::Icon::Gauge, {4, 5, 6, 7, -1}},
-    {"Audio", "AUDIO", ui::Icon::Speaker, {10, -1, -1, -1, -1}},
-    {"Library", "LIBRARY", ui::Icon::Library, {8, 9, -1, -1, -1}},
+    {"Audio", "AUDIO", ui::Icon::Speaker, {9, -1, -1, -1, -1}},
+    {"Library", "LIBRARY", ui::Icon::Library, {8, -1, -1, -1, -1}},
     {"About", "ABOUT", ui::Icon::Info, {-1, -1, -1, -1, -1}},
 };
 
@@ -193,9 +192,7 @@ void SettingsScene::adjust(App& app, int row, int dir) {
 }
 
 void SettingsScene::activate(App& app, int row) {
-    if (row == ROW_SETUP) {
-        app.switchScene(std::make_unique<SetupScene>(/*fromSettings=*/true));
-    } else if (row == ROW_RESCAN) {
+    if (row == ROW_RESCAN) {
         if (!app.scanner().running()) {
             app.scanner().start();
             app.toast("Rescanning library...");
@@ -232,7 +229,6 @@ const char* SettingsScene::valueText(App& app, int row, char* buf,
         case ROW_AUTOSAVE:  return c.autosave ? "On" : "Off";
         case ROW_RESCAN:
             return app.scanner().running() ? "Scanning..." : "Press X";
-        case ROW_SETUP:     return "Press X";
         default: return "";
     }
 }

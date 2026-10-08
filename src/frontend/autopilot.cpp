@@ -148,37 +148,7 @@ constexpr Step GAME_SCRIPT[] = {
     {2708, PSP_CTRL_CROSS,    nullptr},
     {2726, 0,                 "emulator_chosen"},
 };
-#if defined(RS_AUTOPILOT_SETUP)
-/* First-run setup capture. Mode 1 has games and two emulators for GBC (the
- * dummy test core), so every step appears; mode 2 has an empty Memory Stick
- * and ends on Home's empty state. */
-#if RS_AUTOPILOT_SETUP == 2
-constexpr Step SETUP_TOUR[] = {
-    {70,  0,                 "s01_scan"},
-    {110, 0,                 "s02_systems_empty"},
-    {120, PSP_CTRL_TRIANGLE, nullptr},          /* finish anyway */
-    {180, 0,                 "s03_home_empty"},
-    {190, PSP_CTRL_CROSS,    nullptr},          /* scan again */
-    {200, 0,                 "s04_home_scanning"},
-};
-#else
-constexpr Step SETUP_TOUR[] = {
-    {70,  0,                 "s01_scan"},
-    {110, 0,                 "s02_systems"},
-    {120, PSP_CTRL_CROSS,    nullptr},
-    {160, 0,                 "s03_emulators"},
-    {170, PSP_CTRL_DOWN,     nullptr},
-    {180, PSP_CTRL_RIGHT,    nullptr},
-    {200, 0,                 "s04_emulators_changed"},
-    {210, PSP_CTRL_CROSS,    nullptr},
-    {250, 0,                 "s05_done"},
-    {260, PSP_CTRL_CROSS,    nullptr},
-    {320, 0,                 "s06_home"},
-};
-#endif
-constexpr const Step* SCRIPT = SETUP_TOUR;
-constexpr int STEPS = int(sizeof(SETUP_TOUR) / sizeof(SETUP_TOUR[0]));
-#elif defined(RS_AUTOPILOT_TOUR)
+#if defined(RS_AUTOPILOT_TOUR)
 /* UI tour: walks every Home layer with a pre-seeded library so each redesign
  * screen can be captured without launching a core. Gaps leave room for the
  * layer/slide animations (and PPSSPP's software renderer) to settle. */

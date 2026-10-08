@@ -1,7 +1,6 @@
 #include "frontend/scenes/boot_scene.h"
 #include "frontend/app.h"
 #include "frontend/scenes/home_scene.h"
-#include "frontend/scenes/setup_scene.h"
 #include "runtime/config.h"
 
 #include "rs_asset_splash_png.h"
@@ -103,16 +102,9 @@ void BootScene::update(App& app, float dt) {
     m_t += dt;
     if (m_t >= HOLD_END && !m_handedOff) {
         m_handedOff = true;
-        /* A first run goes through setup; autopilot builds skip it so the
-         * regression scripts keep their frame budget (RS_AUTOPILOT_SETUP
-         * opts back in to capture the setup screens). */
-#if defined(RS_AUTOPILOT) && !defined(RS_AUTOPILOT_SETUP)
-        const bool needsSetup = false;
-#else
-        const bool needsSetup = !cfg::get().setupDone;
-#endif
-        if (needsSetup) app.switchScene(std::make_unique<SetupScene>());
-        else app.switchScene(std::make_unique<HomeScene>());
+        /* Straight to Home, first boot included: emulators are chosen,
+         * tuned or turned off per system in Settings > Systems. */
+        app.switchScene(std::make_unique<HomeScene>());
     }
 }
 

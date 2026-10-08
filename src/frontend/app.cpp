@@ -546,8 +546,8 @@ void App::drawTopBar(u32 alpha) {
     ui::brandMark(m_renderer, L::MARGIN, float(int((BAND - 10.f) * .5f)), 2,
                   fade(m_pal.textSecondary, alpha));
     f.title.draw(m_renderer, L::MARGIN + 18.f, f.title.centerY(0.f, BAND),
-                 "RETROSHELL", fade(m_pal.textPrimary, alpha),
-                 text::Align::Left, 2.f);
+                 "RetroShell", fade(m_pal.textPrimary, alpha),
+                 text::Align::Left, 1.f);
 
     /* Status cluster, right to left: battery, percentage, clock. */
     int hh = 0, mm = 0;

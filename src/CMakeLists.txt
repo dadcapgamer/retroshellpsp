@@ -42,7 +42,6 @@ add_executable(retrosuite
   frontend/database/thumb_cache.cpp
   frontend/scenes/boot_scene.cpp
   frontend/scenes/home_scene.cpp
-  frontend/scenes/setup_scene.cpp
   frontend/scenes/settings_scene.cpp)
 
 # Cold, non-per-frame UI and setup code is built for size: every byte of the
@@ -50,7 +49,6 @@ add_executable(retrosuite
 # 17,000 KB release gate. The renderer, fonts, the home scene and the
 # emulation loop stay at -O2.
 set_source_files_properties(
-  frontend/scenes/setup_scene.cpp
   frontend/scenes/settings_scene.cpp
   frontend/scenes/boot_scene.cpp
   frontend/ui/state_panel.cpp

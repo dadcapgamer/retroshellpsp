@@ -31,7 +31,6 @@ private:
         ROW_SHOW_FPS,
         ROW_AUTOSAVE,
         ROW_RESCAN,
-        ROW_SETUP,
         ROW_UI_SOUNDS,
         ROW_COUNT
     };

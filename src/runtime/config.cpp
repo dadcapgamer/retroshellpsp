@@ -102,12 +102,7 @@ void setSystemEnabled(const char* coreId, bool enabled) {
 
 void load() {
     cJSON* root = json::parseFile(CFG_PATH);
-    if (!root) return;   /* first boot: setupDone stays false */
-    /* An existing config predates first-run setup unless it says otherwise. */
-    s_cfg.setupDone = true;
-    if (const cJSON* v = cJSON_GetObjectItemCaseSensitive(root, "setupDone");
-        cJSON_IsBool(v))
-        s_cfg.setupDone = cJSON_IsTrue(v);
+    if (!root) return;   /* first boot: defaults */
     if (const cJSON* map = cJSON_GetObjectItemCaseSensitive(root, "systemCores");
         cJSON_IsObject(map)) {
         for (const cJSON* it = map->child; it; it = it->next)
@@ -166,7 +161,6 @@ void save() {
     cJSON_AddBoolToObject(root, "autosave", s_cfg.autosave);
     cJSON_AddBoolToObject(root, "showArt", s_cfg.showArt);
     cJSON_AddNumberToObject(root, "homeLayout", s_cfg.homeLayout);
-    cJSON_AddBoolToObject(root, "setupDone", s_cfg.setupDone);
     cJSON* disabled = cJSON_AddArrayToObject(root, "disabledSystems");
     for (const auto& id : s_cfg.disabledSystems)
         cJSON_AddItemToArray(disabled, cJSON_CreateString(id.c_str()));

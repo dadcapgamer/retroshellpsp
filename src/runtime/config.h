@@ -37,10 +37,6 @@ struct Config {
     /* Home screen presentation. Classic is the pre-beta.3 card rail, kept
      * because some users prefer its denser, more console-like shelf. */
     int  homeLayout    = HOME_LAYOUT_MODERN;
-    /* First-run setup (scan, confirm systems, confirm emulators) has been
-     * completed or skipped. A config.json written before this key existed
-     * counts as done: those users are not new. */
-    bool setupDone     = false;
     /* Per-system default emulator: db::SystemInfo::coreId -> core name.
      * A game's own remembered core still wins, because save states are
      * core-specific. */

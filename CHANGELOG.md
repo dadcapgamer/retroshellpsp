@@ -11,6 +11,12 @@
   and dynarec; Snes9x filter, flicker and overclock; QuickNES palette, sprite
   limit and sound quality; Gambatte resampler, frame blending and colour;
   PCE Fast and SMS Plus options. The list scrolls when a core has more.
+- **RetroShell brand in the header**: the top-left mark is now the real
+  RetroShell diamond (as on the splash screen and website), with the
+  RetroShell wordmark, replacing the placeholder dot grid.
+- **No first-boot setup screen**: RetroShell opens straight to Home.
+  Emulators are chosen, tuned or turned off per system in Settings >
+  Systems ("Run setup again" is gone with it).
 - **Settings stick, per emulator**: aspect ratio, filter and Emulator
   Settings are saved the moment you change them (quitting through HOME or
   turning the PSP off no longer loses them) and apply to every game on

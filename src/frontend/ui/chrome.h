@@ -76,9 +76,10 @@ constexpr float CHIP_H = 15.f;
 float chipWidth(App& app, const char* text);
 
 /* --- brand ------------------------------------------------------------ */
-/* The RetroShell mark: a 3x3 grid of square dots, `dot` px each with a
- * `dot` px gap, so the mark is 5*dot square. Cells are row major; bit i of
- * `skip` leaves out cell i. */
+/* The RetroShell mark (assets/branding, website/assets): nine `dot` px
+ * squares touching corner to corner in a diamond, 5*dot square. Cells are
+ * numbered as a 3x3 grid, row major, turned 45 degrees (cell 0 is the top
+ * point, BRAND_CENTER the middle); bit i of `skip` leaves out cell i. */
 constexpr int BRAND_CELLS = 9;
 constexpr int BRAND_CENTER = 4;
 void brandMark(gfx::Renderer& r, float x, float y, int dot, u32 color,

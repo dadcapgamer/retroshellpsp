@@ -130,10 +130,11 @@ float brandMarkSize(int dot) { return float(dot * 5); }
 void brandMark(gfx::Renderer& r, float x, float y, int dot, u32 color,
                unsigned skip) {
     x = px(x); y = px(y);
-    const float d = float(dot), pitch = float(dot * 2);
+    const float d = float(dot);
     for (int i = 0; i < BRAND_CELLS; i++) {
         if ((skip >> i) & 1u) continue;
-        r.rect(x + float(i % 3) * pitch, y + float(i / 3) * pitch, d, d, color);
+        const int c = i % 3, row = i / 3;     /* grid cell, turned 45 deg */
+        r.rect(x + float(c - row + 2) * d, y + float(c + row) * d, d, d, color);
     }
 }
 
@@ -258,7 +259,7 @@ void artFallback(App& app, int systemId, float x, float y, float w, float h,
     const bool large = w >= 140.f && h >= 100.f;
     const float brandY = y + (large ? 10.f : 8.f);
     if (w >= 96.f) {
-        const char* word = "RETROSHELL";
+        const char* word = "RetroShell";
         const float ww = large ? fonts.tiny.measure(word, 1.f) + 9.f : 0.f;
         const float bx = px(x + (w - (5.f + ww)) * .5f);
         brandMark(r, bx, brandY + 1.f, 1, fade(pal.textSecondary, alpha));
