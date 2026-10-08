@@ -53,9 +53,10 @@
         "-fno-rtti",
         "-fno-strict-overflow",
         "-fno-strict-aliasing",
-        "-DPSP"
+        "-DPSP",
+        "-ffile-prefix-map=<source>/="
       ],
-      "expectedArtifactSha256": "0bfd91ab3b3a1eecc9172ea2715c606e086ef767ec583efdbaa1386620a23d16"
+      "expectedArtifactSha256": "556042ae549661e6381d659e6ebbd9fae995a63258615c41b9c903bc64c6bf9c"
     },
     {
       "name": "gpsp",

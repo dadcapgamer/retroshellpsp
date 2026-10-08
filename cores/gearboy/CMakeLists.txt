@@ -79,7 +79,11 @@ target_compile_definitions(rs_core_gearboy PRIVATE
 
 # -O3 on the hot path; quiet vendored-only warnings so they don't bury the
 # shim's. Upstream (GPLv3) is not ours to fix.
+# Upstream logs and asserts with __FILE__, which baked the checkout's
+# absolute path into the PRX: the artifact hash then depended on where the
+# repository was cloned. Strip it so the locked hash is reproducible.
 target_compile_options(rs_core_gearboy PRIVATE
+  -ffile-prefix-map=${CMAKE_SOURCE_DIR}/=
   -O3
   -Wno-sign-compare -Wno-unused-variable
   $<$<COMPILE_LANGUAGE:CXX>:-Wno-reorder>)
