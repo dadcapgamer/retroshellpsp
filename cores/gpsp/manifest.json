@@ -3,8 +3,8 @@
   "version": "1.1.0-5b6e751",
   "systems": "gba",
   "priority": 100,
-  "testOnly": true,
-  "psp1000Safe": false,
+  "testOnly": false,
+  "psp1000Safe": true,
   "requiresFullContent": false,
   "preferVfs": true
 }

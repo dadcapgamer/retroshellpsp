@@ -3,7 +3,7 @@
   "version": "0.5.0-native",
   "systems": "gba",
   "priority": 90,
-  "testOnly": true,
+  "testOnly": false,
   "psp1000Safe": true,
   "backend": "native",
   "adapterProtocol": 1,

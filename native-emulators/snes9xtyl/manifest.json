@@ -3,7 +3,7 @@
   "version": "1.9.01-rs7",
   "systems": "snes",
   "priority": 90,
-  "testOnly": true,
+  "testOnly": false,
   "psp1000Safe": true,
   "backend": "native",
   "adapterProtocol": 1,

@@ -3,7 +3,7 @@
   "version": "1.2",
   "systems": "sms|gg",
   "priority": 90,
-  "testOnly": true,
-  "psp1000Safe": false,
+  "testOnly": false,
+  "psp1000Safe": true,
   "requiresFullContent": true
 }

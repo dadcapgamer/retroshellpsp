@@ -1,9 +1,25 @@
 # Changelog
 
-## Unreleased — Systems, themes, save states, sharpness
+## v1.0.0-beta.5
 
-- **Emulator Settings** in the pause menu: per-game options for every
-  built-in emulator. Two RetroShell options apply to every core and take
+Everything since beta.4: the Astra shell redesign, a maturity pass, visual
+polish, and the systems, settings, emulator and native-emulator work below.
+Every emulator now ships as included, and FrogGBA and Snes9xTYL come in the
+release itself.
+
+### Systems, themes, save states, sharpness
+
+- **All emulators promoted**: gpSP, PCE Fast and SMS Plus GX are now
+  included alongside Gambatte, QuickNES, PicoDrive and Snes9x 2005 (SMS Plus
+  is the Master System / Game Gear alternate; PicoDrive stays the default),
+  and the bundled FrogGBA and Snes9xTYL are no longer marked as testing.
+- **Snes9xTYL** starts games on its Accurate soft renderer (the accelerated
+  engines garbled Secret of Mana's prologue); a faster engine can still be
+  chosen per game. It now fits a PSP-1000 when launched from RetroShell,
+  restores the display after its own settings menu, and reports why if a
+  session ends early.
+- **Emulator Settings** in the pause menu: options for every built-in
+  emulator, saved for that emulator (or for one game; see below). Two RetroShell options apply to every core and take
   effect at once: **Frame skip** (Auto, or draw one frame in 2, 3 or 4) and
   **Audio buffer** (Normal, Large, Max — more buffering, fewer crackles).
   Each core adds its own speed and sound options: PicoDrive renderer, sound
@@ -77,7 +93,7 @@
   192 px masters (`tools/crisp_icons.py`) instead of smoothed exports.
 - Save-state load failures now log their reason.
 
-## Unreleased — Visual polish
+### Visual polish
 
 Brings the whole shell to `RetroShell_Modern_PSP_Visual_Polish_Guide.md` and
 its concept board: one design language on every screen, built for 480×272
@@ -115,7 +131,7 @@ and the PSP's rendering budget (flat surfaces, no blur, no shadows, no glow).
 - Font atlases cut from 278 KB to 155 KB; the boot scene draws the embedded
   splash instead of a 26 px atlas. Startup arena: 17,099 KB.
 
-## Unreleased — Maturity pass
+### Maturity pass
 
 Closes the gaps found auditing the shell against
 `RetroShell_Mature_Frontend_Foundations.md` (see `docs/MATURITY_AUDIT.md`).
@@ -143,7 +159,7 @@ Closes the gaps found auditing the shell against
 - Removed the unused 69 KB Inter 19 atlas to pay for the new code; startup
   arena is 17,016 KB (gate: 17,000).
 
-## Unreleased — Astra shell redesign
+### Astra shell redesign
 
 Home is rebuilt around a spatial, PSP-native model instead of the card
 dashboard: **horizontal changes system, vertical moves within a layer, X

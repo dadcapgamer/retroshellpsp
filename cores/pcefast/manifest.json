@@ -3,8 +3,8 @@
   "version": "1.0.0-9e65100-rs3",
   "systems": "pce",
   "priority": 100,
-  "testOnly": true,
-  "psp1000Safe": false,
+  "testOnly": false,
+  "psp1000Safe": true,
   "requiresFullContent": true,
   "preferVfs": false
 }

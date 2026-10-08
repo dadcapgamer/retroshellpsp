@@ -13,7 +13,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 LOCK = ROOT / "core-provenance.lock.json"
 VALID_SYSTEMS = {"gb", "gbc", "gba", "nes", "snes", "md", "sms", "gg", "pce"}
-SHIPPING_SYSTEMS = {"gb", "gbc", "nes", "snes", "md", "sms", "gg"}
+SHIPPING_SYSTEMS = {"gb", "gbc", "gba", "nes", "snes", "md", "sms", "gg", "pce"}
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
 COMMIT = re.compile(r"^[0-9a-f]{40}$")
 
@@ -193,10 +193,15 @@ def main() -> int:
     if production != locked_production:
         fail(errors, f"manifest production set {sorted(production)} != lockfile set {sorted(locked_production)}")
     for system in sorted(SHIPPING_SYSTEMS):
-        defaults = [
+        # Several production cores may serve a system (an alternate such as
+        # SMS Plus beside PicoDrive); exactly one must rank highest, so the
+        # default never depends on discovery order.
+        serving = [
             name for name in production
             if system in manifests[name]["systems"].split("|")
         ]
+        top = max((manifests[name]["priority"] for name in serving), default=None)
+        defaults = [name for name in serving if manifests[name]["priority"] == top]
         if len(defaults) != 1:
             fail(errors, f"{system}: expected one production default, found {sorted(defaults)}")
 

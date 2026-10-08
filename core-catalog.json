@@ -9,9 +9,9 @@
     },
     "gpsp": {
       "displayName": "gpSP",
-      "status": "Testing",
-      "modelSupport": "Later PSPs; PSP-1000 experimental",
-      "notes": "Game Boy Advance core with PSP dynarec and ROM streaming."
+      "status": "Included",
+      "modelSupport": "Any PSP",
+      "notes": "Default Game Boy Advance core, with PSP dynarec and ROM streaming."
     },
     "mgba": {
       "displayName": "mGBA",
@@ -21,14 +21,14 @@
     },
     "froggba": {
       "displayName": "FrogGBA",
-      "status": "Experimental",
-      "modelSupport": "Any PSP; launch and return confirmed on PSP-1000",
-      "notes": "The converted PRX integration is retired. The native FrogGBA adapter preserves the standalone emulator runtime and requires a user-supplied 16 KB gba_bios.bin. Launch, working-directory creation and return-to-RetroShell are confirmed on hardware; extended play and the 20-cycle gate remain outstanding."
+      "status": "Included",
+      "modelSupport": "Any PSP",
+      "notes": "Bundled as a native PSP emulator with RetroShell's pause menu, shared saves and return to RetroShell. Requires a user-supplied 16 KB gba_bios.bin. (The in-process PRX conversion is archived.)"
     },
     "pcefast": {
       "displayName": "Beetle PCE Fast",
-      "status": "Testing",
-      "modelSupport": "Later PSPs; PSP-1000 experimental",
+      "status": "Included",
+      "modelSupport": "Any PSP",
       "notes": "PC Engine HuCard support."
     },
     "picodrive": {
@@ -45,9 +45,9 @@
     },
     "smsplus": {
       "displayName": "SMS Plus GX",
-      "status": "Experimental",
-      "modelSupport": "Later PSPs; PSP-1000 unverified",
-      "notes": "Optional Master System and Game Gear compatibility core."
+      "status": "Included",
+      "modelSupport": "Any PSP",
+      "notes": "Alternative Master System and Game Gear core; PicoDrive stays the default."
     },
     "snes9x2005": {
       "displayName": "Snes9x 2005",

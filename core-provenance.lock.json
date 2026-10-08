@@ -55,11 +55,11 @@
         "-fno-strict-aliasing",
         "-DPSP"
       ],
-      "expectedArtifactSha256": "98c79e4c12264b39a9e035d85898b38f998069eaea5f7b370bf5a5e4ecb60086"
+      "expectedArtifactSha256": "0bfd91ab3b3a1eecc9172ea2715c606e086ef767ec583efdbaa1386620a23d16"
     },
     {
       "name": "gpsp",
-      "delivery": "candidate",
+      "delivery": "production",
       "repository": "https://github.com/libretro/gpsp.git",
       "commit": "5b6e751f4abf368509146cd143c949c1946ac1ae",
       "license": "GPL-2.0",
@@ -381,7 +381,7 @@
     },
     {
       "name": "smsplus",
-      "delivery": "candidate",
+      "delivery": "production",
       "repository": "https://github.com/libretro/smsplus-gx.git",
       "commit": "8a63f82d3c3bbf7215a31f86a4aaa13fb68a579f",
       "license": "GPL-2.0",
@@ -407,7 +407,7 @@
     },
     {
       "name": "pcefast",
-      "delivery": "candidate",
+      "delivery": "production",
       "repository": "https://github.com/libretro/beetle-pce-fast-libretro.git",
       "commit": "9e6510023545007e235117753329946cbc5f311a",
       "license": "GPL-2.0",
