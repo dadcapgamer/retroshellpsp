@@ -2,7 +2,6 @@
 #pragma once
 
 #include "frontend/scenes/scene.h"
-#include "frontend/splash_art.h"
 #include "frontend/ui/anim.h"
 #include "platform/psp/gu_renderer.h"
 
@@ -17,7 +16,6 @@ public:
 
 private:
     gfx::Texture m_logo;
-    splash::Art m_art = splash::forTheme("dark");   /* the theme's splash */
     float m_t = 0.f;
     bool  m_handedOff = false;
 };

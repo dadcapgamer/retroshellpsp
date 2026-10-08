@@ -128,6 +128,21 @@ Theme loadTheme(const std::string& id) {
     return t;
 }
 
+Palette paletteFor(const std::string& id) {
+    for (const Builtin& b : BUILTINS)
+        if (id == b.id) return b.palette();
+    char path[256];
+    std::snprintf(path, sizeof path, "%s/themes/%s/theme.json", fs::ROOT,
+                  id.c_str());
+    cJSON* root = json::parseFile(path);
+    if (!root) return builtin(true).palette;
+    const cJSON* darkFlag = cJSON_GetObjectItemCaseSensitive(root, "dark");
+    Palette p = builtin(!cJSON_IsFalse(darkFlag)).palette;
+    applyColors(p, cJSON_GetObjectItemCaseSensitive(root, "colors"));
+    cJSON_Delete(root);
+    return p;
+}
+
 std::vector<std::string> availableThemes() {
     std::vector<std::string> out;
     for (const Builtin& b : BUILTINS) out.push_back(b.id);

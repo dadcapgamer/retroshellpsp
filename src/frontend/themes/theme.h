@@ -40,6 +40,10 @@ struct Theme {
  * to built-in dark on any error. */
 Theme loadTheme(const std::string& id);
 
+/* A theme's colours alone (no background image is loaded), for drawing
+ * before the UI is up. Same fallbacks as loadTheme. */
+Palette paletteFor(const std::string& id);
+
 /* Discovered theme ids: always starts with the four built-ins. */
 std::vector<std::string> availableThemes();
 

@@ -33,7 +33,7 @@
 #include "rs_asset_font_body_rsf.h"
 #include "rs_asset_font_small_rsf.h"
 #include "rs_asset_font_tiny_rsf.h"
-#include "frontend/splash_art.h"
+#include "frontend/splash.h"
 
 /* Set by the HOME-menu exit callback in main.cpp. */
 extern volatile bool g_exitRequested;
@@ -42,17 +42,16 @@ namespace rs {
 
 namespace {
 
-bool drawStartupPlate(gfx::Renderer& renderer, const splash::Art& art) {
-    int w = 0, h = 0, channels = 0;
-    stbi_uc* pixels = stbi_load_from_memory(art.png, int(art.len),
-                                            &w, &h, &channels, 4);
+bool drawStartupPlate(gfx::Renderer& renderer, const theme::Palette& pal) {
+    int w = 0, h = 0;
+    stbi_uc* pixels = splash::compose(pal, w, h);
     gfx::Texture splash;
     const bool ready = pixels && w == RS_SCREEN_W && h == RS_SCREEN_H &&
         gfx::Renderer::createTexture(
             splash, w, h, GU_PSM_8888, pixels, /*dynamic=*/false);
     if (pixels) stbi_image_free(pixels);
 
-    renderer.beginFrame(art.bg);
+    renderer.beginFrame(pal.bg);
     if (ready)
         renderer.sprite(splash, 0, 0, w, h, 0, 0,
                         RS_SCREEN_W, RS_SCREEN_H, rsHex(0xFFFFFF));
@@ -80,7 +79,7 @@ bool App::init() {
      * frame be the splash of the player's theme. */
     cfg::load();
     const bool startupPlateReady =
-        drawStartupPlate(m_renderer, splash::forTheme(cfg::get().theme));
+        drawStartupPlate(m_renderer, theme::paletteFor(cfg::get().theme));
     const u32 firstFrameUs = sceKernelGetSystemTimeLow() - initStart;
     const fs::RootMigration migration = fs::migrateLegacyRoot();
     log::init(/*toFile=*/true);

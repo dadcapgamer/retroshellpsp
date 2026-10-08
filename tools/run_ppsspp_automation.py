@@ -86,7 +86,8 @@ def main() -> int:
         help="0 = PSP-1000 (32 MB, default), 1 = PSP-2000+ (64 MB). The "
              "64 MB model is a required release gate that cores sized from "
              "available memory behave differently under.")
-    parser.add_argument("--theme", choices=("dark", "light"), default="dark",
+    parser.add_argument("--theme", choices=("dark", "graphite", "light", "mist"),
+                        default="dark",
                         help="frontend theme used for visual validation")
     storage_group = parser.add_mutually_exclusive_group()
     storage_group.add_argument(

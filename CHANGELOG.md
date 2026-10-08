@@ -38,10 +38,11 @@ release itself.
   Auto-save, with a line underneath saying what it does: in-game saves are
   written every 10 seconds while you play (not save states).
 - **New XMB thumbnail** (ICON0) from the Figma "xmb thumbnail" frame.
-- **A startup splash for each theme**: Dark, Graphite, Light and Mist each
-  open on their own splash (from the Figma "Splash screens"), drawn exactly
-  as designed; custom themes use Dark's. The XMB background now uses the
-  Dark splash.
+- **The startup screen follows the theme**: after X on the XMB, RetroShell
+  opens on the Figma splash design in the colours of the theme in use (its
+  background and text colour, with the brand's grey tagline), custom themes
+  included. It is drawn from one small mask instead of an image per theme.
+  The XMB background stays the single Dark splash.
 - **RetroShell brand in the header**: the top-left mark is now the real
   RetroShell diamond (as on the splash screen and website), with the
   RetroShell wordmark, replacing the placeholder dot grid.

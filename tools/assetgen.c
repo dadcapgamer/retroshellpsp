@@ -1,7 +1,7 @@
 /*
  * assetgen — RetroShell host-side asset baker (runs on the build machine).
  *
- * Generates the PBP artwork (SPLASH_<THEME>/PIC1/ICON0). Font atlases (.rsf, format
+ * Generates the PBP artwork (SPLASH_MASK/PIC1/ICON0). Font atlases (.rsf, format
  * below, parsed by src/frontend/text/font.cpp) are baked by tools/fontbake.c.
  * Outputs are committed to the repo so contributors don't need this tool;
  * rerun it only when changing fonts or artwork.
@@ -67,34 +67,69 @@ static Canvas bake_half(const char* source_path) {
     return out;
 }
 
+/* Coverage (0..255) of `p` along the line from `bg` to `fg`. */
+static unsigned char coverage(const unsigned char* p, const int bg[3],
+                              const int fg[3]) {
+    long num = 0, den = 0;
+    for (int c = 0; c < 3; c++) {
+        num += (long)(p[c] - bg[c]) * (fg[c] - bg[c]);
+        den += (long)(fg[c] - bg[c]) * (fg[c] - bg[c]);
+    }
+    long v = den ? (num * 255 + den / 2) / den : 0;
+    return (unsigned char)(v < 0 ? 0 : v > 255 ? 255 : v);
+}
+
 static void make_pbp_art(const char* out_dir) {
     char source_path[1024], output_path[1024];
     int channels = 0;
-    /* One startup splash per built-in theme (Figma "Splash screens"), shown
-     * in the theme the player picked. The XMB background (PIC1) is the
-     * default Dark theme's. */
-    static const char* const THEMES[][2] = {
-        {"dark", "DARK"}, {"graphite", "GRAPHITE"},
-        {"light", "LIGHT"}, {"mist", "MIST"},
-    };
-    for (int t = 0; t < 4; t++) {
-        snprintf(source_path, sizeof source_path,
-                 "%s/branding/retroshell-splash-%s-2x.png", out_dir,
-                 THEMES[t][0]);
-        Canvas splash = bake_half(source_path);
-        snprintf(output_path, sizeof output_path, "%s/SPLASH_%s.PNG", out_dir,
-                 THEMES[t][1]);
-        stbi_write_png(output_path, splash.w, splash.h, 4, splash.px,
-                       splash.w * 4);
-        printf("wrote %s\n", output_path);
-        if (t == 0) {
-            snprintf(output_path, sizeof output_path, "%s/PIC1.PNG", out_dir);
-            stbi_write_png(output_path, splash.w, splash.h, 4, splash.px,
-                           splash.w * 4);
-            printf("wrote %s\n", output_path);
+    /* The startup splash is themed at run time (src/frontend/splash.cpp):
+     * one mask, baked from the Dark Figma frame, holds the mark + title
+     * coverage in red and the tagline's in green; the app fills the theme's
+     * background and tints them with its primary text colour and the brand
+     * tagline grey. The XMB background (PIC1) is the Dark frame itself. */
+    snprintf(source_path, sizeof source_path,
+             "%s/branding/retroshell-splash-2x.png", out_dir);
+    Canvas pic1 = bake_half(source_path);
+    snprintf(output_path, sizeof output_path, "%s/PIC1.PNG", out_dir);
+    stbi_write_png(output_path, pic1.w, pic1.h, 4, pic1.px, pic1.w * 4);
+    printf("wrote %s\n", output_path);
+    free(pic1.px);
+
+    int sw = 0, sh = 0;
+    unsigned char* src = stbi_load(source_path, &sw, &sh, &channels, 4);
+    if (!src || sw != 960 || sh != 544) exit(1);
+    static const int BG[3] = {0x08, 0x18, 0x28};     /* Dark background */
+    static const int FG[3] = {0xF4, 0xF1, 0xE8};     /* Dark primary text */
+    static const int TAG[3] = {0xA0, 0x98, 0x86};    /* tagline grey */
+    const int TAGLINE_TOP = 350;                     /* 2x rows */
+    Canvas mask = canvas_new(480, 272);
+    for (int y = 0; y < 272; y++) {
+        for (int x = 0; x < 480; x++) {
+            unsigned sum = 0;
+            for (int yy = 0; yy < 2; yy++)
+                for (int xx = 0; xx < 2; xx++) {
+                    const int sy = y * 2 + yy, sx = x * 2 + xx;
+                    const unsigned char* p = src + (sy * sw + sx) * 4;
+                    sum += coverage(p, BG, sy < TAGLINE_TOP ? FG : TAG);
+                }
+            unsigned char* d = mask.px + (y * 480 + x) * 4;
+            const unsigned char a = (unsigned char)((sum + 2) / 4);
+            d[0] = y * 2 < TAGLINE_TOP ? a : 0;
+            d[1] = y * 2 < TAGLINE_TOP ? 0 : a;
+            d[2] = 0;
+            d[3] = 255;
         }
-        free(splash.px);
     }
+    stbi_image_free(src);
+    snprintf(output_path, sizeof output_path, "%s/SPLASH_MASK.PNG", out_dir);
+    /* RGB is enough; three channels compress smaller than four. */
+    unsigned char* rgb = malloc(480 * 272 * 3);
+    for (int i = 0; i < 480 * 272; i++)
+        memcpy(rgb + i * 3, mask.px + i * 4, 3);
+    stbi_write_png(output_path, 480, 272, 3, rgb, 480 * 3);
+    free(rgb);
+    free(mask.px);
+    printf("wrote %s\n", output_path);
 
     /* ICON0 is authored as its own native-resolution Figma frame. Treat that
      * export as the canonical source so a later font or splash bake cannot
