@@ -6,7 +6,8 @@
 #   ./build.sh qualify LOG — grade the latest real-PSP hardware run
 #   ./build.sh release    — build, audit, and create deterministic stable ZIP
 #   ./build.sh candidates — build a test-core EBOOT and drag-and-drop packages
-#   ./build.sh adapters FROG_DIR SNES_DIR — package all current native adapters
+#   ./build.sh adapters [FROG_DIR SNES_DIR] — build (from pinned source) and
+#                         package the bundled native emulators
 set -e
 
 export PSPDEV="${PSPDEV:-$HOME/pspdev}"
@@ -57,12 +58,21 @@ case "$1" in
     EXTRA_ARGS="-DRS_INCLUDE_TEST_CORES=ON"
     ;;
   adapters)
-    if [ -z "$2" ] || [ -z "$3" ]; then
-      echo "usage: ./build.sh adapters /path/to/FrogGBA /path/to/patched/snes9xTYL" >&2
+    # With no arguments, build both native emulators from their pinned
+    # source (native-emulators/build_native.sh); or package already-built
+    # FrogGBA and Snes9xTYL directories.
+    if [ -z "$2" ]; then
+      FROG_DIR="$(native-emulators/build_native.sh froggba build-native)"
+      SNES_DIR="$(native-emulators/build_native.sh snes9xtyl build-native)"
+    elif [ -n "$3" ]; then
+      FROG_DIR="$2"
+      SNES_DIR="$3"
+    else
+      echo "usage: ./build.sh adapters [/path/to/FrogGBA /path/to/patched/snes9xTYL]" >&2
       exit 2
     fi
-    python3 tools/package_native_emulator.py froggba "$2"
-    python3 tools/package_native_emulator.py snes9xtyl "$3"
+    python3 tools/package_native_emulator.py froggba "$FROG_DIR"
+    python3 tools/package_native_emulator.py snes9xtyl "$SNES_DIR"
     BUILD_DIR=build-candidates
     EXTRA_ARGS="-DRS_INCLUDE_TEST_CORES=ON"
     ;;

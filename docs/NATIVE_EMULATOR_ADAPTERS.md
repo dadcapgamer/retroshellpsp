@@ -53,25 +53,24 @@ python3 tools/package_native_emulator.py froggba /path/to/FrogGBA
 python3 tools/package_native_emulator.py snes9xtyl /path/to/patched/snes9xTYL
 ```
 
-To package both current adapters, audit the repository, rebuild the testing
-EBOOT, and refresh the core-directory index in one command:
+To build both native emulators from their pinned source and package them,
+audit the repository, rebuild the EBOOT, and refresh the core-directory index
+in one command:
 
 ```sh
-./build.sh adapters /path/to/FrogGBA /path/to/patched/snes9xTYL
+./build.sh adapters
 ```
 
-The FrogGBA directory must be the unmodified standalone PSP release directory,
-not RetroShell's retired PRX conversion. The Snes9xTYL directory must be built
-from the pinned commit after applying `direct-rom-launch.patch` and then
-`retroshell-adapter.patch`, with the adapter SDK copied into `psp/`:
-
-```sh
-git apply native-emulators/snes9xtyl/direct-rom-launch.patch
-git apply native-emulators/snes9xtyl/retroshell-adapter.patch
-cp native-emulators/sdk/retroshell_adapter.[ch] src/core_api/rs_pause_menu.h psp/
-make mehome
-make -C psp/homehookprx && make -C psp/mediaengineprx
-```
+This runs `native-emulators/build_native.sh` for each emulator: it clones the
+commit pinned in `adapter.json`, applies the listed patches, copies the
+adapter SDK in, and builds with the pspdev toolchain in `~/pspdev` (the same
+`pspdev/pspdev` image FrogGBA's Docker setup uses, so no Docker is needed).
+The result is byte-for-byte identical to the packages tested on hardware.
+FrogGBA's exception handler and kernel bridge are upstream's prebuilt modules
+from its pinned `release/FrogGBA_v0.1.0.zip`; its `dir.ini` (snapshots kept in
+the emulator's folder) and `froggba.cfg` live in
+`native-emulators/froggba/files/`. Already-built trees can still be packaged
+with `./build.sh adapters /path/to/FrogGBA /path/to/patched/snes9xTYL`.
 
 Both packages are bundled into the release ZIP by `tools/package_release.py`
 (`./build.sh release`): build them into `dist/core-directory/` first. A missing

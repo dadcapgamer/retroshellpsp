@@ -52,6 +52,7 @@
     "source/src/input.c: invoke the embedded RetroShell pause surface with L+R+Select and record pause/resume state",
     "source/src/main.c: consume argv[2..3] and chain-load back to RetroShell on quit",
     "source/Makefile: compile the adapter shim and link pspsystemctrl_user",
-    "dir.ini: snapshot_directory relocated from ms0:/PICTURE into the adapter's own folder so the emulator is self-contained"
+    "dir.ini: snapshot_directory relocated from ms0:/PICTURE into the adapter's own folder so the emulator is self-contained (native-emulators/froggba/files/, with froggba.cfg)",
+    "exception.prx and ku_bridge.prx: upstream's prebuilt modules from release/FrogGBA_v0.1.0.zip at the pinned commit; build everything with native-emulators/build_native.sh froggba"
   ]
 }
