@@ -8,6 +8,7 @@ add_custom_target(rs_build_stamp ALL
 add_executable(retrosuite
   main.cpp
   platform/psp/gu_renderer.cpp
+  platform/psp/osk.cpp
   platform/psp/vram.cpp
   platform/psp/input_pad.cpp
   platform/psp/power.cpp
@@ -80,6 +81,7 @@ target_link_libraries(retrosuite PRIVATE
   psprtc
   pspaudio
   pspdebug
+  psputility
   # Custom firmware's kernel-side loader, reachable from a user module.
   # sceKernelLoadExec alone is privileged and fails with ILLEGAL_PERM_CALL,
   # so native emulator adapters cannot launch without this.

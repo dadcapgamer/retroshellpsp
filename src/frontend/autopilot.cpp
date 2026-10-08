@@ -50,6 +50,8 @@ constexpr Step GAME_SCRIPT[] = {
     {1126, 0,                 "pause_menu"},
     {1130, PSP_CTRL_DOWN,     nullptr},         /* Save state */
     {1140, PSP_CTRL_CROSS,    nullptr},
+    {1144, 0,                 "save_confirm"},
+    {1146, PSP_CTRL_CROSS,    nullptr},         /* "Yes, save" */
     {1150, PSP_CTRL_DOWN,     nullptr},         /* Load state */
     {1160, PSP_CTRL_CROSS,    nullptr},
     {1200, PSP_CTRL_LTRIGGER | PSP_CTRL_RTRIGGER | PSP_CTRL_SELECT,

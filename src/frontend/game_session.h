@@ -77,6 +77,10 @@ private:
     int  m_optValue[coreopt::MAX_PER_CORE] = {};
     int  m_optStart[coreopt::MAX_PER_CORE] = {};   /* as the game started */
     bool m_scopeGame = false;      /* settings saved for this game only */
+    /* Pause menu: "Save to Slot N?" before a save state is written. */
+    bool m_saveAsk = false;
+    int  m_saveAskRow = 0;         /* 0 Yes, 1 No */
+    void drawSaveAsk(App& app, u32 alpha);
     ui::Smooth m_settingsScroll;
     /* Apply & Restart asks whether to save first. */
     bool m_confirmOpen = false;

@@ -8,6 +8,7 @@
 #include "frontend/ui/state_panel.h"
 #include "frontend/ui/text_layout.h"
 #include "platform/psp/fs_psp.h"
+#include "platform/psp/osk.h"
 #include "platform/psp/power.h"
 #include "runtime/config.h"
 #include "runtime/log.h"
@@ -887,6 +888,34 @@ void HomeScene::updateViewMenu(App& app) {
 }
 
 void HomeScene::openSearch(App& app) {
+    /* The PSP's own keyboard, over the Library. Confirm applies the search;
+     * cancel goes back to the View menu. */
+#ifndef RS_AUTOPILOT   /* scripted input cannot reach the system keyboard */
+    m_overlay = Overlay::None;
+    struct Ctx { HomeScene* scene; App* app; } ctx{this, &app};
+    std::string text;
+    const osk::Result result = osk::run(
+        app.renderer(), "Search games", m_query, int(SEARCH_MAX), text,
+        [](void* p) {
+            auto* c = static_cast<Ctx*>(p);
+            c->scene->draw(*c->app);
+        },
+        &ctx);
+    /* The button that closed the keyboard must not reach the Library. */
+    app.padMutable().resetAfterResume();
+    if (result == osk::Result::Accepted) {
+        while (!text.empty() && text.back() == ' ') text.pop_back();
+        while (!text.empty() && text.front() == ' ') text.erase(0, 1);
+        applyView(app, m_view, text);
+        return;
+    }
+    if (result == osk::Result::Cancelled) {
+        m_overlay = Overlay::ViewMenu;
+        m_overlayFade.start(0.16f);
+        return;
+    }
+#endif
+    /* The system keyboard could not start: RetroShell's letter wheel. */
     m_searchBuf = m_query;
     m_searchChar = 0;
     m_searchTouched = false;

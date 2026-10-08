@@ -139,7 +139,7 @@ void Renderer::beginFrame(u32 clearColor) {
     sceGuDisable(GU_TEXTURE_2D);
 }
 
-void Renderer::endFrame() {
+void Renderer::endFrame(void (*beforeSwap)(void*), void* ctx) {
     sceKernelDcacheWritebackAll();  /* vertices written this frame */
     sceGuFinish();
     const u32 syncStart = sceKernelGetSystemTimeLow();
@@ -156,6 +156,8 @@ void Renderer::endFrame() {
         }
     }
     m_lastFrameStart = m_frameStart;
+
+    if (beforeSwap) beforeSwap(ctx);
 
     /* Queued for the next vblank; beginFrame waits for it only when the
      * next frame would otherwise start drawing before it. */

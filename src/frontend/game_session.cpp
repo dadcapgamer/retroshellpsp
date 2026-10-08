@@ -833,6 +833,7 @@ void GameSession::openMenu(App& app) {
     resetPerfWindow();
     m_state = State::Menu;
     m_settingsOpen = false;
+    m_saveAsk = false;
     m_menuRow = RS_PAUSE_RESUME;
     m_menuPos.snap(0.f);
     m_menuScroll.snap(0.f);
@@ -1136,6 +1137,21 @@ void GameSession::updateMenu(App& app) {
         updateSettings(app);
         return;
     }
+    if (m_saveAsk) {
+        if (pad.navPressed(PSP_CTRL_UP) && m_saveAskRow > 0) m_saveAskRow--;
+        if (pad.navPressed(PSP_CTRL_DOWN) && m_saveAskRow < 1) m_saveAskRow++;
+        if (pad.isPressed(PSP_CTRL_CIRCLE) ||
+            (pad.isPressed(PSP_CTRL_CROSS) && m_saveAskRow == 1)) {
+            m_saveAsk = false;
+        } else if (pad.isPressed(PSP_CTRL_CROSS)) {
+            m_saveAsk = false;
+            const bool saved = saveToSlot(m_slot);
+            app.toast(saved ? "State saved" : "Save failed");
+            save::querySlots(m_game, m_slots);
+            m_thumbSlot = -1;
+        }
+        return;
+    }
 
     if (pad.navPressed(PSP_CTRL_UP) && m_menuRow > 0) m_menuRow--;
     if (pad.navPressed(PSP_CTRL_DOWN) &&
@@ -1175,13 +1191,11 @@ void GameSession::updateMenu(App& app) {
         case RS_PAUSE_RESUME:
             resumeGame();
             break;
-        case RS_PAUSE_SAVE_STATE: {
-            const bool saved = saveToSlot(m_slot);
-            app.toast(saved ? "State saved" : "Save failed");
-            save::querySlots(m_game, m_slots);
-            m_thumbSlot = -1;
+        case RS_PAUSE_SAVE_STATE:
+            /* Asked first: a save can replace a state the player wants. */
+            m_saveAsk = true;
+            m_saveAskRow = 0;
             break;
-        }
         case RS_PAUSE_LOAD_STATE:
             if (m_slots[m_slot].exists && !slotFromThisCore(m_slot)) {
                 /* States are core-specific; say so instead of trying. */
@@ -1491,12 +1505,59 @@ void GameSession::drawMenu(App& app) {
         }
     }
 
+    if (m_saveAsk) {
+        drawSaveAsk(app, a);
+        return;
+    }
     const App::Hint hints[] = {
         {ui::prim::Button::Cross, "Select"},
         {ui::prim::Button::DpadLeftRight, "Change"},
         {ui::prim::Button::Circle, "Resume"},
     };
     app.drawHintBar(hints, 3, /*solid=*/true);
+}
+
+/* "Save to Slot N?" over the pause menu. */
+void GameSession::drawSaveAsk(App& app, u32 a) {
+    namespace L = ui::layout;
+    using ui::fade;
+    auto& r = app.renderer();
+    const auto& pal = app.pal();
+    const auto& fonts = app.fonts();
+    r.rect(0, 0, RS_SCREEN_W, RS_SCREEN_H, rsWithAlpha(pal.bg, a * 110u / 255u));
+    constexpr float HEAD = 36.f, PW = 240.f;
+    const bool replaces = m_slots[m_slot].exists;
+    const float ph = HEAD + L::ROW_H * 2.f + 6.f + (replaces ? 22.f : 0.f);
+    const float px = float(int((RS_SCREEN_W - PW) * .5f));
+    const float py = float(int(L::CONTENT_TOP + (L::CONTENT_BOTTOM -
+                                                  L::CONTENT_TOP - ph) * .5f));
+    ui::panel(app, px, py, PW, ph, a);
+    ui::label(app, px + 10.f, fonts.tiny.centerY(py + 9.f, 6.f), "SAVE STATE",
+              fade(pal.textMuted, a));
+    char title[32];
+    std::snprintf(title, sizeof title, "Save to Slot %d?", m_slot + 1);
+    fonts.bodyStrong.draw(r, px + 10.f, fonts.bodyStrong.centerY(py + 20.f, 8.f),
+                          title, fade(pal.textPrimary, a));
+    float y = py + HEAD;
+    if (replaces) {
+        fonts.small.draw(r, px + 10.f, fonts.small.centerY(y, 14.f),
+                         "This replaces the state in this slot.",
+                         fade(pal.textSecondary, a));
+        y += 22.f;
+    }
+    const char* rows[2] = {"Yes, save", "No"};
+    for (int i = 0; i < 2; i++) {
+        ui::RowStyle style;
+        style.focused = i == m_saveAskRow;
+        style.strong = i == 0;
+        ui::menuRow(app, px + 3.f, y + float(i) * L::ROW_H, PW - 6.f, L::ROW_H,
+                    rows[i], nullptr, style, a);
+    }
+    const App::Hint hints[] = {
+        {ui::prim::Button::Cross, "Select"},
+        {ui::prim::Button::Circle, "Cancel"},
+    };
+    app.drawHintBar(hints, 2, /*solid=*/true);
 }
 
 void GameSession::drawSettings(App& app, u32 a) {

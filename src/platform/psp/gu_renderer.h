@@ -49,7 +49,10 @@ public:
     void shutdown();
 
     void beginFrame(u32 clearColor);
-    void endFrame();            /* finish, GPU sync, swap at next vblank */
+    /* Finish, GPU sync, swap at next vblank. `beforeSwap` runs after this
+     * frame is drawn and before the swap: a system utility (the on-screen
+     * keyboard) draws itself over the frame there. */
+    void endFrame(void (*beforeSwap)(void*) = nullptr, void* ctx = nullptr);
     /* Microseconds spent waiting on vblank and the GPU since the last call
      * (performance diagnostics). */
     u32  takeWaitUs() { const u32 w = m_waitUs; m_waitUs = 0; return w; }

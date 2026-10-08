@@ -27,6 +27,13 @@ release itself.
   and dynarec; Snes9x filter, flicker and overclock; QuickNES palette, sprite
   limit and sound quality; Gambatte resampler, frame blending and colour;
   PCE Fast and SMS Plus options. The list scrolls when a core has more.
+- **Search uses the PSP keyboard**: Library > View > Search opens the
+  system on-screen keyboard (in the PSP's language and X/O setting) over
+  the Library; confirming applies the search, cancelling returns to the
+  View menu. RetroShell's letter wheel remains only as a fallback.
+- **Save State asks first**: choosing Save State in the pause menu asks
+  "Save to Slot N?" (noting when it replaces an existing state) before
+  writing.
 - **Legibility pass**: secondary text (game details, counts, save-slot
   labels) is brighter in every theme and now meets WCAG AA contrast on both
   the background and panels; empty save slots no longer use the faint
