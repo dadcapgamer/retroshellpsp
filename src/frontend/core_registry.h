@@ -65,10 +65,20 @@ struct CoreInfo {
     std::string pauseMode;
     std::string pauseHotkey;
     std::string returnMode;
+    /* What the player sees ("Snes9x 2005"): the manifest's "displayName",
+     * else coreDisplayName(name). */
+    std::string displayName;
 
     bool serves(db::System s) const;
     bool isNative() const { return backend == CoreBackend::NativeEboot; }
+    const char* label() const {
+        return displayName.empty() ? name.c_str() : displayName.c_str();
+    }
 };
+
+/* The proper name of a known emulator id ("snes9x2005" -> "Snes9x 2005"),
+ * or the id itself for one RetroShell does not know. */
+const char* coreDisplayName(const char* id);
 
 class CoreRegistry {
 public:
@@ -76,6 +86,12 @@ public:
 
     const std::vector<CoreInfo>& all() const { return m_cores; }
     const CoreInfo* find(const char* name) const;
+    /* Display name for an emulator id, installed or not (save-state labels
+     * name the emulator that wrote them). */
+    const char* displayName(const char* id) const {
+        const CoreInfo* c = find(id);
+        return c ? c->label() : coreDisplayName(id);
+    }
 
     std::vector<const CoreInfo*> coresFor(db::System s) const;
     int countFor(db::System s) const;          /* no allocation */

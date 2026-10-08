@@ -149,6 +149,7 @@ bool GameSession::startCore(App& app) {
      * ones; it now saves to a slot the player picks. Drop any leftover. */
     save::dropLegacyResumeState(m_game);
     const CoreInfo* info = app.cores().find(m_coreName.c_str());
+    m_coreLabel = info ? info->label() : coreDisplayName(m_coreName.c_str());
     if (!info) {
         std::snprintf(m_error, sizeof m_error, "core '%s' not installed",
                       m_coreName.c_str());
@@ -1187,7 +1188,7 @@ void GameSession::updateMenu(App& app) {
                 char msg[80];
                 std::snprintf(msg, sizeof msg,
                               "Saved with %s - load it from Game Details",
-                              m_slots[m_slot].coreName);
+                              app.cores().displayName(m_slots[m_slot].coreName));
                 app.toast(msg);
             } else if (m_slots[m_slot].exists) {
                 app.toast(save::loadState(m_game, core, m_slot)
@@ -1514,7 +1515,7 @@ void GameSession::drawSettings(App& app, u32 a) {
     ui::label(app, PX + 10.f, fonts.tiny.centerY(py + 9.f, 6.f),
               "EMULATOR SETTINGS", fade(pal.textMuted, a));
     ui::label(app, PX + PW - 10.f, fonts.tiny.centerY(py + 9.f, 6.f),
-              m_coreName.c_str(), fade(pal.textMuted, a), text::Align::Right);
+              m_coreLabel.c_str(), fade(pal.textMuted, a), text::Align::Right);
     ui::drawEllipsized(fonts.bodyStrong, r, PX + 10.f,
                        fonts.bodyStrong.centerY(py + 20.f, 8.f), PW - 20.f,
                        m_game.shown(), fade(pal.textPrimary, a));
@@ -1566,7 +1567,7 @@ void GameSession::drawSettings(App& app, u32 a) {
                         "filter. Switch back to follow %s's."
                       : "Changes here, and the pause menu's aspect ratio and "
                         "filter, apply to every game on %s.",
-                  m_coreName.c_str());
+                  m_coreLabel.c_str());
     ui::drawWrapped(fonts.small, r, PX + PW + 14.f,
                     fonts.small.centerY(py + 4.f, 7.f), L::RIGHT - PX - PW - 14.f,
                     14.f, 9,

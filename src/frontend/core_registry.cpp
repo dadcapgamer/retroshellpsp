@@ -89,6 +89,23 @@ std::string chosenCore(u32 pathHash) {
 }
 }  // namespace
 
+const char* coreDisplayName(const char* id) {
+    static const char* const NAMES[][2] = {
+        {"gambatte", "Gambatte"},       {"gearboy", "Gearboy"},
+        {"tgbdual", "TGB Dual"},        {"gpsp", "gpSP"},
+        {"mgba", "mGBA"},               {"froggba", "FrogGBA"},
+        {"quicknes", "QuickNES"},       {"fceumm", "FCEUmm"},
+        {"snes9x2005", "Snes9x 2005"},  {"snes9x2005_plus", "Snes9x 2005 Plus"},
+        {"snes9xtyl", "Snes9xTYL"},     {"picodrive", "PicoDrive"},
+        {"smsplus", "SMS Plus GX"},     {"pcefast", "PCE Fast"},
+        {"dummy", "Test core"},
+    };
+    if (!id) return "";
+    for (const auto& n : NAMES)
+        if (std::strcmp(n[0], id) == 0) return n[1];
+    return id;
+}
+
 const CoreInfo* CoreRegistry::overrideFor(const db::GameEntry& game) const {
     const std::string chosen = chosenCore(game.pathHash);
     if (chosen.empty()) return nullptr;
@@ -139,6 +156,7 @@ void CoreRegistry::discover() {
         m_cores.push_back({api->name, api->version, api->systems,
                            0, false, true, true, false, true,
                            CoreBackend::InProcessPrx, {}, 767, {}, {}, 0, {}});
+        m_cores.back().displayName = coreDisplayName(api->name);
     }
     sortCores(m_cores);
     RS_LOGI("cores: %d linked in", int(m_cores.size()));
@@ -319,6 +337,12 @@ void CoreRegistry::discover() {
                                    std::move(nativePauseMode),
                                    std::move(nativePauseHotkey),
                                    std::move(nativeReturnMode)});
+                const cJSON* shown = cJSON_GetObjectItem(root, "displayName");
+                m_cores.back().displayName =
+                    cJSON_IsString(shown) && *shown->valuestring &&
+                            std::strlen(shown->valuestring) <= 32
+                        ? shown->valuestring
+                        : coreDisplayName(name->valuestring);
             } else {
                 RS_LOGW("cores: manifest %s has no valid %s payload",
                         e.name.c_str(), native ? "native" : "PRX");

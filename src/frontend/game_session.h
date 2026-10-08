@@ -92,6 +92,7 @@ private:
 
     db::GameEntry m_game;
     std::string m_coreName;
+    std::string m_coreLabel;       /* its display name, for the UI */
     CoreManager m_cores;
     State m_state = State::Starting;
 

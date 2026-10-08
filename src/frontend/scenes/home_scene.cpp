@@ -736,7 +736,8 @@ void HomeScene::updateStates(App& app, float dt) {
         const CoreInfo* core = app.cores().find(slot.coreName);
         if (!core || !core->serves(m_detailGame.system)) {
             char msg[64];
-            std::snprintf(msg, sizeof msg, "%s is not installed", slot.coreName);
+            std::snprintf(msg, sizeof msg, "%s is not installed",
+                          app.cores().displayName(slot.coreName));
             app.toast(msg);
             return;
         }
@@ -747,7 +748,7 @@ void HomeScene::updateStates(App& app, float dt) {
             char msg[96];
             std::snprintf(msg, sizeof msg,
                           "Made by an older %s; it can't be loaded",
-                          slot.coreName);
+                          core->label());
             app.toast(msg);
             RS_LOGW("states: slot %d belongs to native '%s'; refused",
                     m_stateIdx, slot.coreName);
@@ -809,10 +810,10 @@ void HomeScene::updatePicker(App& app) {
         char msg[96];
         if (chosen)
             std::snprintf(msg, sizeof msg, "This game uses %s",
-                          chosen->name.c_str());
+                          chosen->label());
         else
             std::snprintf(msg, sizeof msg, "This game uses the default (%s)",
-                          m_pickerDefault ? m_pickerDefault->name.c_str() : "none");
+                          m_pickerDefault ? m_pickerDefault->label() : "none");
         app.toast(msg);
         m_hydratedHash = 0;   /* re-read the Emulator row */
         hydrateSelection(app);
@@ -1629,8 +1630,9 @@ void HomeScene::drawDetail(App& app, u32 a, float dy) {
                 label = "Emulator";
                 style.icon = int(ui::Icon::Gamepad);
                 if (m_selCore)
-                    value = m_selCoreChosen ? m_selCore->name
-                                            : m_selCore->name + " \xC2\xB7 Default";
+                    value = m_selCoreChosen
+                        ? std::string(m_selCore->label())
+                        : std::string(m_selCore->label()) + " \xC2\xB7 Default";
                 break;
             case DA_REMOVE_RECENT:
                 label = "Remove from Continue";
@@ -1741,11 +1743,12 @@ void HomeScene::drawStates(App& app, u32 a, float dy) {
             drawEllipsized(fonts.small, r, LX + 10.f, capsAt(fonts.small, y + 18.f),
                            LW - 20.f,
                            confirming ? std::string("Press triangle again to delete")
-                                      : std::string(slot.coreName),
+                                      : std::string(app.cores().displayName(
+                                            slot.coreName)),
                            fade(sub, a));
         } else {
             fonts.small.draw(r, LX + 10.f, capsAt(fonts.small, y + 18.f), "Empty",
-                             fade(focused ? sub : pal.textDisabled, a));
+                             fade(focused ? sub : pal.textMuted, a));
         }
     }
     if (m_detailHasSave) {
@@ -1786,10 +1789,10 @@ void HomeScene::drawPicker(App& app) {
             label = "System default";
             std::snprintf(value, sizeof value, "%s%s",
                           m_pickerChoice ? "" : "Current \xC2\xB7 ",
-                          m_pickerDefault ? m_pickerDefault->name.c_str() : "None");
+                          m_pickerDefault ? m_pickerDefault->label() : "None");
         } else {
             const CoreInfo& c = *m_pickerCores[size_t(i - offset)];
-            label = c.name.c_str();
+            label = c.label();
             selected = m_pickerAssign ? &c == m_pickerChoice : &c == m_pickerCurrent;
             std::snprintf(value, sizeof value, "%s%s",
                           selected ? (m_pickerAssign ? "Current \xC2\xB7 "

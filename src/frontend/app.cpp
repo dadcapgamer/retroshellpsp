@@ -234,7 +234,7 @@ void App::launchGame(const db::GameEntry& game, const CoreInfo* core) {
             default: reason = "emulator could not be started"; break;
         }
         char msg[96];
-        std::snprintf(msg, sizeof msg, "%s: %s", core->name.c_str(), reason);
+        std::snprintf(msg, sizeof msg, "%s: %s", core->label(), reason);
         fail(msg);
         RS_LOGE("app: native launch failed (%d): %s", result, msg);
         return;
@@ -601,10 +601,29 @@ void App::drawHintBar(const Hint* hints, int count, bool solid) {
     const float colW = (L::RIGHT - L::MARGIN) / float(columns);
     float x = L::MARGIN + 4.f;
     int group = 0;
+    /* SELECT and START have no symbol: their name in a small outlined key,
+     * set in a real font (the old baked glyphs' lettering was ~4 px). */
+    const auto& keyFont = m_fonts.tiny;
+    const auto keyName = [](ui::prim::Button b) -> const char* {
+        return b == ui::prim::Button::Select ? "SELECT"
+             : b == ui::prim::Button::Start  ? "START" : nullptr;
+    };
     for (int i = 0; i < count; i++) {
-        const float lead = ui::prim::buttonGlyphWidth(hints[i].button);
-        ui::prim::buttonGlyph(m_renderer, hints[i].button, x + lead * .5f, cy,
-                              6.f, m_pal.textPrimary);
+        const char* key = keyName(hints[i].button);
+        float lead;
+        if (key) {
+            constexpr float KEY_H = 11.f;
+            lead = float(int(keyFont.measure(key))) + 8.f;
+            const float ky = float(int(cy - KEY_H * .5f));
+            ui::pixelFrame(m_renderer, x, ky, lead, KEY_H, 1, 2,
+                           m_pal.textPrimary);
+            keyFont.draw(m_renderer, x + 4.f, keyFont.centerY(ky, KEY_H), key,
+                         m_pal.textPrimary);
+        } else {
+            lead = ui::prim::buttonGlyphWidth(hints[i].button);
+            ui::prim::buttonGlyph(m_renderer, hints[i].button, x + lead * .5f,
+                                  cy, 6.f, m_pal.textPrimary);
+        }
         if (!hints[i].label[0]) {
             x += lead + 4.f;
             continue;

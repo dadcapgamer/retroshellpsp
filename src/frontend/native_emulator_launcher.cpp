@@ -66,9 +66,10 @@ bool consumeReturnReceipt(char* notice, size_t size) {
             char reason[96];
             if (adapterResult(adapter, reason, sizeof reason)) {
                 RS_LOGW("native: %s reported: %s", adapter, reason);
-                std::snprintf(notice, size, "%s: %s", adapter, reason);
+                std::snprintf(notice, size, "%s: %s", coreDisplayName(adapter), reason);
             } else {
-                std::snprintf(notice, size, "%s closed unexpectedly", adapter);
+                std::snprintf(notice, size, "%s closed unexpectedly",
+                              coreDisplayName(adapter));
             }
             early = true;
         }

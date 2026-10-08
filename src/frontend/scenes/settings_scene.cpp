@@ -220,7 +220,7 @@ const char* SettingsScene::valueText(App& app, int row, char* buf,
         const db::System sys = db::System(row - SYS_ROW);
         if (!cfg::systemEnabled(db::systemInfo(sys).coreId)) return "Off";
         const CoreInfo* core = app.cores().defaultFor(sys);
-        std::snprintf(buf, n, "%s", core ? core->name.c_str() : "On");
+        std::snprintf(buf, n, "%s", core ? core->label() : "On");
         return buf;
     }
     const auto& c = cfg::get();

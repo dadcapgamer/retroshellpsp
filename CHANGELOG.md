@@ -27,6 +27,13 @@ release itself.
   and dynarec; Snes9x filter, flicker and overclock; QuickNES palette, sprite
   limit and sound quality; Gambatte resampler, frame blending and colour;
   PCE Fast and SMS Plus options. The list scrolls when a core has more.
+- **Legibility pass**: secondary text (game details, counts, save-slot
+  labels) is brighter in every theme and now meets WCAG AA contrast on both
+  the background and panels; empty save slots no longer use the faint
+  disabled colour; the SELECT and START hints are drawn as small labelled
+  keys in a real font instead of 4 px baked lettering; and emulators show
+  by name everywhere (Snes9x 2005, PicoDrive, gpSP...) instead of their
+  internal ids. Manifests may set "displayName" for community cores.
 - **"Recurring saves"** is the new name for Settings > Performance's
   Auto-save, with a line underneath saying what it does: in-game saves are
   written every 10 seconds while you play (not save states).
