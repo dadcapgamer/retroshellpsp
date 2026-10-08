@@ -124,6 +124,8 @@ rs_embed_assets(retrosuite
   ${CMAKE_SOURCE_DIR}/assets/icons/consoles/pc-engine-24.png
   ${CMAKE_SOURCE_DIR}/assets/icons/consoles/pc-engine-48.png
   ${CMAKE_SOURCE_DIR}/assets/icons/consoles/pc-engine-64.png
+  ${CMAKE_SOURCE_DIR}/assets/icons/favorite-48.png
+  ${CMAKE_SOURCE_DIR}/assets/icons/favorite-64.png
   ${CMAKE_SOURCE_DIR}/assets/icons/controls/control-cross-24.png
   ${CMAKE_SOURCE_DIR}/assets/icons/controls/control-circle-24.png
   ${CMAKE_SOURCE_DIR}/assets/icons/controls/control-triangle-24.png
@@ -131,7 +133,9 @@ rs_embed_assets(retrosuite
   ${CMAKE_SOURCE_DIR}/assets/icons/controls/control-start-24.png
   ${CMAKE_SOURCE_DIR}/assets/icons/controls/control-left-shoulder-24.png
   ${CMAKE_SOURCE_DIR}/assets/icons/controls/control-right-shoulder-24.png
-  ${CMAKE_SOURCE_DIR}/assets/icons/controls/control-select-24.png)
+  ${CMAKE_SOURCE_DIR}/assets/icons/controls/control-select-24.png
+  ${CMAKE_SOURCE_DIR}/assets/icons/controls/control-arrow-up-24.png
+  ${CMAKE_SOURCE_DIR}/assets/icons/controls/control-arrow-down-24.png)
 
 create_pbp_file(
   TARGET retrosuite

@@ -1,4 +1,5 @@
 #include "frontend/scenes/home_scene.h"
+#include "frontend/database/natural_order.h"
 #include "frontend/app.h"
 #include "frontend/scenes/settings_scene.h"
 #include "frontend/ui/chrome.h"
@@ -69,9 +70,20 @@ constexpr float SETTLE_SECONDS = 0.18f;
 using ui::drawEllipsized;
 using ui::drawWrapped;
 
-const char* systemTitle(int systemId) { return ui::systemName(systemId); }
+/* Favorites leads the rail as an entry of its own, browsed exactly like a
+ * console. It needs an id the per-system Library state (last selection,
+ * view) can key on: outside db::System, inside the 0..31 library.json
+ * accepts. */
+constexpr int FAVORITES_RAIL = 16;
+static_assert(FAVORITES_RAIL >= db::SYSTEM_COUNT, "must not alias a system");
+
+const char* systemTitle(int systemId) {
+    if (systemId == FAVORITES_RAIL) return "Favorites";
+    return ui::systemName(systemId);
+}
 
 const char* badge(int systemId) {
+    if (systemId == FAVORITES_RAIL) return "FAV";
     return db::systemInfo(db::System(rsClamp(systemId, 0,
                                              db::SYSTEM_COUNT - 1))).badge;
 }
@@ -164,6 +176,9 @@ void HomeScene::enter(App& app) {
     rebuildSystems(app);
 
     const auto& snap = app.snapshot();
+    /* Without a remembered position, start on the first console rather
+     * than Favorites, which may still be empty. */
+    if (m_systems.size() > 1) m_nav.systemPos = 1;
     for (size_t i = 0; i < m_systems.size(); i++)
         if (m_systems[i] == snap.systemId) m_nav.systemPos = int(i);
     m_nav.continueIdx = snap.continueIdx;
@@ -228,6 +243,7 @@ void HomeScene::rebuildSystems(App& app) {
      * folder missing / nothing found), not a rail of empty systems. */
     m_allHidden = anyGames && m_systems.empty();
     m_empty = m_systems.empty();
+    if (!m_empty) m_systems.insert(m_systems.begin(), FAVORITES_RAIL);
     m_romRootMissing = m_empty && !fs::exists(fs::ROM_ROOT) &&
                        !fs::exists("ms0:/roms");
 }
@@ -245,9 +261,36 @@ int HomeScene::currentSystemId() const { return m_nav.activeSystem; }
  * game now sits. Selection is remembered by game, not by row, so changing the
  * view (or a rescan reshuffling the list) never moves the user off their
  * game when it is still visible. */
+std::vector<const db::GameEntry*> HomeScene::railGames(App& app) const {
+    std::vector<const db::GameEntry*> out;
+    const int system = currentSystemId();
+    if (system != FAVORITES_RAIL) {
+        const auto& games = app.index().games(db::System(system));
+        out.reserve(games.size());
+        for (const db::GameEntry& g : games) out.push_back(&g);
+        return out;
+    }
+    /* Favorites from every console still on the rail, merged into one A-Z
+     * list in the order GameIndex uses within a system. */
+    for (int s : m_systems) {
+        if (s == FAVORITES_RAIL) continue;
+        for (const db::GameEntry& g : app.index().games(db::System(s)))
+            if (app.library().isFavorite(g.pathHash)) out.push_back(&g);
+    }
+    std::stable_sort(out.begin(), out.end(),
+                     [](const db::GameEntry* a, const db::GameEntry* b) {
+                         if (db::naturalNameLess(a->title, b->title))
+                             return true;
+                         if (db::naturalNameLess(b->title, a->title))
+                             return false;
+                         return db::naturalNameLess(a->name, b->name);
+                     });
+    return out;
+}
+
 void HomeScene::rebuildList(App& app) {
     const int system = currentSystemId();
-    const auto& all = app.index().games(db::System(system));
+    const auto all = railGames(app);
     m_view = app.library().view(system);
     m_visible = db::buildView(all, m_view, m_query, app.library());
     m_systemTotal = int(all.size());
@@ -426,7 +469,9 @@ void HomeScene::updateError(App& app) {
 
 void HomeScene::toggleFavorite(App& app, const db::GameEntry& game) {
     app.library().toggleFavorite(game.pathHash);
-    if (m_view.filter == db::ViewFilter::Favorites) m_listDirty = true;
+    if (m_view.filter == db::ViewFilter::Favorites ||
+        currentSystemId() == FAVORITES_RAIL)
+        m_listDirty = true;
     /* In Game Detail the Favorites row already shows the new state; the
      * lists only have a small star, so they get a toast. */
     if (m_overlay == Overlay::None && m_nav.layer != nav::Layer::Detail)
@@ -934,9 +979,8 @@ static std::string searchPreview(const std::string& buf, bool touched, int ch) {
 void HomeScene::recountSearch(App& app) {
     const std::string q = searchPreview(m_searchBuf, m_searchTouched,
                                         m_searchChar);
-    m_searchCount = int(db::buildView(
-        app.index().games(db::System(currentSystemId())), m_view, q,
-        app.library()).size());
+    m_searchCount = int(db::buildView(railGames(app), m_view, q,
+                                      app.library()).size());
 }
 
 /* Initials-style entry: up/down pick a letter, right locks it in, left
@@ -1024,7 +1068,7 @@ void HomeScene::update(App& app, float dt) {
         m_nav.clamp(int(m_systems.size()), gamesInCurrent(),
                     int(m_recents.size()), m_systemTotal);
     }
-    if (m_listDirty && m_nav.layer == nav::Layer::Library &&
+    if (m_listDirty && m_nav.layer != nav::Layer::Detail &&
         m_overlay == Overlay::None) {
         m_listDirty = false;
         refreshListKeepingPosition(app);
@@ -1071,7 +1115,8 @@ void HomeScene::update(App& app, float dt) {
     }
     /* Library row thumbnails come from the worker; ask for this system's
      * set whenever the Library is (or is about to be) on screen. */
-    if (cfg::get().showArt && m_layerPos.v > .3f && !m_systems.empty())
+    if (cfg::get().showArt && m_layerPos.v > .3f && !m_systems.empty() &&
+        currentSystemId() != FAVORITES_RAIL)
         app.thumbs().requestSystem(currentSystemId());
     /* Warm Continue artwork one image per frame while that layer is near. */
     if (cfg::get().showArt && !m_recents.empty() &&
@@ -1221,11 +1266,18 @@ void HomeScene::drawSystems(App& app, u32 a, float dy) {
         const int system = m_systems[size_t(i)];
         const bool active = std::fabs(float(i) - m_railPos.v) < .5f;
         const float size = active ? 64.f : 48.f;
-        ui::prim::iconSystem(r, system, x - size * .5f,
-                             RAIL_ICON_CY - size * .5f + dy, size,
-                             rsWithAlpha(rsHex(0xFFFFFF), active ? a
-                                                                 : a * 200u / 255u),
-                             pal.accent);
+        const u32 iconInk = rsWithAlpha(rsHex(0xFFFFFF),
+                                        active ? a : a * 200u / 255u);
+        /* The star is monochrome, so it takes the theme's text ink (the
+         * same as its label) instead of the consoles' full-colour art. */
+        if (system == FAVORITES_RAIL)
+            ui::prim::iconFavorite(
+                r, x - size * .5f, RAIL_ICON_CY - size * .5f + dy, size,
+                fade(active ? pal.textPrimary : pal.textSecondary, a));
+        else
+            ui::prim::iconSystem(r, system, x - size * .5f,
+                                 RAIL_ICON_CY - size * .5f + dy, size,
+                                 iconInk, pal.accent);
         const text::Font& face = active ? fonts.bodyStrong : fonts.body;
         face.draw(r, x, capsAt(face, RAIL_LABEL_Y) + dy, badge(system),
                   fade(active ? pal.textPrimary : pal.textSecondary, a),
@@ -1354,7 +1406,9 @@ void HomeScene::drawLibrary(App& app, u32 a, float dy) {
     constexpr float HEAD_Y = 35.f;
     const float chipW = ui::chip(app, L::MARGIN + dx, HEAD_Y + dy, badge(sys),
                                  body, true);
-    const std::string heading = std::string(systemTitle(sys)) + " Library";
+    const std::string heading = sys == FAVORITES_RAIL
+        ? std::string(systemTitle(sys))
+        : std::string(systemTitle(sys)) + " Library";
     const float headX = L::MARGIN + chipW + 10.f + dx;
     fonts.body.draw(r, headX, fonts.body.centerY(HEAD_Y + dy, ui::CHIP_H),
                     heading.c_str(), fade(pal.textPrimary, body));
@@ -1404,9 +1458,11 @@ void HomeScene::drawLibrary(App& app, u32 a, float dy) {
         if (!m_query.empty()) {
             panel.title = "No matches";
             message = "Nothing in this system matches \"" + m_query + "\".";
-        } else if (m_view.filter == db::ViewFilter::Favorites) {
+        } else if (m_view.filter == db::ViewFilter::Favorites ||
+                   sys == FAVORITES_RAIL) {
             panel.title = "No favorites yet";
             message = "Press the square button on any game to add it here.";
+            if (m_view.isDefault()) panel.actionLabel = nullptr;
         } else {
             panel.title = "No games to show";
             message = "Rescan the library from Settings.";

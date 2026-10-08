@@ -72,10 +72,12 @@ constexpr Step GAME_SCRIPT[] = {
     {1324, PSP_CTRL_UP,       nullptr},         /* Systems → Continue Playing */
     {1344, 0,                 "recent_focus"},
     {1348, PSP_CTRL_DOWN,     nullptr},         /* Continue → Systems */
+    {1360, PSP_CTRL_LEFT,     nullptr},         /* Favorites, first on the rail */
     {1396, 0,                 "favorites_home"},
-    {1400, PSP_CTRL_CROSS,    nullptr},         /* open Library again */
+    {1400, PSP_CTRL_CROSS,    nullptr},         /* open the Favorites list */
     {1420, 0,                 "favorites_list"},/* shows the starred game */
     {1424, PSP_CTRL_CIRCLE,   nullptr},
+    {1428, PSP_CTRL_RIGHT,    nullptr},         /* back to the target system */
     {1432, PSP_CTRL_TRIANGLE, nullptr},         /* open Settings */
     {1452, 0,                 "settings"},
     {1456, PSP_CTRL_CROSS,    nullptr},         /* into the panel */
@@ -373,7 +375,7 @@ bool s_done = false;
 constexpr int TARGET_SYSTEM = RS_AUTOPILOT_SYSTEM_INDEX;
 constexpr int NAV_FIRST_FRAME = 165;
 constexpr int NAV_FRAME_GAP = 8;
-int s_railPresses = -1;   /* Right presses from the first rail system */
+int s_railPresses = -1;   /* Right presses from the first console (Favorites sits left of it) */
 
 /* The rail lists only systems that have games, so the target's slot is the
  * number of populated systems before it. Counted once, when navigation

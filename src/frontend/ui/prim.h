@@ -39,6 +39,9 @@ void iconGear(gfx::Renderer& r, float cx, float cy, float radius, u32 color);
  * settings=9. `size` snaps to 24, 48 or 64 (the artwork has built-in padding). */
 void iconSystem(gfx::Renderer& r, int systemIdx, float x, float y, float size,
                 u32 base, u32 detail);
+/* Favorites star (Figma "icon - favorite"), drawn on the system rail.
+ * Same cells as iconSystem: `size` snaps to 48 or 64; tinted by `color`. */
+void iconFavorite(gfx::Renderer& r, float x, float y, float size, u32 color);
 
 /* Flat 1-bit-style shapes for the firmware look: no AA masks, integer
  * aligned, so edges stay crisp on the LCD. */
@@ -54,8 +57,9 @@ void arrow(gfx::Renderer& r, Dir d, float cx, float cy, float size, u32 color);
  * a full placeholder costs a handful of sprites, not hundreds of rects. */
 void dotField(gfx::Renderer& r, float x, float y, float w, float h, u32 color);
 
-/* PSP face-button glyphs for hint bars. DpadUp/DpadDown draw as arrows;
- * Face buttons and START are the Figma pixel glyphs. */
+/* PSP button glyphs for hint bars: face buttons, START, SELECT, shoulders
+ * and D-pad up/down are the Figma pixel glyphs, baked at legend size
+ * (`radius` is ignored); DpadLeftRight is drawn from chevrons. */
 enum class Button { Cross, Circle, Triangle, Square, DpadUp, DpadDown, Start,
                     L1, R1, Select, DpadLeftRight };
 void buttonGlyph(gfx::Renderer& r, Button b, float cx, float cy, float radius,

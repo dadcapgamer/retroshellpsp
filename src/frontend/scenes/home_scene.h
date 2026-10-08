@@ -56,6 +56,8 @@ private:
     /* --- data ------------------------------------------------------------ */
     void rebuildSystems(App& app);
     void rebuildList(App& app);
+    /* The current rail entry's games, A-Z, before filter/sort/search. */
+    std::vector<const db::GameEntry*> railGames(App& app) const;
     void rebuildRecents(App& app);
     void applyView(App& app, db::ViewState view, const std::string& query);
     void refreshListKeepingPosition(App& app);
@@ -115,7 +117,7 @@ private:
     nav::HomeNav m_nav;
     Overlay      m_overlay = Overlay::None;
 
-    std::vector<int> m_systems;                       /* db::System ids on the rail */
+    std::vector<int> m_systems;                       /* rail: Favorites, then db::System ids */
     std::vector<const db::GameEntry*> m_visible;      /* current system's games */
     std::vector<const db::GameEntry*> m_recents;      /* Continue Playing */
     db::ViewState m_view;                  /* filter + sort of the current system */

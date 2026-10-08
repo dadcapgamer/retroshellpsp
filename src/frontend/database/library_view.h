@@ -94,23 +94,24 @@ inline bool matchesQuery(const std::string& label, const std::string& query) {
 }
 
 /* `lib` supplies isFavorite(hash), lastPlayed(hash) and playCount(hash).
- * `games` must already be in A-Z order (GameIndex guarantees it). */
+ * `games` must already be in A-Z order (GameIndex guarantees it). This form
+ * takes pointers so a list gathered across systems (the Favorites rail
+ * entry) gets the same filter, sort and search as a single system. */
 template <class Lib>
-std::vector<const GameEntry*> buildView(const std::vector<GameEntry>& games,
-                                        const ViewState& view,
-                                        const std::string& query,
-                                        const Lib& lib) {
+std::vector<const GameEntry*> buildView(
+        const std::vector<const GameEntry*>& games, const ViewState& view,
+        const std::string& query, const Lib& lib) {
     std::vector<const GameEntry*> out;
     out.reserve(games.size());
     const std::string needle = searchFold(query);
-    for (const GameEntry& g : games) {
+    for (const GameEntry* g : games) {
         if (view.filter == ViewFilter::Favorites &&
-            !lib.isFavorite(g.pathHash))
+            !lib.isFavorite(g->pathHash))
             continue;
         if (!needle.empty() &&
-            searchFold(g.shown()).find(needle) == std::string::npos)
+            searchFold(g->shown()).find(needle) == std::string::npos)
             continue;
-        out.push_back(&g);
+        out.push_back(g);
     }
 
     if (view.filter == ViewFilter::RecentlyAdded) {
@@ -157,6 +158,17 @@ std::vector<const GameEntry*> buildView(const std::vector<GameEntry>& games,
             break;
     }
     return out;
+}
+
+template <class Lib>
+std::vector<const GameEntry*> buildView(const std::vector<GameEntry>& games,
+                                        const ViewState& view,
+                                        const std::string& query,
+                                        const Lib& lib) {
+    std::vector<const GameEntry*> all;
+    all.reserve(games.size());
+    for (const GameEntry& g : games) all.push_back(&g);
+    return buildView(all, view, query, lib);
 }
 
 /* Position of `hash` in a built view, or -1. */

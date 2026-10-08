@@ -28,6 +28,8 @@
 #include "rs_asset_game_gear_64_png.h"
 #include "rs_asset_pc_engine_48_png.h"
 #include "rs_asset_pc_engine_64_png.h"
+#include "rs_asset_favorite_48_png.h"
+#include "rs_asset_favorite_64_png.h"
 #include "rs_asset_control_cross_24_png.h"
 #include "rs_asset_control_circle_24_png.h"
 #include "rs_asset_control_triangle_24_png.h"
@@ -36,6 +38,8 @@
 #include "rs_asset_control_left_shoulder_24_png.h"
 #include "rs_asset_control_right_shoulder_24_png.h"
 #include "rs_asset_control_select_24_png.h"
+#include "rs_asset_control_arrow_up_24_png.h"
+#include "rs_asset_control_arrow_down_24_png.h"
 #include "stb_image.h"
 
 #include <pspgu.h>
@@ -63,12 +67,15 @@ constexpr int SYSTEM_CELL_SMALL = 24;    /* list-row glyph */
 constexpr int SYSTEM_CELL = 48;          /* resting / list size */
 constexpr int SYSTEM_CELL_LARGE = 64;    /* selected / preview size */
 constexpr int CONSOLE_COUNT = SYSTEM_COUNT - 1;
-constexpr int GLYPH_COUNT = 8;
-/* Cross, Circle, Triangle, Square, Start, L1, R1 — cropped to their ink. */
+constexpr int GLYPH_COUNT = 10;
+/* Cross, Circle, Triangle, Square, Start, L1, R1, Select, Up, Down —
+ * cropped to their ink. */
 gfx::Texture s_glyphs[GLYPH_COUNT];
 gfx::Texture s_systemIconsSmall[CONSOLE_COUNT];
 gfx::Texture s_systemIcons[CONSOLE_COUNT];
 gfx::Texture s_systemIconsLarge[CONSOLE_COUNT];
+gfx::Texture s_favorite;          /* 48 px rail star, white ink */
+gfx::Texture s_favoriteLarge;     /* 64 px selected star */
 
 float roundedCoverage(float px, float py, float w, float h, float rad) {
     /* Signed distance to a rounded rectangle centered in [0,w]x[0,h]. */
@@ -225,6 +232,31 @@ bool bakeSystemIcons() {
         }
     }
 
+    /* Favorites rail star (Figma "icon - favorite"), rasterised crisp from
+     * assets/icons/favorite.svg in white so it tints like the glyphs. */
+    const EmbeddedPng favorites[2] = {
+        {rs_asset_favorite_48_png, rs_asset_favorite_48_png_len},
+        {rs_asset_favorite_64_png, rs_asset_favorite_64_png_len},
+    };
+    gfx::Texture* favoriteTargets[2] = {&s_favorite, &s_favoriteLarge};
+    const int favoriteCells[2] = {SYSTEM_CELL, SYSTEM_CELL_LARGE};
+    for (int v = 0; v < 2; ++v) {
+        int w = 0, h = 0, comp = 0;
+        stbi_uc* px = stbi_load_from_memory(favorites[v].bytes,
+                                            int(favorites[v].length), &w, &h,
+                                            &comp, 4);
+        if (!px || w != favoriteCells[v] || h != favoriteCells[v]) {
+            RS_LOGE("ui: favorite icon (%d px) is not a valid RGBA asset",
+                    favoriteCells[v]);
+            if (px) stbi_image_free(px);
+            return false;
+        }
+        const bool ok = gfx::Renderer::createTexture(
+            *favoriteTargets[v], w, h, GU_PSM_8888, px, /*dynamic=*/true);
+        stbi_image_free(px);
+        if (!ok) return false;
+    }
+
     /* Control glyphs: 24 px Figma exports with black RGB and coverage alpha.
      * Recolour to white so they tint to any theme colour, and crop to the
      * ink so legend spacing follows the visible shape, not the padding. */
@@ -239,6 +271,10 @@ bool bakeSystemIcons() {
         {rs_asset_control_right_shoulder_24_png,
          rs_asset_control_right_shoulder_24_png_len},
         {rs_asset_control_select_24_png,   rs_asset_control_select_24_png_len},
+        {rs_asset_control_arrow_up_24_png,
+         rs_asset_control_arrow_up_24_png_len},
+        {rs_asset_control_arrow_down_24_png,
+         rs_asset_control_arrow_down_24_png_len},
     };
     for (int i = 0; i < GLYPH_COUNT; ++i) {
         int w = 0, h = 0, comp = 0;
@@ -462,6 +498,16 @@ void iconSystem(gfx::Renderer& r, int systemIdx, float x, float y, float size,
     r.setTexFilter(previous);
 }
 
+void iconFavorite(gfx::Renderer& r, float x, float y, float size, u32 color) {
+    const bool large = size >= 56.f;
+    const float cell = float(large ? SYSTEM_CELL_LARGE : SYSTEM_CELL);
+    const gfx::TexFilter previous = r.texFilter();
+    r.setTexFilter(gfx::TexFilter::Nearest);
+    r.sprite(large ? s_favoriteLarge : s_favorite, 0.f, 0.f, cell, cell,
+             float(int(x)), float(int(y)), cell, cell, color);
+    r.setTexFilter(previous);
+}
+
 namespace {
 int glyphIndex(Button b) {
     switch (b) {
@@ -473,6 +519,8 @@ int glyphIndex(Button b) {
         case Button::L1:       return 5;
         case Button::R1:       return 6;
         case Button::Select:   return 7;
+        case Button::DpadUp:   return 8;
+        case Button::DpadDown: return 9;
         default:               return -1;
     }
 }
@@ -486,6 +534,7 @@ float buttonGlyphWidth(Button b) {
 
 void buttonGlyph(gfx::Renderer& r, Button b, float cx, float cy, float radius,
                  u32 color) {
+    (void)radius;   /* every baked glyph has a fixed legend size */
     const int index = glyphIndex(b);
     if (b == Button::DpadLeftRight) {
         /* Two horizontal stem arrows: arrow() only draws vertical ones. */
@@ -497,11 +546,7 @@ void buttonGlyph(gfx::Renderer& r, Button b, float cx, float cy, float radius,
         chevron(r, Dir::Right, x0 + 8.f, y0, 6.f, 2.f, color);
         return;
     }
-    if (index < 0) {
-        arrow(r, b == Button::DpadUp ? Dir::Up : Dir::Down, cx, cy,
-              radius * 0.8f, color);
-        return;
-    }
+    if (index < 0) return;
     const gfx::Texture& t = s_glyphs[index];
     const gfx::TexFilter previous = r.texFilter();
     r.setTexFilter(gfx::TexFilter::Nearest);

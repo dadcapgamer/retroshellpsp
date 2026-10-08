@@ -9,6 +9,15 @@ release itself.
 
 ### Systems, themes, save states, sharpness
 
+- **Favorites on the system rail**: Favorites is now the first entry on
+  Home's system rail, with its own pixel star, and opens like a console: X
+  shows every starred game from all enabled systems in one A-Z list (each
+  row keeps its console icon), with sort and search from the View menu.
+  Unstarring a game there removes it at once, and an empty Favorites
+  explains how to add games with the square button. Home still opens on
+  the first console when there is no remembered position.
+- **New D-pad arrows** in the button hints: the up and down arrows are the
+  Figma pixel glyphs, matching the face buttons, instead of drawn shapes.
 - **All emulators promoted**: gpSP, PCE Fast and SMS Plus GX are now
   included alongside Gambatte, QuickNES, PicoDrive and Snes9x 2005 (SMS Plus
   is the Master System / Game Gear alternate; PicoDrive stays the default),
