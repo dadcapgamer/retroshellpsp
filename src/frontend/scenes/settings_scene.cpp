@@ -25,7 +25,7 @@ using ui::fade;
 
 const char* ROW_LABELS[] = {
     "Theme", "Accent color", "Time format", "Artwork", "Menu CPU clock",
-    "In-game CPU clock", "Show FPS", "Auto-save", "Rescan library",
+    "In-game CPU clock", "Show FPS", "Recurring saves", "Rescan library",
     "UI sounds",
 };
 struct CategoryDef {
@@ -34,6 +34,18 @@ struct CategoryDef {
     ui::Icon icon;
     int rows[5];          /* -1 terminated */
 };
+/* A short line under a row's label, for settings whose name alone does not
+ * say what they do. nullptr for most rows. */
+const char* rowDescription(int row) {
+    switch (row) {
+        case 7:   /* ROW_AUTOSAVE */
+            return "Writes in-game saves every 10 s while you play";
+        default:
+            return nullptr;
+    }
+}
+constexpr float DESC_H = 12.f;       /* extra height for a description */
+
 const CategoryDef CATS[] = {
     {"Appearance", "APPEARANCE", ui::Icon::Gear, {0, 1, 2, 3, -1}},
     {"Systems", "SYSTEMS", ui::Icon::Gamepad, {-1, -1, -1, -1, -1}},
@@ -275,6 +287,7 @@ void SettingsScene::update(App& app, float dt) {
 }
 
 void SettingsScene::draw(App& app) {
+    static_assert(ROW_AUTOSAVE == 7, "rowDescription() row ids");
     auto& r = app.renderer();
     const auto& pal = app.pal();
     const auto& fonts = app.fonts();
@@ -329,8 +342,10 @@ void SettingsScene::draw(App& app) {
     if (m_cat == CAT_SYSTEMS && n == 0)
         fonts.body.draw(r, px + 10.f, fonts.body.centerY(y, ROW_H),
                         "No emulators installed", fade(pal.textMuted, pa));
-    for (int i = first; i < last; i++, y += ROW_H) {
+    for (int i = first; i < last; i++) {
         const int row = rows[i];
+        const char* desc = row < SYS_ROW ? rowDescription(row) : nullptr;
+        const float rowH = desc ? ROW_H + DESC_H : ROW_H;
         ui::RowStyle style;
         style.focused = row == focusedRow;
         style.adjustable = !isAction(row) && row != ROW_ACCENT;
@@ -354,8 +369,13 @@ void SettingsScene::draw(App& app) {
                                  fade(rsHex(theme::accentOption(sw).rgb), pa));
             }
         }
+        if (desc)
+            fonts.small.draw(r, px + 10.f,
+                             fonts.small.centerY(y + ROW_H - 3.f, DESC_H), desc,
+                             fade(pal.textMuted, pa));
         if (!style.focused && i + 1 < last && rows[i + 1] != focusedRow)
-            ui::rowRule(app, px, y + ROW_H - 1.f, pw, pa);
+            ui::rowRule(app, px, y + rowH - 1.f, pw, pa);
+        y += rowH;
     }
     if (n > VISIBLE_ROWS) {
         /* Position marker inside the panel's right edge. */

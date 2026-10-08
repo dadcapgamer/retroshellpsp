@@ -79,7 +79,10 @@ constexpr Step GAME_SCRIPT[] = {
     {1456, PSP_CTRL_CROSS,    nullptr},         /* into the panel */
     {1464, PSP_CTRL_DOWN,     nullptr},         /* Accent color */
     {1472, 0,                 "accent_picker"},
-    {1480, PSP_CTRL_START,    nullptr},         /* return to Systems */
+    {1474, PSP_CTRL_RTRIGGER, nullptr},         /* Systems */
+    {1478, PSP_CTRL_RTRIGGER, nullptr},         /* Performance */
+    {1488, 0,                 "settings_performance"},
+    {1490, PSP_CTRL_START,    nullptr},         /* return to Systems */
     {1500, PSP_CTRL_CROSS,    nullptr},         /* open Library */
     {1516, PSP_CTRL_CROSS,    nullptr},         /* Library: X relaunches */
     {1718, 0,                 "game_relaunch"},

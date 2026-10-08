@@ -27,6 +27,10 @@ release itself.
   and dynarec; Snes9x filter, flicker and overclock; QuickNES palette, sprite
   limit and sound quality; Gambatte resampler, frame blending and colour;
   PCE Fast and SMS Plus options. The list scrolls when a core has more.
+- **"Recurring saves"** is the new name for Settings > Performance's
+  Auto-save, with a line underneath saying what it does: in-game saves are
+  written every 10 seconds while you play (not save states).
+- **New XMB thumbnail** (ICON0) from the Figma "xmb thumbnail" frame.
 - **A startup splash for each theme**: Dark, Graphite, Light and Mist each
   open on their own splash (from the Figma "Splash screens"), drawn exactly
   as designed; custom themes use Dark's. The XMB background now uses the
