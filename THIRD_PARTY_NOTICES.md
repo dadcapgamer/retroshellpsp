@@ -8,6 +8,19 @@ The interface is set in IBM Plex Mono, Copyright © 2017 IBM Corp., licensed
 under the SIL Open Font License 1.1. The complete license is stored at
 `assets/fonts/OFL-IBMPlexMono.txt`.
 
+## Handheld overlay artwork
+
+The GB, GBC, and GBA overlay PNGs under `assets/overlays/` are scaled
+adaptations of the default black 1080p overlays from
+[Watomsk/Overlays](https://github.com/Watomsk/Overlays), commit
+`8aaf9a930c16a33df581ebd481086c29a0cb7298`. The upstream repository does not
+provide a license. These images are not covered by RetroShell's MIT license and
+should not be redistributed without permission from their author. They are
+included in this local build at the user's direction.
+
+Game Boy, Game Boy Color, and Game Boy Advance are trademarks of Nintendo.
+RetroShell is not affiliated with or endorsed by Nintendo.
+
 | Core | Upstream | License |
 |---|---|---|
 | Gambatte | libretro/gambatte-libretro | GPL-2.0 |
