@@ -1,8 +1,11 @@
 # RetroShell handheld borders
 
-These GB, GBC, and GBA borders are original RetroShell assets. They use
-hardware-inspired proportions and colors without copying console logos, game
-artwork, or third-party overlay packs.
+These GB, GBC, and GBA borders are original RetroShell vector assets. They use
+hardware-inspired proportions, colors, controls, and model-name typography
+without copying game artwork or third-party overlay packs.
 
 The source SVGs and generated PNGs are covered by RetroShell's root MIT
 license.
+
+Game Boy, Game Boy Color, and Game Boy Advance are trademarks of Nintendo.
+RetroShell is not affiliated with or endorsed by Nintendo.
