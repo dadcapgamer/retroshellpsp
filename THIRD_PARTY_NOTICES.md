@@ -10,8 +10,10 @@ under the SIL Open Font License 1.1. The complete license is stored at
 
 ## Handheld overlay artwork
 
-The GB, GBC, and GBA overlay PNGs under `assets/overlays/` are scaled
-adaptations of the default black 1080p overlays from
+The GB, GBC, and GBA overlay PNGs under `assets/overlays/`, along with the
+FrogGBA-native conversion at
+`native-emulators/froggba/files/Watomsk-GBA.ovl`, are scaled adaptations of
+the default black 1080p overlays from
 [Watomsk/Overlays](https://github.com/Watomsk/Overlays), commit
 `8aaf9a930c16a33df581ebd481086c29a0cb7298`. The upstream repository does not
 provide a license. These images are not covered by RetroShell's MIT license and

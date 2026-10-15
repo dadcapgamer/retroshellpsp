@@ -68,9 +68,11 @@ adapter SDK in, and builds with the pspdev toolchain in `~/pspdev` (the same
 The result is byte-for-byte identical to the packages tested on hardware.
 FrogGBA's exception handler and kernel bridge are upstream's prebuilt modules
 from its pinned `release/FrogGBA_v0.1.0.zip`; its `dir.ini` (snapshots kept in
-the emulator's folder) and `froggba.cfg` live in
-`native-emulators/froggba/files/`. Already-built trees can still be packaged
-with `./build.sh adapters /path/to/FrogGBA /path/to/patched/snes9xTYL`.
+the emulator's folder), `froggba.cfg`, and bundled Watomsk GBA overlay live in
+`native-emulators/froggba/files/`. RetroShell adapter launches automatically
+select that overlay and its matching top-aligned 1.5x viewport; FrogGBA's own
+overlay menu can still change or disable it during the session. Already-built
+trees can still be packaged with `./build.sh adapters FROG_DIR SNES_DIR`.
 
 Both packages are bundled into the release ZIP by `tools/package_release.py`
 (`./build.sh release`): build them into `dist/core-directory/` first. A missing

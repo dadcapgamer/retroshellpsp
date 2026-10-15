@@ -16,7 +16,8 @@
   "capabilities": ["pause", "resume", "saveState", "loadState", "reset", "aspectRatio", "filter", "screenshot", "emulatorSettings", "exitToShell"],
   "patches": [
     "native-emulators/froggba/patches/return-to-launcher.patch",
-    "native-emulators/froggba/shared-save-library.patch"
+    "native-emulators/froggba/shared-save-library.patch",
+    "native-emulators/froggba/patches/retroshell-overlay.patch"
   ],
   "payload": [
     {
@@ -42,6 +43,10 @@
     {
       "source": "froggba.cfg",
       "destination": "froggba.cfg"
+    },
+    {
+      "source": "Watomsk-GBA.ovl",
+      "destination": "overlays/Watomsk-GBA.ovl"
     }
   ],
   "localPatches": [
@@ -49,10 +54,11 @@
     "source/src/gui.c: render the compact RetroShell pause surface and route Emulator Settings to FrogGBA's native settings",
     "source/src/gui.c: dispatch wrapper actions by stable indices instead of executable stack trampolines",
     "source/src/{main,gui,memory}.c: use RetroShell's per-game save library with read-only fallback to FrogGBA's legacy save and state folders",
+    "source/src/main.c: automatically select the bundled Watomsk GBA overlay and its top-aligned 1.5x viewport for RetroShell adapter launches",
     "source/src/input.c: invoke the embedded RetroShell pause surface with L+R+Select and record pause/resume state",
     "source/src/main.c: consume argv[2..3] and chain-load back to RetroShell on quit",
     "source/Makefile: compile the adapter shim and link pspsystemctrl_user",
-    "dir.ini: snapshot_directory relocated from ms0:/PICTURE into the adapter's own folder so the emulator is self-contained (native-emulators/froggba/files/, with froggba.cfg)",
+    "dir.ini: snapshot_directory relocated from ms0:/PICTURE into the adapter's own folder so the emulator is self-contained (native-emulators/froggba/files/, with froggba.cfg and Watomsk-GBA.ovl)",
     "exception.prx and ku_bridge.prx: upstream's prebuilt modules from release/FrogGBA_v0.1.0.zip at the pinned commit; build everything with native-emulators/build_native.sh froggba"
   ]
 }

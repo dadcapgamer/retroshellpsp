@@ -27,6 +27,9 @@ Snes9xTYL (SNES), in `ms0:/RETROSHELL/emulators/`. They are optional: gpSP and
 Snes9x 2005 stay the defaults, and either native emulator can be picked per
 game from the core picker. FrogGBA requires a legally obtained GBA BIOS at
 `ms0:/RETROSHELL/system/gba_bios.bin`; gpSP does not need this file.
+When FrogGBA is launched from RetroShell, its bundled Watomsk GBA border is
+enabled automatically. It can be changed or disabled from FrogGBA's native
+overlay settings during the session.
 Snes9xTYL shows its licence disclaimer once on first launch.
 
 To add cover art, place a PNG or JPG beside the ROM using the same base name:
