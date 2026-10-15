@@ -114,6 +114,9 @@ Do not submit copyrighted ROMs, BIOS files, or keys.
 
 RetroShell was built with Fable and OpenAI Codex. Product and interface design by Dadcap.
 
+GB, GBC, and GBA border artwork adapted from
+[Watomsk/Overlays](https://github.com/Watomsk/Overlays).
+
 ## License
 
 RetroShell is MIT licensed. Emulator cores and vendored libraries retain their upstream licenses. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
