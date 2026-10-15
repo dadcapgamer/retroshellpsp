@@ -16,6 +16,11 @@
 #include "runtime/log.h"
 
 #include "miniz.h"
+#include "stb_image.h"
+
+#include "rs_asset_border_gb_png.h"
+#include "rs_asset_border_gba_png.h"
+#include "rs_asset_border_gbc_png.h"
 
 #include <pspctrl.h>
 #include <pspgu.h>
@@ -97,6 +102,31 @@ constexpr s32 GBA_BIOS_BYTES = 16 * 1024;
  * a small, predictable ceiling and let the user archive/remove them. */
 constexpr int MAX_SCREENSHOTS = 50;
 
+struct BorderAsset {
+    const unsigned char* bytes;
+    unsigned length;
+    float x, y, w, h;
+};
+
+bool borderAssetFor(db::System system, BorderAsset& out) {
+    switch (system) {
+        case db::System::GameBoy:
+            out = {rs_asset_border_gb_png, rs_asset_border_gb_png_len,
+                   120.f, 28.f, 240.f, 216.f};
+            return true;
+        case db::System::GameBoyColor:
+            out = {rs_asset_border_gbc_png, rs_asset_border_gbc_png_len,
+                   120.f, 28.f, 240.f, 216.f};
+            return true;
+        case db::System::GBA:
+            out = {rs_asset_border_gba_png, rs_asset_border_gba_png_len,
+                   60.f, 16.f, 360.f, 240.f};
+            return true;
+        default:
+            return false;
+    }
+}
+
 }  // namespace
 
 const char* GameSession::scaleOptionName(ScaleMode mode) {
@@ -104,6 +134,7 @@ const char* GameSession::scaleOptionName(ScaleMode mode) {
         case ScaleMode::FourThree: return "4:3";
         case ScaleMode::Stretch:   return "stretch";
         case ScaleMode::OneToOne:  return "1:1";
+        case ScaleMode::Border:    return "border";
         default:                   return "fit";
     }
 }
@@ -113,8 +144,53 @@ const char* GameSession::scaleDisplayName(ScaleMode mode) {
         case ScaleMode::FourThree: return "4:3";
         case ScaleMode::Stretch:   return "Stretch";
         case ScaleMode::OneToOne:  return "1:1";
+        case ScaleMode::Border:    return "Border";
         default:                   return "Original";
     }
+}
+
+bool GameSession::loadBorder() {
+    BorderAsset asset{};
+    if (!borderAssetFor(m_game.system, asset)) return false;
+
+    int w = 0, h = 0, channels = 0;
+    stbi_uc* rgba = stbi_load_from_memory(
+        asset.bytes, int(asset.length), &w, &h, &channels, 4);
+    if (!rgba || w != RS_SCREEN_W || h != RS_SCREEN_H) {
+        if (rgba) stbi_image_free(rgba);
+        RS_LOGW("border: invalid asset for %s",
+                db::systemInfo(m_game.system).coreId);
+        return false;
+    }
+
+    const size_t pixelCount = size_t(w) * size_t(h);
+    auto* packed = static_cast<u16*>(std::malloc(pixelCount * sizeof(u16)));
+    if (!packed) {
+        stbi_image_free(rgba);
+        return false;
+    }
+    for (size_t i = 0; i < pixelCount; ++i) {
+        const u8 r = rgba[i * 4 + 0];
+        const u8 g = rgba[i * 4 + 1];
+        const u8 b = rgba[i * 4 + 2];
+        const u8 a = rgba[i * 4 + 3];
+        packed[i] = u16((r >> 4) | ((g >> 4) << 4) |
+                        ((b >> 4) << 8) | ((a >> 4) << 12));
+    }
+    stbi_image_free(rgba);
+    const bool ok = gfx::Renderer::createTexture(
+        m_borderTex, w, h, GU_PSM_4444, packed, /*dynamic=*/false);
+    std::free(packed);
+    if (!ok) {
+        RS_LOGW("border: texture allocation failed for %s",
+                db::systemInfo(m_game.system).coreId);
+        return false;
+    }
+    m_borderX = asset.x;
+    m_borderY = asset.y;
+    m_borderW = asset.w;
+    m_borderH = asset.h;
+    return true;
 }
 
 bool GameSession::injectFailure(const char* stage) const {
@@ -173,16 +249,22 @@ bool GameSession::startCore(App& app) {
     const char* core = m_coreName.c_str();
     m_scopeGame = cfg::gameScoped(m_game.pathHash);
     const std::string scale = cfg::option(m_game.pathHash, core, "scale");
-    m_scaleMode = scale == "1:1"     ? ScaleMode::OneToOne
-                : scale == "4:3"     ? ScaleMode::FourThree
-                : scale == "stretch" ? ScaleMode::Stretch
-                                     : ScaleMode::Fit;
+    BorderAsset border{};
+    const bool hasBorder = borderAssetFor(m_game.system, border);
+    m_scaleMode = scale == "1:1"       ? ScaleMode::OneToOne
+                : scale == "4:3"       ? ScaleMode::FourThree
+                : scale == "stretch"   ? ScaleMode::Stretch
+                : scale == "border" && hasBorder ? ScaleMode::Border
+                : scale.empty() && hasBorder      ? ScaleMode::Border
+                                                  : ScaleMode::Fit;
     m_nearestFilter =
         cfg::option(m_game.pathHash, core, "filter") == "nearest";
 
     /* 1. Evict frontend caches (the arena/vram space becomes the core's). */
     app.evictForCore();
     m_frontendEvicted = true;
+    if (hasBorder && !loadBorder() && m_scaleMode == ScaleMode::Border)
+        m_scaleMode = ScaleMode::Fit;
 
 #ifndef RS_STATIC_CORES
     /* 2. PRX mode: the module loader needs partition space, so the arena
@@ -462,6 +544,7 @@ void GameSession::teardown(App& app, bool restoreFrontend) {
         m_romLoaded = false;
     }
     gfx::Renderer::freeTexture(m_frameTex);
+    gfx::Renderer::freeTexture(m_borderTex);
     gfx::Renderer::freeTexture(m_thumbTex);
 
     /* Unload the core BEFORE releasing the arena: the core's shutdown()
@@ -1041,10 +1124,13 @@ void GameSession::setScope(App& app, bool game) {
         cfg::setGameOption(hash, "scale", "");
         cfg::setGameOption(hash, "filter", "");
         const std::string scale = cfg::coreOption(core, "scale");
-        m_scaleMode = scale == "1:1"     ? ScaleMode::OneToOne
-                    : scale == "4:3"     ? ScaleMode::FourThree
-                    : scale == "stretch" ? ScaleMode::Stretch
-                                         : ScaleMode::Fit;
+        const bool hasBorder = m_borderTex.valid();
+        m_scaleMode = scale == "1:1"       ? ScaleMode::OneToOne
+                    : scale == "4:3"       ? ScaleMode::FourThree
+                    : scale == "stretch"   ? ScaleMode::Stretch
+                    : scale == "border" && hasBorder ? ScaleMode::Border
+                    : scale.empty() && hasBorder      ? ScaleMode::Border
+                                                      : ScaleMode::Fit;
         m_nearestFilter = cfg::coreOption(core, "filter") == "nearest";
         app.toast("Settings now follow this emulator");
     }
@@ -1167,7 +1253,8 @@ void GameSession::updateMenu(App& app) {
 
     const auto cycleAspect = [this](int direction) {
         int mode = static_cast<int>(m_scaleMode);
-        mode = (mode + direction + 4) % 4;
+        const int count = m_borderTex.valid() ? 5 : 4;
+        mode = (mode + direction + count) % count;
         m_scaleMode = static_cast<ScaleMode>(mode);
         m_videoOptionsDirty = true;
     };
@@ -1381,7 +1468,13 @@ void GameSession::drawFrame(App& app) {
 
     /* Scale mode resolved at launch (see m_scaleMode). */
     float dw, dh;
-    if (m_scaleMode == ScaleMode::OneToOne) {
+    float dx = 0.f, dy = 0.f;
+    if (m_scaleMode == ScaleMode::Border && m_borderTex.valid()) {
+        dx = m_borderX;
+        dy = m_borderY;
+        dw = m_borderW;
+        dh = m_borderH;
+    } else if (m_scaleMode == ScaleMode::OneToOne) {
         dw = f.width;
         dh = f.height;
     } else if (m_scaleMode == ScaleMode::Stretch) {
@@ -1401,10 +1494,19 @@ void GameSession::drawFrame(App& app) {
         dw = f.width * s;
         dh = f.height * s;
     }
+    if (m_scaleMode != ScaleMode::Border || !m_borderTex.valid()) {
+        dx = (RS_SCREEN_W - dw) / 2.f;
+        dy = (RS_SCREEN_H - dh) / 2.f;
+    }
     r.setTexFilter(m_nearestFilter ? gfx::TexFilter::Nearest
                                    : gfx::TexFilter::Linear);
-    r.sprite(m_frameTex, 0, 0, f.width, f.height, (RS_SCREEN_W - dw) / 2.f,
-             (RS_SCREEN_H - dh) / 2.f, dw, dh, rsHex(0xFFFFFF));
+    r.sprite(m_frameTex, 0, 0, f.width, f.height,
+             dx, dy, dw, dh, rsHex(0xFFFFFF));
+    if (m_scaleMode == ScaleMode::Border && m_borderTex.valid()) {
+        r.setTexFilter(gfx::TexFilter::Nearest);
+        r.sprite(m_borderTex, 0, 0, RS_SCREEN_W, RS_SCREEN_H,
+                 0, 0, RS_SCREEN_W, RS_SCREEN_H, rsHex(0xFFFFFF));
+    }
     r.setTexFilter(gfx::TexFilter::Linear);
 }
 

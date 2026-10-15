@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="272" viewBox="0 0 480 272">
+  <defs>
+    <mask id="screen-cutout">
+      <rect width="480" height="272" fill="white"/>
+      <rect x="120" y="28" width="240" height="216" rx="4" fill="black"/>
+    </mask>
+  </defs>
+  <g mask="url(#screen-cutout)">
+    <rect width="480" height="272" fill="#604783"/>
+    <rect x="0" y="0" width="90" height="272" fill="#553d78"/>
+    <rect x="390" y="0" width="90" height="272" fill="#553d78"/>
+    <rect x="92" y="5" width="296" height="262" rx="18" fill="#20232a"/>
+    <rect x="96" y="9" width="288" height="254" rx="15" fill="none" stroke="#3a3e47" stroke-width="2"/>
+    <rect x="115" y="23" width="250" height="226" rx="8" fill="#111318"/>
+    <rect x="119" y="27" width="242" height="218" rx="5" fill="none" stroke="#555b65"/>
+    <circle cx="105" cy="67" r="3.5" fill="#cb3347"/>
+    <circle cx="104" cy="66" r="1.3" fill="#ff9aa7"/>
+    <text x="105" y="79" fill="#9da2ad" font-family="Arial, sans-serif" font-size="6" text-anchor="middle" letter-spacing="0.7">POWER</text>
+    <text x="240" y="18" fill="#aeb3bd" font-family="Arial, sans-serif" font-size="7" font-weight="700" text-anchor="middle" letter-spacing="1.5">COLOR DISPLAY</text>
+    <g transform="translate(218 254)">
+      <rect x="0" y="0" width="7" height="3" rx="1.5" fill="#63a86c"/>
+      <rect x="9" y="0" width="7" height="3" rx="1.5" fill="#d8b545"/>
+      <rect x="18" y="0" width="7" height="3" rx="1.5" fill="#d16a53"/>
+      <rect x="27" y="0" width="7" height="3" rx="1.5" fill="#a45b9b"/>
+      <rect x="36" y="0" width="7" height="3" rx="1.5" fill="#597dc1"/>
+    </g>
+    <text x="240" y="265" fill="#aeb3bd" font-family="Arial, sans-serif" font-size="6" font-style="italic" font-weight="700" text-anchor="middle" letter-spacing="1.2">POCKET COLOR</text>
+    <path d="M30 34h34M30 40h34M30 46h34" stroke="#49346a" stroke-width="2" stroke-linecap="round"/>
+    <path d="M416 226h34M416 232h34M416 238h34" stroke="#49346a" stroke-width="2" stroke-linecap="round"/>
+  </g>
+</svg>

@@ -63,6 +63,7 @@ private:
     void restartWithSettings(App& app, int slot);
     void drawFrame(App& app);
     void drawMenu(App& app);
+    bool loadBorder();
     void openMenu(App& app);
     void resumeGame(bool discardAudio = false);
     void primeAudio();
@@ -103,7 +104,7 @@ private:
     /* Video options resolved once at launch — reading them per frame means
      * a Memory Stick read + JSON parse every frame, which is invisible in
      * PPSSPP but drops real hardware to a couple of fps. */
-    enum class ScaleMode { Fit, FourThree, Stretch, OneToOne };
+    enum class ScaleMode { Fit, FourThree, Stretch, OneToOne, Border };
     static const char* scaleOptionName(ScaleMode mode);
     static const char* scaleDisplayName(ScaleMode mode);
     ScaleMode m_scaleMode = ScaleMode::Fit;
@@ -111,8 +112,11 @@ private:
     bool m_videoOptionsDirty = false;
 
     gfx::Texture m_frameTex;
+    gfx::Texture m_borderTex;
     u16 m_frameW = 0, m_frameH = 0;
     u32 m_uploadedFrameSequence = UINT32_MAX;
+    float m_borderX = 0.f, m_borderY = 0.f;
+    float m_borderW = 0.f, m_borderH = 0.f;
 
     int m_menuRow = RS_PAUSE_RESUME;
     int m_slot = 0;

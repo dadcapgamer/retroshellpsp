@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="272" viewBox="0 0 480 272">
+  <defs>
+    <mask id="screen-cutout">
+      <rect width="480" height="272" fill="white"/>
+      <rect x="120" y="28" width="240" height="216" rx="4" fill="black"/>
+    </mask>
+  </defs>
+  <g mask="url(#screen-cutout)">
+    <rect width="480" height="272" fill="#8b8d82"/>
+    <rect x="0" y="0" width="92" height="272" fill="#7e8076"/>
+    <rect x="388" y="0" width="92" height="272" fill="#7e8076"/>
+    <rect x="92" y="6" width="296" height="260" rx="14" fill="#262b2d"/>
+    <rect x="96" y="10" width="288" height="252" rx="11" fill="none" stroke="#4c5352" stroke-width="2"/>
+    <rect x="115" y="23" width="250" height="226" rx="8" fill="#15191a"/>
+    <rect x="119" y="27" width="242" height="218" rx="5" fill="none" stroke="#69706c"/>
+    <circle cx="105" cy="70" r="4" fill="#b53b47"/>
+    <circle cx="104" cy="69" r="1.5" fill="#f4939a"/>
+    <text x="105" y="82" fill="#aeb5b0" font-family="Arial, sans-serif" font-size="6" text-anchor="middle" letter-spacing="0.7">POWER</text>
+    <text x="240" y="18" fill="#b9bfbb" font-family="Arial, sans-serif" font-size="7" font-weight="700" text-anchor="middle" letter-spacing="1.6">DOT MATRIX DISPLAY</text>
+    <rect x="215" y="253" width="50" height="2" rx="1" fill="#783d6c"/>
+    <text x="240" y="263" fill="#b9bfbb" font-family="Arial, sans-serif" font-size="6" font-style="italic" font-weight="700" text-anchor="middle" letter-spacing="1.1">STEREO SOUND</text>
+    <path d="M30 34h34M30 40h34M30 46h34" stroke="#73766d" stroke-width="2" stroke-linecap="round"/>
+    <path d="M416 226h34M416 232h34M416 238h34" stroke="#73766d" stroke-width="2" stroke-linecap="round"/>
+  </g>
+</svg>

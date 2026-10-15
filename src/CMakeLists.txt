@@ -97,6 +97,9 @@ rs_embed_assets(retrosuite
   ${CMAKE_SOURCE_DIR}/assets/fonts/font_tiny.rsf
   ${CMAKE_SOURCE_DIR}/assets/SPLASH_MASK.PNG
   ${CMAKE_SOURCE_DIR}/assets/branding/retroshell-logo-light-2x.png
+  ${CMAKE_SOURCE_DIR}/assets/overlays/border-gb.png
+  ${CMAKE_SOURCE_DIR}/assets/overlays/border-gbc.png
+  ${CMAKE_SOURCE_DIR}/assets/overlays/border-gba.png
   ${CMAKE_SOURCE_DIR}/assets/icons/consoles/game-boy-24.png
   ${CMAKE_SOURCE_DIR}/assets/icons/consoles/game-boy-48.png
   ${CMAKE_SOURCE_DIR}/assets/icons/consoles/game-boy-64.png
