@@ -1,8 +1,9 @@
 # RetroShell handheld borders
 
 These GB, GBC, and GBA borders are original RetroShell vector assets. They use
-hardware-inspired proportions, colors, controls, and model-name typography
-without copying game artwork or third-party overlay packs.
+the handhelds' native display proportions inside a dark screen-lens bezel, with
+model-name typography on the lower bezel and no game artwork or console-body
+decoration.
 
 The source SVGs and generated PNGs are covered by RetroShell's root MIT
 license.

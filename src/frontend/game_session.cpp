@@ -112,15 +112,15 @@ bool borderAssetFor(db::System system, BorderAsset& out) {
     switch (system) {
         case db::System::GameBoy:
             out = {rs_asset_border_gb_png, rs_asset_border_gb_png_len,
-                   120.f, 28.f, 240.f, 216.f};
+                   120.f, 8.f, 240.f, 216.f};
             return true;
         case db::System::GameBoyColor:
             out = {rs_asset_border_gbc_png, rs_asset_border_gbc_png_len,
-                   120.f, 28.f, 240.f, 216.f};
+                   120.f, 8.f, 240.f, 216.f};
             return true;
         case db::System::GBA:
             out = {rs_asset_border_gba_png, rs_asset_border_gba_png_len,
-                   60.f, 16.f, 360.f, 240.f};
+                   75.f, 8.f, 330.f, 220.f};
             return true;
         default:
             return false;

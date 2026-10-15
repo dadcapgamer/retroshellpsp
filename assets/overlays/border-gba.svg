@@ -1,31 +1,19 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="480" height="272" viewBox="0 0 480 272">
   <defs>
+    <linearGradient id="lens" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#252b32"/>
+      <stop offset="1" stop-color="#0c0f13"/>
+    </linearGradient>
     <mask id="screen-cutout">
       <rect width="480" height="272" fill="white"/>
-      <rect x="60" y="16" width="360" height="240" rx="3" fill="black"/>
+      <rect x="75" y="8" width="330" height="220" rx="2" fill="black"/>
     </mask>
   </defs>
   <g mask="url(#screen-cutout)">
-    <rect width="480" height="272" fill="#525596"/>
-    <path d="M0 54Q0 16 39 7L87 0h306l48 7q39 9 39 47v164q0 38-39 47l-48 7H87l-48-7Q0 256 0 218z" fill="#595ca1"/>
-    <path d="M5 59Q5 24 41 15L89 7h302l48 8q36 9 36 44" fill="none" stroke="#7779b7" stroke-width="2"/>
-    <path d="M5 213q0 35 36 44l48 8h302l48-8q36-9 36-44" fill="none" stroke="#3e417d" stroke-width="2"/>
-
-    <rect x="47" y="3" width="386" height="266" rx="25" fill="#20232b"/>
-    <rect x="51" y="7" width="378" height="258" rx="21" fill="#30343e"/>
-    <rect x="56" y="12" width="368" height="248" rx="8" fill="#111419"/>
-    <rect x="59" y="15" width="362" height="242" rx="5" fill="none" stroke="#717985" stroke-width="2"/>
-
-    <g fill="#353875" stroke="#7779b7" stroke-width="1.3">
-      <path d="M12 128h9v-9h8v9h9v8h-9v9h-8v-9h-9z"/>
-      <circle cx="454" cy="124" r="9"/>
-      <circle cx="466" cy="143" r="9"/>
-    </g>
-    <path d="M13 47h22M445 47h22" stroke="#3e417d" stroke-width="4" stroke-linecap="round"/>
-    <circle cx="440" cy="34" r="3.5" fill="#68c76f"/>
-    <circle cx="439" cy="33" r="1.2" fill="#c9ffd0"/>
-    <text x="449" y="36" fill="#d0d3dc" font-family="Arial, Helvetica, sans-serif" font-size="5.2" font-weight="700" letter-spacing=".35">POWER</text>
-
-    <text x="240" y="267" fill="#c7cad2" font-family="Arial, Helvetica, sans-serif" font-size="9" font-weight="700" font-style="italic" text-anchor="middle" letter-spacing="-.1">GAME BOY ADVANCE</text>
+    <rect width="480" height="272" fill="#080a0d"/>
+    <rect x="66" y="0" width="348" height="270" rx="9" fill="url(#lens)"/>
+    <rect x="70" y="3" width="340" height="230" rx="6" fill="#11161b" stroke="#454d55" stroke-width="2"/>
+    <path d="M71 4h338" stroke="#68717a" stroke-width="1" opacity=".6"/>
+    <text x="240" y="259" fill="#b8c0ca" font-family="Trebuchet MS, Arial, Helvetica, sans-serif" font-size="15" font-weight="700" font-style="italic" text-anchor="middle" letter-spacing="-.6">GAME BOY ADVANCE</text>
   </g>
 </svg>

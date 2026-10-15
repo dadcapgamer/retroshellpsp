@@ -1,32 +1,26 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="480" height="272" viewBox="0 0 480 272">
   <defs>
+    <linearGradient id="lens" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#252b32"/>
+      <stop offset="1" stop-color="#0c0f13"/>
+    </linearGradient>
     <mask id="screen-cutout">
       <rect width="480" height="272" fill="white"/>
-      <rect x="120" y="28" width="240" height="216" rx="3" fill="black"/>
+      <rect x="120" y="8" width="240" height="216" rx="2" fill="black"/>
     </mask>
   </defs>
   <g mask="url(#screen-cutout)">
-    <rect width="480" height="272" fill="#5b3c8f"/>
-    <path d="M0 18Q0 0 20 0h440q20 0 20 18v236q0 18-20 18H20Q0 272 0 254z" fill="#65439b"/>
-    <path d="M14 4h452M20 268h440" stroke="#8061ad" stroke-width="2" opacity=".75"/>
-    <path d="M29 0v272M451 0v272" stroke="#432a70" opacity=".48"/>
-
-    <path d="M91 8Q91 2 99 2h282q8 0 8 8v246q0 10-10 10H101q-10 0-10-10z" fill="#292b34"/>
-    <path d="M97 10Q97 7 103 7h274q6 0 6 6v239q0 8-8 8H105q-8 0-8-8z" fill="#383b45"/>
-    <rect x="115" y="23" width="250" height="226" rx="8" fill="#15171d"/>
-    <rect x="118" y="26" width="244" height="220" rx="5" fill="none" stroke="#666b76" stroke-width="2"/>
-
-    <circle cx="105" cy="70" r="4" fill="#d02c43"/>
-    <circle cx="104" cy="69" r="1.4" fill="#ff9aa7"/>
-    <text x="105" y="82" fill="#aeb3bc" font-family="Arial, Helvetica, sans-serif" font-size="5.6" text-anchor="middle" letter-spacing=".45">POWER</text>
-
-    <text x="177" y="261" fill="#bec2ca" font-family="Arial, Helvetica, sans-serif" font-size="5.5" font-weight="700" font-style="italic" text-anchor="end">Nintendo</text>
-    <text x="181" y="262" fill="#bec2ca" font-family="Arial, Helvetica, sans-serif" font-size="10.5" font-weight="700" font-style="italic" letter-spacing="-.3">GAME BOY</text>
-    <text x="244" y="262" fill="#7fbd48" font-family="Arial, Helvetica, sans-serif" font-size="9" font-weight="700" font-style="italic">C</text>
-    <text x="251" y="262" fill="#e3b93d" font-family="Arial, Helvetica, sans-serif" font-size="9" font-weight="700" font-style="italic">O</text>
-    <text x="259" y="262" fill="#dc6a3d" font-family="Arial, Helvetica, sans-serif" font-size="9" font-weight="700" font-style="italic">L</text>
-    <text x="265" y="262" fill="#b8568d" font-family="Arial, Helvetica, sans-serif" font-size="9" font-weight="700" font-style="italic">O</text>
-    <text x="273" y="262" fill="#4d85c5" font-family="Arial, Helvetica, sans-serif" font-size="9" font-weight="700" font-style="italic">R</text>
-    <path d="M18 56h42M18 62h42M420 210h42M420 216h42" stroke="#4c2f7b" stroke-width="2" stroke-linecap="round"/>
+    <rect width="480" height="272" fill="#080a0d"/>
+    <rect x="111" y="0" width="258" height="270" rx="9" fill="url(#lens)"/>
+    <rect x="115" y="3" width="250" height="226" rx="6" fill="#11161b" stroke="#454d55" stroke-width="2"/>
+    <path d="M116 4h248" stroke="#68717a" stroke-width="1" opacity=".6"/>
+    <g font-family="Trebuchet MS, Arial, Helvetica, sans-serif" font-weight="700" font-style="italic" text-anchor="middle">
+      <text x="206" y="258" fill="#76c9ed" font-size="17" letter-spacing="-.8">GAME BOY</text>
+      <text x="256" y="258" fill="#d2528b" font-size="17">C</text>
+      <text x="269" y="258" fill="#74bc4f" font-size="17">O</text>
+      <text x="283" y="258" fill="#f0ca45" font-size="17">L</text>
+      <text x="294" y="258" fill="#ec7144" font-size="17">O</text>
+      <text x="308" y="258" fill="#4e94cd" font-size="17">R</text>
+    </g>
   </g>
 </svg>
