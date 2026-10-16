@@ -11,7 +11,7 @@ diff --git a/source/src/gui.c b/source/src/gui.c
    char *ext;
    
    /*FILE *debug_log = fopen("froggba_debug.log", "a");
-@@ -358,13 +361,25 @@ void init_overlays_at_boot(void)
+@@ -358,13 +361,26 @@ void init_overlays_at_boot(void)
    if (dir >= 0)
    {
 -    // Scan for PNG files in the overlay directory
@@ -24,6 +24,7 @@ diff --git a/source/src/gui.c b/source/src/gui.c
      {
 +      memset(&dirent, 0, sizeof(dirent));
 +      memset(&fat_dirent, 0, sizeof(fat_dirent));
++      fat_dirent.size = sizeof(fat_dirent);
 +      dirent.d_private = &fat_dirent;
 +      read_result = sceIoDread(dir, &dirent);
 +      if (read_result <= 0)
@@ -41,7 +42,7 @@ diff --git a/source/src/gui.c b/source/src/gui.c
 +      ext = strrchr(entry_name, '.');
        if (ext && (strcasecmp(ext, ".ovl") == 0 || strcasecmp(ext, ".png") == 0))
        {
-@@ -381,7 +395,7 @@ void init_overlays_at_boot(void)
+@@ -381,7 +396,7 @@ void init_overlays_at_boot(void)
          }*/
          
          // Copy filename and remove extension for display
@@ -50,6 +51,18 @@ diff --git a/source/src/gui.c b/source/src/gui.c
          overlay_names[num_overlays][sizeof(overlay_names[num_overlays]) - 1] = '\0';
          
          // Remove .ovl or .png extension from display name
+diff --git a/source/src/main.c b/source/src/main.c
+--- a/source/src/main.c
++++ b/source/src/main.c
+@@ -852,6 +852,7 @@ int user_main(int argc, char *argv[])
+     for (overlay_index = 1; overlay_index < num_overlays; overlay_index++)
+     {
+-      if (strcmp(overlay_names[overlay_index], "Watomsk-GBA") == 0)
++      if (strcmp(overlay_names[overlay_index], "Watomsk-GBA") == 0 ||
++          strncasecmp(overlay_names[overlay_index], "WATOMS", 6) == 0)
+       {
+         option_overlay_enabled = 1;
+         option_overlay_selected = overlay_index;
 diff --git a/source/src/video.c b/source/src/video.c
 --- a/source/src/video.c
 +++ b/source/src/video.c
