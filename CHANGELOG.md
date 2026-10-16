@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- **Snes9xTYL controls, HOME and the pause menu work again.** With the
+  Accurate soft renderer (the default since beta.5) Snes9xTYL's frame
+  limiter spun instead of sleeping, so its emulation thread never paused
+  and starved lower-priority threads, including homehook.prx's HOME reader
+  and the exit callback. On a real PSP, L+R+Select, HOME and the controls
+  stopped responding and the game could not be left. The limiter now sleeps
+  through its wait and yields briefly every frame (Snes9xTYL 1.9.01-rs8).
+
 ## v1.0.0-beta.5
 
 Everything since beta.4: the Astra shell redesign, a maturity pass, visual

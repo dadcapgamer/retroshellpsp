@@ -16,7 +16,7 @@ index cb84cc7..b23e537 100644
  
  
 diff --git a/psp/psp.cpp b/psp/psp.cpp
-index 25a8683..f2bf5d3 100644
+index 25a8683..a82370e 100644
 --- a/psp/psp.cpp
 +++ b/psp/psp.cpp
 @@ -171,7 +171,15 @@ PSP_MAIN_THREAD_STACK_SIZE_KB(256); /* smaller stack for kernel thread */
@@ -128,7 +128,38 @@ index 25a8683..f2bf5d3 100644
  
  	// NET STUFF HERE
  	//  Standard PACKET is 8 bytes.
-@@ -1796,14 +1868,17 @@ const char *S9xGetFilename( const char *e )
+@@ -1676,6 +1748,16 @@ void S9xSyncSpeed()
+ 
+ 	s_TotalFrame++;
+ 
++#ifdef RETROSHELL_ADAPTER
++	/* The emulation thread runs at priority 0x9 and its frame limiter used
++	 * to spin, so with the Accurate soft renderer (no GE waits) it never
++	 * blocked and starved every lower-priority thread: homehook.prx's HOME
++	 * reader and the exit callback (both 0x11) stopped running, and on
++	 * hardware HOME, the pause menu and the controls stopped responding. A
++	 * short sleep each frame lets them run. */
++	sceKernelDelayThread(100);
++#endif
++
+ 	os9x_updatepadcpt++;
+ 
+ 	if (os9x_netplay) {
+@@ -1736,6 +1818,13 @@ void S9xSyncSpeed()
+ 		  	//wait to sync
+ 		  	waited = (now.tv_sec - next1.tv_sec) * 1000000 + now.tv_usec - next1.tv_usec;
+ 		  	while ( timercmp( &next1, &now, > ) ){
++#ifdef RETROSHELL_ADAPTER
++					/* Sleep through the wait instead of spinning, so the
++					 * spare frame time goes to the threads above. */
++					const long remain = (next1.tv_sec - now.tv_sec) * 1000000 +
++					                    next1.tv_usec - now.tv_usec;
++					sceKernelDelayThread(remain > 1000 ? remain - 500 : 100);
++#endif
+ 					sceKernelLibcGettimeofday( &now, 0 );
+ 		  	}
+ 		  }
+@@ -1796,14 +1885,17 @@ const char *S9xGetFilename( const char *e )
  ////////////////////////////////////////////////////////////////////////////////////////
  //
  ////////////////////////////////////////////////////////////////////////////////////////
@@ -150,7 +181,7 @@ index 25a8683..f2bf5d3 100644
  	src = strrchr(Memory.ROMFilename, '/');
  	p = strrchr(src, '.');
  	while(src < p) *dst++ = *src++;
-@@ -1813,6 +1888,34 @@ const char *S9xGetSaveFilename( const char *e ) {
+@@ -1813,6 +1905,34 @@ const char *S9xGetSaveFilename( const char *e ) {
  	return (filename);
  }
  
@@ -185,7 +216,7 @@ index 25a8683..f2bf5d3 100644
  ////////////////////////////////////////////////////////////////////////////////////////
  //
  ////////////////////////////////////////////////////////////////////////////////////////
-@@ -2124,6 +2227,18 @@ void S9xInitDisplay(  )
+@@ -2124,6 +2244,18 @@ void S9xInitDisplay(  )
  //
  ////////////////////////////////////////////////////////////////////////////////////////
  void S9xExit (){
@@ -204,7 +235,7 @@ index 25a8683..f2bf5d3 100644
  	g_bLoop=0;
  #if 0
  	// Cleanup the games resources etc (if required)
-@@ -2237,6 +2352,9 @@ extern "C" {
+@@ -2237,6 +2369,9 @@ extern "C" {
  ////////////////////////////////////////////////////////////////////////////////////////
  void S9xProcessEvents( bool8 block ) {
  	static int cpt=0;
@@ -214,7 +245,7 @@ index 25a8683..f2bf5d3 100644
  	if (!(cpt&2047)) scePowerTick(0); //send powertick to avoid auto off
  	if (!(cpt&2047)) {//check every 34s
  		//check if battery is low
-@@ -2256,7 +2374,14 @@ void S9xProcessEvents( bool8 block ) {
+@@ -2256,7 +2391,14 @@ void S9xProcessEvents( bool8 block ) {
  		}
  		//initUSBdrivers();
  
@@ -229,7 +260,7 @@ index 25a8683..f2bf5d3 100644
  
  #ifndef FW3X
  		endUSBdrivers();
-@@ -2403,7 +2528,7 @@ void S9xProcessEvents( bool8 block ) {
+@@ -2403,7 +2545,7 @@ void S9xProcessEvents( bool8 block ) {
  		}
  		before_pause();
  
@@ -238,7 +269,7 @@ index 25a8683..f2bf5d3 100644
  			if (inputBox(s9xTYL_msg[MENU_STATE_CONFIRMLOAD])) {
  				msgBoxLines(s9xTYL_msg[MENU_STATE_ISLOADING], 10);
  				os9x_load(".zat");
-@@ -2486,7 +2611,15 @@ static void initvar_withdefault() {
+@@ -2486,7 +2628,15 @@ static void initvar_withdefault() {
  
  	os9x_gammavalue=0;
  	os9x_fastsprite=0;
@@ -254,7 +285,7 @@ index 25a8683..f2bf5d3 100644
  	os9x_smoothing=1;
  	os9x_fskipvalue=0;
  	os9x_autofskip_MaxSkipFrames=9;
-@@ -2642,6 +2775,14 @@ static int user_main(SceSize args, void* argp);
+@@ -2642,6 +2792,14 @@ static int user_main(SceSize args, void* argp);
  //
  ////////////////////////////////////////////////////////////////////////////////////////
  int main(int argc,char **argv) {
@@ -269,7 +300,7 @@ index 25a8683..f2bf5d3 100644
  	// Kernel mode thread
  	/* Install our custom exception handler. If this was NULL then the default would be used */
  #ifndef NOKERNEL
-@@ -2666,6 +2807,24 @@ int main(int argc,char **argv) {
+@@ -2666,6 +2824,24 @@ int main(int argc,char **argv) {
  	launch_rom[0]=0;
  	if (argc > 1 && argv[1] && strlen(argv[1]) < sizeof(launch_rom))
  		strcpy(launch_rom, argv[1]);
@@ -294,7 +325,7 @@ index 25a8683..f2bf5d3 100644
    /* Clear the existing profile regs */
  	//pspDebugProfilerClear();
  	/* Enable profiling */
-@@ -2759,9 +2918,35 @@ int main(int argc,char **argv) {
+@@ -2759,9 +2935,35 @@ int main(int argc,char **argv) {
              PSP_THREAD_ATTR_USER|PSP_THREAD_ATTR_VFPU, NULL);
  
    // start user thread, then wait for it to do everything else
@@ -330,7 +361,7 @@ index 25a8683..f2bf5d3 100644
    sceKernelExitGame();
    return 0;
  }
-@@ -3781,7 +3966,7 @@ static int init_snes_rom() {
+@@ -3781,7 +3983,7 @@ static int init_snes_rom() {
  		msgBoxLines(s9xTYL_msg[ERR_LOADING_ROM], 60 * 2);
  		return -1;
  	} else {
@@ -339,7 +370,7 @@ index 25a8683..f2bf5d3 100644
  
  		if (!bypass_rom_settings) {
  			if (int ret=load_rom_settings(Memory.ROMCRC32)) {
-@@ -4041,6 +4226,14 @@ static int user_main(SceSize args, void* argp) {
+@@ -4041,6 +4243,14 @@ static int user_main(SceSize args, void* argp) {
  	if (launch_rom[0]) {
  		strcpy(rom_filename, launch_rom);
  		open_snes_rom();
@@ -354,7 +385,7 @@ index 25a8683..f2bf5d3 100644
  	} else if (os9x_autostart) {
  		strcpy(rom_filename, romPath);
  		strncat(rom_filename, lastRom, 255 - strlen(romPath));
-@@ -4270,3 +4463,202 @@ time_t GetCurrentTime()
+@@ -4270,3 +4480,202 @@ time_t GetCurrentTime()
  	cur_time += os9x_timezone * 60 + os9x_daylsavings * 3600;
  	return cur_time;
  }
