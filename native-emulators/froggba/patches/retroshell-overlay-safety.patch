@@ -1,0 +1,140 @@
+diff --git a/source/src/gui.c b/source/src/gui.c
+--- a/source/src/gui.c
++++ b/source/src/gui.c
+@@ -327,6 +327,9 @@ void init_overlays_at_boot(void)
+   u32 i;
+   SceUID dir;
+   SceIoDirent dirent;
++  SceIoFatDirentPrivate fat_dirent;
++  const char *entry_name;
++  int read_result;
+   char *ext;
+   
+   /*FILE *debug_log = fopen("froggba_debug.log", "a");
+@@ -358,13 +361,25 @@ void init_overlays_at_boot(void)
+   if (dir >= 0)
+   {
+-    // Scan for PNG files in the overlay directory
+-    while (sceIoDread(dir, &dirent) > 0 && num_overlays < MAX_OVERLAYS)
++    // SceIoDread treats a non-NULL d_private as long-filename storage. An
++    // uninitialized SceIoDirent therefore lets the FAT driver write through a
++    // garbage pointer and corrupt the stack. Supply valid storage on every
++    // call and prefer its long name over the DOS 8.3 fallback.
++    while (num_overlays < MAX_OVERLAYS)
+     {
++      memset(&dirent, 0, sizeof(dirent));
++      memset(&fat_dirent, 0, sizeof(fat_dirent));
++      dirent.d_private = &fat_dirent;
++      read_result = sceIoDread(dir, &dirent);
++      if (read_result <= 0)
++        break;
++
++      entry_name = fat_dirent.l_name[0] ? fat_dirent.l_name : dirent.d_name;
++
+       // Skip directories and hidden files
+-      if (!(dirent.d_stat.st_mode & FIO_SO_IFREG) || dirent.d_name[0] == '.')
++      if (!FIO_SO_ISREG(dirent.d_stat.st_mode) || entry_name[0] == '.')
+         continue;
+         
+       // Check if it's an OVL file (or PNG for backwards compatibility)
+-      ext = strrchr(dirent.d_name, '.');
++      ext = strrchr(entry_name, '.');
+       if (ext && (strcasecmp(ext, ".ovl") == 0 || strcasecmp(ext, ".png") == 0))
+       {
+@@ -381,7 +395,7 @@ void init_overlays_at_boot(void)
+         }*/
+         
+         // Copy filename and remove extension for display
+-        strncpy(overlay_names[num_overlays], dirent.d_name, sizeof(overlay_names[num_overlays]) - 1);
++        strncpy(overlay_names[num_overlays], entry_name, sizeof(overlay_names[num_overlays]) - 1);
+         overlay_names[num_overlays][sizeof(overlay_names[num_overlays]) - 1] = '\0';
+         
+         // Remove .ovl or .png extension from display name
+diff --git a/source/src/video.c b/source/src/video.c
+--- a/source/src/video.c
++++ b/source/src/video.c
+@@ -4588,6 +4588,9 @@ void load_overlay(const char *filename) 
+ {
+   SceUID fd;
+   char filepath[MAX_PATH];
++  SceOff file_size;
++  int path_length;
++  int bytes_read;
+   
+   
+   // Clear overlay first
+@@ -4604,6 +4607,10 @@ void load_overlay(const char *filename) 
+   }
+   
+   // Build full path to overlay file
+-  sprintf(filepath, "%s%s.ovl", dir_overlay, filename);
++  path_length = snprintf(filepath, sizeof(filepath), "%s%s.ovl",
++                         dir_overlay, filename);
++  if (path_length < 0 || path_length >= (int)sizeof(filepath)) {
++    return;
++  }
+   
+   /*debug_log = fopen("froggba_debug.log", "a");
+@@ -4613,6 +4620,20 @@ void load_overlay(const char *filename) 
+     fclose(debug_log);
+   }*/
+   
++  // Reject truncated or malformed payloads before allocating or reading.
++  fd = sceIoOpen(filepath, PSP_O_RDONLY, 0777);
++  if (fd < 0) {
++    overlay_loaded = 0;
++    return;
++  }
++  file_size = sceIoLseek(fd, 0, PSP_SEEK_END);
++  if (file_size != (SceOff)(OVERLAY_SIZE * sizeof(u16)) ||
++      sceIoLseek(fd, 0, PSP_SEEK_SET) < 0) {
++    sceIoClose(fd);
++    overlay_loaded = 0;
++    return;
++  }
++
+   // Allocate overlay buffer if not already allocated
+   if (overlay_buffer == NULL) {
+     overlay_buffer = (u16*)safe_malloc(OVERLAY_SIZE * sizeof(u16));
+@@ -4621,6 +4644,7 @@ void load_overlay(const char *filename) 
+         fprintf(debug_log, "load_overlay: Failed to allocate overlay buffer\n");
+         fclose(debug_log);
+       }*/
++      sceIoClose(fd);
+       return;
+     }
+   }
+@@ -4628,10 +4652,9 @@ void load_overlay(const char *filename) 
+   // Don't allocate cache arrays here - will be done dynamically after counting pixels
+ 
+-  // Try to open overlay file (using .ovl extension for raw overlay data)
+-  fd = sceIoOpen(filepath, PSP_O_RDONLY, 0777);
+-  if (fd >= 0) {
+-    // Read overlay data (480x272 pixels, 2 bytes per pixel = 261,120 bytes)
+-    int bytes_read = sceIoRead(fd, overlay_buffer, OVERLAY_SIZE * 2);
++  // Read the exact 480x272x16-bit payload. A short read must never be
++  // interpreted as pixels from uninitialized heap memory.
++  bytes_read = sceIoRead(fd, overlay_buffer, OVERLAY_SIZE * sizeof(u16));
++  if (bytes_read == (int)(OVERLAY_SIZE * sizeof(u16))) {
+     sceIoClose(fd);
+     
+     overlay_loaded = 1;
+@@ -4655,15 +4684,9 @@ void load_overlay(const char *filename) 
+       fclose(debug_log);
+     }*/
+   } else {
+-    // Try PNG format (would need proper PNG loading implementation)
+-    sprintf(filepath, "%s%s.png", dir_overlay, filename);
+-    // For now, PNG loading is not implemented
++    sceIoClose(fd);
+     overlay_loaded = 0;
+-    
+-    /*debug_log = fopen("froggba_debug.log", "a");
+-    if (debug_log) {
+-      fprintf(debug_log, "load_overlay: FAILED to open file\n");
+-      fclose(debug_log);
+-    }*/
++    free(overlay_buffer);
++    overlay_buffer = NULL;
+   }
+ }
