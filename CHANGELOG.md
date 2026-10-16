@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## v1.0.0-beta.6
+
+Hotfix for the bundled native emulators.
 
 - **Snes9xTYL controls, HOME and the pause menu work again.** With the
   Accurate soft renderer (the default since beta.5) Snes9xTYL's frame
