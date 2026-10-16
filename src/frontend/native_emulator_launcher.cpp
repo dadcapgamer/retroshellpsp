@@ -19,8 +19,10 @@ namespace rs::nativeemu {
 
 namespace {
 /* Where RetroShell's own EBOOT lives, so an adapter can chain-load back to
- * it. docs/INSTALL.md documents the first; the second covers the common
- * habit of renaming the folder in upper case. */
+ * it. The path RetroShell was booted from (argv[0]) comes first; these are
+ * the fallback when it is unavailable. docs/INSTALL.md documents the first;
+ * the second covers the common habit of renaming the folder in upper case. */
+char s_bootPath[256];
 const char* const LAUNCHER_PATHS[] = {
     "ms0:/PSP/GAME/RetroShell/EBOOT.PBP",
     "ms0:/PSP/GAME/RETROSHELL/EBOOT.PBP",
@@ -48,6 +50,18 @@ bool adapterResult(const char* adapter, char* out, size_t size) {
     return out[0] != 0;
 }
 }  // namespace
+
+void setLauncherPath(const char* path) {
+    s_bootPath[0] = '\0';
+    if (!path) return;
+    const size_t length = std::strlen(path);
+    /* Only a real EBOOT on a storage device; anything else (a host path
+     * under an emulator, an over-long name) falls back to the fixed list. */
+    if (length >= sizeof s_bootPath || std::strstr(path, ":/") == nullptr ||
+        length < 9 || std::strcmp(path + length - 9, "EBOOT.PBP") != 0)
+        return;
+    std::memcpy(s_bootPath, path, length + 1);
+}
 
 bool consumeReturnReceipt(char* notice, size_t size) {
     std::vector<u8> bytes;
@@ -142,20 +156,23 @@ int launch(const CoreInfo& core, const db::GameEntry& game) {
      * chain-loads back here on quit instead of dropping the user at the XMB,
      * which is what makes a process-replacement emulator still feel like part
      * of the shell. Emulators that ignore the extra argument are unaffected.
-     * sceKernelInitFileName reports where this process was booted from, so a
-     * non-standard install location still returns correctly. */
-    /* sceKernelInitFileName would report this exactly, but it lives in
-     * libpspkernel, whose kernel-mode stubs collide with newlib in a user
-     * module. Probing the documented install location is enough: when it is
-     * missing we simply pass no argv[2] and the adapter exits to the XMB as
-     * before, which is a graceful degradation rather than a failure. */
+     * RetroShell's own argv[0] says where it was booted from, so any install
+     * location works (ARK category folders, renamed folders); the documented
+     * locations are only probed when that is unavailable. Without a launcher
+     * no argv[2]/argv[3] are passed: the emulator still runs, but its
+     * adapter stays off and Exit drops to the XMB. */
     const char* launcher = nullptr;
+    if (s_bootPath[0] && fs::exists(s_bootPath)) launcher = s_bootPath;
     for (const char* candidate : LAUNCHER_PATHS) {
-        if (fs::exists(candidate)) {
-            launcher = candidate;
-            break;
-        }
+        if (launcher) break;
+        if (fs::exists(candidate)) launcher = candidate;
     }
+    /* Without a way back the adapter cannot switch on: no pause menu, and
+     * Exit drops to the XMB. Say so in the log. */
+    if (!launcher)
+        RS_LOGW("native: RetroShell's EBOOT not found (booted from '%s'); "
+                "the emulator will run without its RetroShell adapter",
+                s_bootPath[0] ? s_bootPath : "unknown");
     const size_t executableBytes = std::strlen(executable) + 1;
     const size_t romBytes = game.path.size() + 1;
     const size_t launcherBytes =

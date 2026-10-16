@@ -11,6 +11,10 @@
 
 namespace rs::nativeemu {
 
+/* Records where this RetroShell was booted from (main's argv[0]), so an
+ * adapter can chain-load back to it wherever it is installed. */
+void setLauncherPath(const char* path);
+
 /* Does not return on success. Returns the negative PSP loadexec error when
  * custom firmware/firmware policy rejects the executable. */
 int launch(const CoreInfo& core, const db::GameEntry& game);

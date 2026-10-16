@@ -9,6 +9,13 @@
   and the exit callback. On a real PSP, L+R+Select, HOME and the controls
   stopped responding and the game could not be left. The limiter now sleeps
   through its wait and yields briefly every frame (Snes9xTYL 1.9.01-rs8).
+- **Native emulators find their way back from any install folder.**
+  RetroShell told FrogGBA and Snes9xTYL where to return only when it was
+  installed in one of four fixed folders; anywhere else (an ARK category
+  folder, a renamed folder) their RetroShell adapter stayed off, so
+  L+R+Select did nothing, HOME opened the emulator's own menu and Exit
+  went to the XMB. RetroShell now passes the path it was actually started
+  from.
 
 ## v1.0.0-beta.5
 

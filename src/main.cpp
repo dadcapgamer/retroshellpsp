@@ -4,6 +4,7 @@
  * else lives in App (src/frontend/app.*).
  */
 #include "frontend/app.h"
+#include "frontend/native_emulator_launcher.h"
 #include "platform/psp/power.h"
 #include "runtime/arena.h"
 #include "runtime/log.h"
@@ -77,8 +78,10 @@ void setupCallbacks() {
 
 }  // namespace
 
-int main() {
+int main(int argc, char** argv) {
     setupCallbacks();
+    /* The firmware passes the booted EBOOT's full path as argv[0]. */
+    if (argc > 0 && argv && argv[0]) rs::nativeemu::setLauncherPath(argv[0]);
     rs::power::setCpuMhz(222);  /* menus don't need 333 */
 
     if (!rs::mem::init()) fatal("memory arena reservation failed");
