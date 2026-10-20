@@ -19,7 +19,8 @@
     "native-emulators/froggba/shared-save-library.patch",
     "native-emulators/froggba/patches/retroshell-overlay.patch",
     "native-emulators/froggba/patches/retroshell-overlay-safety.patch",
-    "native-emulators/froggba/patches/retroshell-overlay-control.patch"
+    "native-emulators/froggba/patches/retroshell-overlay-control.patch",
+    "native-emulators/froggba/patches/retroshell-overlay-layout.patch"
   ],
   "payload": [
     {
@@ -60,6 +61,7 @@
     "source/src/{gui,video}.c: safely enumerate FAT long filenames and validate overlay paths, sizes, and reads before rendering",
     "source/src/{main,video}.c: select the packaged overlay without relying on FAT directory names and paint the active framebuffer through uncached VRAM",
     "source/src/{main,gui}.c: expose a persistent Border on/off control in RetroShell's embedded FrogGBA pause menu",
+    "source/src/{main,gui}.c: restore the centered viewport and saved aspect ratio when the FrogGBA border is off",
     "source/src/input.c: invoke the embedded RetroShell pause surface with L+R+Select and record pause/resume state",
     "source/src/main.c: consume argv[2..3] and chain-load back to RetroShell on quit",
     "source/Makefile: compile the adapter shim and link pspsystemctrl_user",

@@ -1,0 +1,40 @@
+diff --git a/source/src/main.c b/source/src/main.c
+--- a/source/src/main.c
++++ b/source/src/main.c
+@@ -858,9 +858,16 @@ int user_main(int argc, char *argv[])
+       option_overlay_selected = 1;
+     }
+     option_overlay_offset_x = 120;
+-    option_overlay_offset_y = 40;
+     option_screen_scale = SCALED_X15_GU;
+-    option_aspect_ratio = 0;
++    if (option_overlay_enabled)
++    {
++      option_overlay_offset_y = 40;
++      option_aspect_ratio = 0;
++    }
++    else
++    {
++      option_overlay_offset_y = 56;
++    }
+     set_gba_resolution();
+   }
+   
+diff --git a/source/src/gui.c b/source/src/gui.c
+--- a/source/src/gui.c
++++ b/source/src/gui.c
+@@ -460,7 +460,14 @@ static void overlay_enabled_changed(void)
+ {
+   extern int overlay_needs_update;
+   extern void load_overlay(const char *filename);
++  extern void set_gba_resolution(void);
+   extern char overlay_names[][64];
++
++  option_overlay_offset_x = 120;
++  option_overlay_offset_y = option_overlay_enabled ? 40 : 56;
++  if (option_overlay_enabled)
++    option_aspect_ratio = 0;
++  set_gba_resolution();
+   
+   /*FILE *debug_log = fopen("froggba_debug.log", "a");
+   if (debug_log) {
