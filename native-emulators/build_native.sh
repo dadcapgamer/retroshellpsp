@@ -52,7 +52,8 @@ case "$NAME" in
     unzip -q -j -o "$SRC/release/FrogGBA_v0.1.0.zip" \
       PSP/GAME/FrogGBA/exception.prx PSP/GAME/FrogGBA/ku_bridge.prx -d "$STAGE"
     cp "$ROOT/native-emulators/froggba/files/dir.ini" \
-       "$ROOT/native-emulators/froggba/files/froggba.cfg" "$STAGE/"
+       "$ROOT/native-emulators/froggba/files/froggba.cfg" \
+       "$ROOT/native-emulators/froggba/files/Watomsk-GBA.ovl" "$STAGE/"
     echo "$STAGE"
     ;;
   snes9xtyl)

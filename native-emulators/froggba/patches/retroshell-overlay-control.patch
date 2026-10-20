@@ -1,0 +1,65 @@
+diff --git a/source/src/main.c b/source/src/main.c
+--- a/source/src/main.c
++++ b/source/src/main.c
+@@ -850,8 +850,13 @@ int user_main(int argc, char *argv[])
+ 
+     strcpy(overlay_names[1], "Watomsk-GBA");
+     if (num_overlays < 2) num_overlays = 2;
+-    option_overlay_enabled = 1;
+-    option_overlay_selected = 1;
++    /* A zero selection is the untouched stock configuration. Enable the
++     * bundled border once; afterward preserve the user's saved on/off choice. */
++    if (option_overlay_selected == 0)
++    {
++      option_overlay_enabled = 1;
++      option_overlay_selected = 1;
++    }
+     option_overlay_offset_x = 120;
+     option_overlay_offset_y = 40;
+     option_screen_scale = SCALED_X15_GU;
+diff --git a/source/src/gui.c b/source/src/gui.c
+--- a/source/src/gui.c
++++ b/source/src/gui.c
+@@ -419,5 +419,5 @@ void init_overlays_at_boot(void)
+   // Ensure option_overlay_selected is within bounds
+-  if (option_overlay_selected >= num_overlays)
++  if (!retroshell_adapter.active && option_overlay_selected >= num_overlays)
+   {
+     option_overlay_selected = 0;
+   }
+@@ -2198,9 +2198,10 @@ u32 menu(void)
+     ACTION_OPTION(NULL, NULL, RS_PAUSE_LABEL_RESET, MSG_MAIN_MENU_HELP_8, 3),
+     STRING_SELECTION_OPTION(NULL, RS_PAUSE_LABEL_ASPECT_RATIO "  < %s >", aspect_ratio_options, &option_aspect_ratio, 3, MSG_OPTION_MENU_HELP_0, 4),
+     STRING_SELECTION_OPTION(NULL, RS_PAUSE_LABEL_FILTER "  < %s >", on_off_options, &option_screen_filter, 2, MSG_OPTION_MENU_HELP_2, 5),
+-    ACTION_OPTION(NULL, NULL, RS_PAUSE_LABEL_SCREENSHOT, MSG_MAIN_MENU_HELP_3, 6),
+-    SUBMENU_OPTION(&main_menu, RS_PAUSE_LABEL_EMULATOR_SETTINGS, MSG_MAIN_MENU_HELP_4, 7),
+-    ACTION_OPTION(NULL, NULL, RS_PAUSE_LABEL_EXIT, MSG_MAIN_MENU_HELP_11, 8)
++    STRING_SELECTION_OPTION(overlay_enabled_changed, "Border  < %s >", on_off_options, &option_overlay_enabled, 2, MSG_OPTION_MENU_HELP_2, 6),
++    ACTION_OPTION(NULL, NULL, RS_PAUSE_LABEL_SCREENSHOT, MSG_MAIN_MENU_HELP_3, 7),
++    SUBMENU_OPTION(&main_menu, RS_PAUSE_LABEL_EMULATOR_SETTINGS, MSG_MAIN_MENU_HELP_4, 8),
++    ACTION_OPTION(NULL, NULL, RS_PAUSE_LABEL_EXIT, MSG_MAIN_MENU_HELP_11, 9)
+   };
+ 
+   MAKE_MENU(retroshell, NULL, NULL);
+@@ -2487,9 +2488,9 @@ u32 menu(void)
+             case 1: action_savestate(); repeat = 0; break;
+             case 2: action_loadstate(); repeat = 0; break;
+             case 3: menu_reset(); break;
+-            case 6: menu_screen_capture(); break;
+-            case 7: menu_init(); choose_menu(&main_menu); break;
+-            case 8: menu_quit(); break;
++            case 7: menu_screen_capture(); break;
++            case 8: menu_init(); choose_menu(&main_menu); break;
++            case 9: menu_quit(); break;
+             default: break;
+           }
+           break;
+@@ -2557,6 +2558,8 @@ u32 menu(void)
+ 
+   } /* end while */
+ 
++  if (retroshell_adapter.active)
++    save_config_file();
+ 
+   scePowerLock(0);
+ 

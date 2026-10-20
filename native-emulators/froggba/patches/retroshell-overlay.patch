@@ -1,0 +1,29 @@
+diff --git a/source/src/main.c b/source/src/main.c
+--- a/source/src/main.c
++++ b/source/src/main.c
+@@ -840,5 +840,25 @@ int user_main(int argc, char *argv[])
+   // Initialize overlay cache at boot
+   init_overlays_at_boot();
++
++  /* RetroShell owns the presentation choice for adapter launches. Reserve a
++   * stable slot for its known packaged border instead of depending on FAT
++   * directory enumeration to report a particular long or 8.3 filename. */
++  if (retroshell_adapter.active)
++  {
++    extern char overlay_names[][64];
++    extern u32 num_overlays;
++    extern void set_gba_resolution(void);
++
++    strcpy(overlay_names[1], "Watomsk-GBA");
++    if (num_overlays < 2) num_overlays = 2;
++    option_overlay_enabled = 1;
++    option_overlay_selected = 1;
++    option_overlay_offset_x = 120;
++    option_overlay_offset_y = 40;
++    option_screen_scale = SCALED_X15_GU;
++    option_aspect_ratio = 0;
++    set_gba_resolution();
++  }
+   
+   // Initialize recent games tracking
+   extern void load_recent_games(void);
