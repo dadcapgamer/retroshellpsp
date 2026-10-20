@@ -1,5 +1,23 @@
 # Changelog
 
+## v1.0.0-beta.7
+
+Hardware-style borders for RetroShell's handheld systems and native FrogGBA.
+
+- **Game Boy, Game Boy Color and Game Boy Advance borders.** RetroShell now
+  includes branded, hardware-style screen bezels adapted from the default black
+  overlays in Watomsk/Overlays. The matching border is selected automatically
+  for GB, GBC and GBA games.
+- **FrogGBA border support.** The bundled native emulator now loads its matching
+  GBA border automatically and exposes a persistent Border On/Off control in
+  RetroShell's embedded pause menu. Turning the border off removes the complete
+  bezel and restores a centered, full-height, aspect-correct game display.
+- **Safer native overlay loading.** FrogGBA now selects the packaged overlay
+  reliably across PSP FAT filename modes, validates overlay paths, sizes and
+  reads, and renders through uncached VRAM to avoid crashes and stale frames.
+- **Artwork attribution.** The documentation and third-party notices credit
+  Watomsk/Overlays and record the artwork's separate licensing status.
+
 ## v1.0.0-beta.6
 
 Hotfix for the bundled native emulators.
