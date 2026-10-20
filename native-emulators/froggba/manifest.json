@@ -1,6 +1,6 @@
 {
   "name": "froggba",
-  "version": "0.5.3-native",
+  "version": "0.5.4-native",
   "systems": "gba",
   "priority": 90,
   "testOnly": false,

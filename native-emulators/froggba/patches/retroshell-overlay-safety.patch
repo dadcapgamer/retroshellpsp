@@ -51,18 +51,6 @@ diff --git a/source/src/gui.c b/source/src/gui.c
          overlay_names[num_overlays][sizeof(overlay_names[num_overlays]) - 1] = '\0';
          
          // Remove .ovl or .png extension from display name
-diff --git a/source/src/main.c b/source/src/main.c
---- a/source/src/main.c
-+++ b/source/src/main.c
-@@ -852,6 +852,7 @@ int user_main(int argc, char *argv[])
-     for (overlay_index = 1; overlay_index < num_overlays; overlay_index++)
-     {
--      if (strcmp(overlay_names[overlay_index], "Watomsk-GBA") == 0)
-+      if (strcmp(overlay_names[overlay_index], "Watomsk-GBA") == 0 ||
-+          strncasecmp(overlay_names[overlay_index], "WATOMS", 6) == 0)
-       {
-         option_overlay_enabled = 1;
-         option_overlay_selected = overlay_index;
 diff --git a/source/src/video.c b/source/src/video.c
 --- a/source/src/video.c
 +++ b/source/src/video.c
@@ -151,3 +139,74 @@ diff --git a/source/src/video.c b/source/src/video.c
 +    overlay_buffer = NULL;
    }
  }
+@@ -4893,9 +4908,10 @@ void apply_overlay_borders(void) 
+   if (!option_overlay_enabled || !overlay_loaded || !cache_valid) return;
+   if (overlay_rle_cache == NULL || num_rle_entries == 0) return;
+   
+-  // Get both framebuffers
+-  u16 *fb0 = (u16 *)0x04000000;
+-  u16 *fb1 = (u16 *)0x04044000;
++  /* Paint the buffer the GU just rendered through PSP VRAM's uncached alias.
++   * Cached 0x04xxxxxx writes are not coherent with the GU and could leave the
++   * border invisible until an unrelated cache writeback. */
++  u16 *framebuffer = (u16 *)psp_vram_addr(draw_frame, 0, 0);
+   
+   u32 max_offset = PSP_LINE_SIZE * PSP_SCREEN_HEIGHT;
+   
+@@ -4910,8 +4926,7 @@ void apply_overlay_borders(void) 
+     if (start_offset >= max_offset) continue;
+     
+     // Optimized run writing with pointer arithmetic
+-    u16 *fb0_ptr = &fb0[start_offset];
+-    u16 *fb1_ptr = &fb1[start_offset];
++    u16 *fb_ptr = &framebuffer[start_offset];
+     
+     // Use memset-style approach for longer runs
+     if (run_length >= 16) {
+@@ -4927,40 +4942,26 @@ void apply_overlay_borders(void) 
+       for (int c = 0; c < chunks; c++) {
+         int base = c * 16;
+         // Unroll 16 writes
+-        fb0_ptr[base] = fb0_ptr[base+1] = fb0_ptr[base+2] = fb0_ptr[base+3] = color;
+-        fb0_ptr[base+4] = fb0_ptr[base+5] = fb0_ptr[base+6] = fb0_ptr[base+7] = color;
+-        fb0_ptr[base+8] = fb0_ptr[base+9] = fb0_ptr[base+10] = fb0_ptr[base+11] = color;
+-        fb0_ptr[base+12] = fb0_ptr[base+13] = fb0_ptr[base+14] = fb0_ptr[base+15] = color;
+-        
+-        fb1_ptr[base] = fb1_ptr[base+1] = fb1_ptr[base+2] = fb1_ptr[base+3] = color;
+-        fb1_ptr[base+4] = fb1_ptr[base+5] = fb1_ptr[base+6] = fb1_ptr[base+7] = color;
+-        fb1_ptr[base+8] = fb1_ptr[base+9] = fb1_ptr[base+10] = fb1_ptr[base+11] = color;
+-        fb1_ptr[base+12] = fb1_ptr[base+13] = fb1_ptr[base+14] = fb1_ptr[base+15] = color;
++        fb_ptr[base] = fb_ptr[base+1] = fb_ptr[base+2] = fb_ptr[base+3] = color;
++        fb_ptr[base+4] = fb_ptr[base+5] = fb_ptr[base+6] = fb_ptr[base+7] = color;
++        fb_ptr[base+8] = fb_ptr[base+9] = fb_ptr[base+10] = fb_ptr[base+11] = color;
++        fb_ptr[base+12] = fb_ptr[base+13] = fb_ptr[base+14] = fb_ptr[base+15] = color;
+       }
+       
+       // Handle remainder
+       int base = chunks * 16;
+       for (int j = 0; j < remainder; j++) {
+-        fb0_ptr[base + j] = color;
+-        fb1_ptr[base + j] = color;
++        fb_ptr[base + j] = color;
+       }
+     } else {
+       // Small runs - direct assignment with bounds check
+       u16 safe_length = (start_offset + run_length > max_offset) ? 
+                         max_offset - start_offset : run_length;
+       for (int j = 0; j < safe_length; j++) {
+-        fb0_ptr[j] = color;
+-        fb1_ptr[j] = color;
++        fb_ptr[j] = color;
+       }
+     }
+   }
+-  
+-  // Minimal cache flush - every 8 frames to reduce overhead
+-  static int flush_counter = 0;
+-  if (++flush_counter >= 8) {
+-    sceKernelDcacheWritebackAll();
+-    flush_counter = 0;
+-  }
+ }
+ 
+ void render_overlay(void) 

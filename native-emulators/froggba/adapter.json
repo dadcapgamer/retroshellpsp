@@ -57,6 +57,7 @@
     "source/src/{main,gui,memory}.c: use RetroShell's per-game save library with read-only fallback to FrogGBA's legacy save and state folders",
     "source/src/main.c: automatically select the bundled Watomsk GBA overlay and its top-aligned 1.5x viewport for RetroShell adapter launches",
     "source/src/{gui,video}.c: safely enumerate FAT long filenames and validate overlay paths, sizes, and reads before rendering",
+    "source/src/{main,video}.c: select the packaged overlay without relying on FAT directory names and paint the active framebuffer through uncached VRAM",
     "source/src/input.c: invoke the embedded RetroShell pause surface with L+R+Select and record pause/resume state",
     "source/src/main.c: consume argv[2..3] and chain-load back to RetroShell on quit",
     "source/Makefile: compile the adapter shim and link pspsystemctrl_user",
