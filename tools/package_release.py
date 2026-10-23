@@ -221,12 +221,24 @@ def write_core_directory(build: Path, cores: list[dict], all_cores: list[dict]) 
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--build-dir", type=Path, default=ROOT / "build")
-    parser.add_argument("--output", type=Path)
+    parser.add_argument(
+        "--output", type=Path,
+        help="release ZIP path, or output directory when used with --core")
+    parser.add_argument(
+        "--core", metavar="NAME",
+        help="create only NAME's .rscore.zip instead of a full release")
+    parser.add_argument(
+        "--allow-archived", action="store_true",
+        help="allow --core to package a core classified as archived")
     parser.add_argument("--include-candidates", action="store_true")
     parser.add_argument("--core-packages", action="store_true",
                         help="also create individual drag-and-drop .rscore.zip packages")
     args = parser.parse_args()
     build = args.build_dir.resolve()
+    if args.allow_archived and not args.core:
+        parser.error("--allow-archived is only valid with --core")
+    if args.core and (args.include_candidates or args.core_packages):
+        parser.error("--core cannot be combined with release-directory options")
     if args.include_candidates:
         cache = build / "CMakeCache.txt"
         if (not cache.is_file() or
@@ -236,6 +248,30 @@ def main() -> None:
                 "candidate packaging requires a build configured with "
                 "-DRS_INCLUDE_TEST_CORES=ON")
     lock = json.loads((ROOT / "core-provenance.lock.json").read_text())
+    if args.core:
+        matches = [core for core in lock["cores"]
+                   if core.get("name") == args.core]
+        if not matches:
+            parser.error(f"unknown core: {args.core}")
+        core = matches[0]
+        delivery = core.get("delivery")
+        if delivery == "archived" and not args.allow_archived:
+            raise SystemExit(
+                f"refusing to package archived core '{args.core}'; "
+                "use --allow-archived only for local investigation")
+        if delivery not in {"production", "candidate", "archived"}:
+            raise SystemExit(
+                f"core '{args.core}' has unsupported delivery policy "
+                f"{delivery!r}")
+        artifact = build / f"cores/{args.core}.prx"
+        if not artifact.is_file():
+            raise SystemExit(
+                f"missing {artifact}; build the core before packaging")
+        output_dir = ((args.output.resolve() if args.output else
+                       ROOT / "dist/core-directory"))
+        package, _ = package_core(build, output_dir, core)
+        print(package)
+        return
     output = args.output
     if output is None:
         filename = f"RetroShell-PSP-v{VERSION}.zip"

@@ -1,0 +1,58 @@
+name: New emulator core
+description: Propose a libretro core or direct RSCoreAPI integration.
+title: "[New core] "
+labels: ["core", "new-core"]
+body:
+  - type: input
+    id: emulator
+    attributes:
+      label: Emulator and systems
+      placeholder: "Example emulator — gb|gbc"
+    validations:
+      required: true
+  - type: input
+    id: upstream
+    attributes:
+      label: Upstream repository and commit
+      placeholder: "https://github.com/example/core @ full 40-character commit"
+    validations:
+      required: true
+  - type: input
+    id: license
+    attributes:
+      label: Upstream license
+      placeholder: "GPL-2.0; COPYING in the upstream repository"
+    validations:
+      required: true
+  - type: dropdown
+    id: integration
+    attributes:
+      label: Integration path
+      options:
+        - Libretro core through the shared shim
+        - Direct RSCoreAPI core
+        - Native emulator adapter
+        - Unsure
+    validations:
+      required: true
+  - type: textarea
+    id: value
+    attributes:
+      label: Why this core helps
+      description: Describe compatibility or performance not covered by current cores.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Current PSP evidence
+      description: Include known PSP ports, memory needs, and tests. PPSSPP is not hardware qualification.
+  - type: checkboxes
+    id: policy
+    attributes:
+      label: Submission policy
+      options:
+        - label: The integration will begin as testOnly and will not claim PSP-1000 safety without hardware evidence.
+          required: true
+        - label: I will not upload ROMs, BIOS files, keys, firmware, or proprietary SDK material.
+          required: true

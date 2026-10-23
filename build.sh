@@ -4,6 +4,9 @@
 #   ./build.sh clean      — wipe the build directory
 #   ./build.sh test       — run repository audit tests
 #   ./build.sh qualify LOG — grade the latest real-PSP hardware run
+#   ./build.sh core NAME — build one core through Core Lab
+#   ./build.sh core-test NAME --rom PATH — PPSSPP correctness smoke test
+#   ./build.sh core-package NAME — build one drag-and-drop core package
 #   ./build.sh release    — build, audit, and create deterministic stable ZIP
 #   ./build.sh candidates — build a test-core EBOOT and drag-and-drop packages
 #   ./build.sh adapters [FROG_DIR SNES_DIR] — build (from pinned source) and
@@ -28,6 +31,7 @@ case "$1" in
     ;;
   test)
     python3 tools/audit_repository.py
+    python3 -m unittest discover -s tests/tools -p 'test_*.py'
     cmake -S tests/host -B build-host-tests
     cmake --build build-host-tests
     ctest --test-dir build-host-tests --output-on-failure
@@ -36,6 +40,20 @@ case "$1" in
     printf '{"malformed":[' | build-fuzz/fuzz_json
     printf 'PK\\003\\004broken' | build-fuzz/fuzz_zip
     exit 0
+    ;;
+  core|core-test|core-package)
+    ACTION="$1"
+    CORE_NAME="$2"
+    if [ -z "$CORE_NAME" ]; then
+      echo "usage: ./build.sh $ACTION CORE [options]" >&2
+      exit 2
+    fi
+    shift 2
+    case "$ACTION" in
+      core) exec python3 tools/core_lab.py build "$CORE_NAME" "$@" ;;
+      core-test) exec python3 tools/core_lab.py smoke "$CORE_NAME" "$@" ;;
+      core-package) exec python3 tools/core_lab.py package "$CORE_NAME" "$@" ;;
+    esac
     ;;
   qualify)
     if [ -z "$2" ]; then

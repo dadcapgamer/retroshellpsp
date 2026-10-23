@@ -1,0 +1,49 @@
+name: Core optimization
+description: Propose or coordinate a performance, memory, audio, or compatibility improvement.
+title: "[Core optimization] "
+labels: ["core", "optimization"]
+body:
+  - type: input
+    id: core
+    attributes:
+      label: Core and system
+      placeholder: "gpSP — Game Boy Advance"
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem observed
+      description: Include the PSP model, workload, and what you can see or hear.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: Note source files, compiler flags, cache sizes, or upstream revisions involved.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Existing evidence
+      description: Share PPSSPP results and real-PSP logs or metrics. Do not upload ROMs or BIOS files.
+  - type: dropdown
+    id: hardware
+    attributes:
+      label: Hardware available
+      options:
+        - PSP-1000
+        - PSP-2000 or later
+        - Multiple PSP models
+        - PPSSPP only; hardware tester needed
+    validations:
+      required: true
+  - type: checkboxes
+    id: content
+    attributes:
+      label: Content confirmation
+      options:
+        - label: I will not upload ROMs, BIOS files, keys, firmware, or proprietary SDK material.
+          required: true
