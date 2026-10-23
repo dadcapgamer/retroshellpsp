@@ -1336,7 +1336,7 @@ void HomeScene::drawGallerySystems(App& app, u32 a, float dy) {
 
     /* Gallery themes provide the scene and silhouette in each transparent
      * PNG. Neighbours are subdued and painted first; the focused leaf stays
-     * bright and on top. Favorites remains beta.7's first rail category. */
+     * bright and on top. Favorites remains the first rail category. */
     for (int pass = 0; pass < 2; ++pass) {
         for (int i = 0; i < count; ++i) {
             const bool selected = i == m_nav.systemPos;

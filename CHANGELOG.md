@@ -1,5 +1,28 @@
 # Changelog
 
+## v1.0.0-beta.8
+
+External, installable themes and the first Gallery-style community package.
+
+- **External theme discovery.** RetroShell now discovers theme manifests under
+  `RETROSHELL/themes/`, with safe relative asset loading for optional palettes,
+  backgrounds, per-system artwork and logos.
+- **Gallery presentation.** Themes can opt into an artwork carousel and
+  two-pane game library while retaining RetroShell's navigation, emulator
+  selection, game details and launch behavior.
+- **Art Book Next add-on.** The Art Book-inspired package is published as a
+  separate, optional non-commercial download. Its attribution and
+  CC BY-NC-SA 2.0 license remain separate from RetroShell's MIT release.
+- **Favorites preserved.** Gallery themes keep Favorites as a first-class
+  system rail and library category, including add/remove behavior and the
+  empty-state guidance from the standard interface.
+- **Built-in themes stay stable.** Dark, Graphite, Light and Mist keep their
+  existing presentation; the Dark theme passed the same full emulator
+  regression path as Art Book during release validation.
+- **Community Core Lab.** A guided contributor workflow, templates and
+  validation tooling make it easier to benchmark, tune and report emulator
+  core work without requiring contributors to learn the full release pipeline.
+
 ## v1.0.0-beta.7
 
 Hardware-style borders for RetroShell's handheld systems and native FrogGBA.

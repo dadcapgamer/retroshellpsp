@@ -4,7 +4,7 @@ RetroShell is an open-source retro game launcher for the Sony PSP. It scans one 
 
 The project targets both the 32 MB PSP-1000 and later 64 MB models. It requires custom firmware.
 
-> **Beta:** `v1.0.0-beta.7` is the current public test release. Save data should be backed up before updating.
+> **Beta:** `v1.0.0-beta.8` is the current public test release. Save data should be backed up before updating.
 
 ## Install
 
