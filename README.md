@@ -113,6 +113,9 @@ The candidate command creates the versioned PSP ZIP and optional core packages u
 
 ## Contributing
 
+- [Contributor guide](CONTRIBUTING.md)
+- [Core contributor workflow](docs/CORE_CONTRIBUTING.md) — build, test, and
+  package one emulator core without learning the frontend
 - [Install RetroShell and community cores](docs/INSTALLING_CORES.md)
 - [Emulator directory](docs/CORE_DIRECTORY.md)
 - [Release changelog](CHANGELOG.md)
