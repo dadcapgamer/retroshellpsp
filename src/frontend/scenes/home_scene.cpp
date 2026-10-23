@@ -1202,6 +1202,10 @@ void panelHeading(App& app, const PanelBox& b, const char* overline,
 
 void HomeScene::drawSystems(App& app, u32 a, float dy) {
     if (a <= 2u) return;
+    if (app.theme().isGallery() && !m_empty) {
+        drawGallerySystems(app, a, dy);
+        return;
+    }
     auto& r = app.renderer();
     const auto& pal = app.pal();
     const auto& fonts = app.fonts();
@@ -1319,6 +1323,84 @@ void HomeScene::drawSystems(App& app, u32 a, float dy) {
                      2.f);
 }
 
+void HomeScene::drawGallerySystems(App& app, u32 a, float dy) {
+    auto& r = app.renderer();
+    const auto& fonts = app.fonts();
+    const int count = int(m_systems.size());
+    constexpr float PITCH = 87.f;
+    constexpr float ART_W = 114.f;
+
+    r.rect(0.f, 0.f, RS_SCREEN_W, RS_SCREEN_H, fade(rsHex(0x000000), a));
+    const gfx::TexFilter previous = r.texFilter();
+    r.setTexFilter(gfx::TexFilter::Nearest);
+
+    /* Gallery themes provide the scene and silhouette in each transparent
+     * PNG. Neighbours are subdued and painted first; the focused leaf stays
+     * bright and on top. Favorites remains beta.7's first rail category. */
+    for (int pass = 0; pass < 2; ++pass) {
+        for (int i = 0; i < count; ++i) {
+            const bool selected = i == m_nav.systemPos;
+            if (selected != (pass == 1)) continue;
+            const int system = m_systems[size_t(i)];
+            const float cx = RS_SCREEN_W * .5f +
+                (float(i) - m_railPos.v) * PITCH;
+            if (cx + ART_W * .5f < 0.f || cx - ART_W * .5f > RS_SCREEN_W)
+                continue;
+            const u32 alpha = selected ? a : a * 118u / 255u;
+            if (system == FAVORITES_RAIL) {
+                ui::prim::iconFavorite(r, cx - 25.f, 86.f + dy, 50.f,
+                                       fade(rsHex(0xFFFFFF), alpha));
+            } else if (const gfx::Texture* art =
+                           app.theme().artForSystem(system)) {
+                r.sprite(*art, 0.f, 0.f, float(art->width), float(art->height),
+                         cx - ART_W * .5f, dy, ART_W, RS_SCREEN_H,
+                         rsWithAlpha(rsHex(0xFFFFFF), alpha));
+            } else {
+                ui::prim::iconSystem(r, system, cx - 32.f, 86.f + dy, 64.f,
+                                     fade(rsHex(0xFFFFFF), alpha),
+                                     rsHex(0xFFFFFF));
+            }
+        }
+    }
+    r.setTexFilter(previous);
+
+    const int system = currentSystemId();
+    if (system == FAVORITES_RAIL) {
+        fonts.display.draw(r, RS_SCREEN_W * .5f,
+                           fonts.display.centerY(113.f + dy, 38.f),
+                           "FAVORITES", fade(rsHex(0xFFFFFF), a),
+                           text::Align::Center, 2.f);
+    } else if (const gfx::Texture* logo = app.theme().logoForSystem(system)) {
+        const float maxW = 190.f, maxH = 60.f;
+        const float scale = std::fmin(maxW / float(logo->width),
+                                      maxH / float(logo->height));
+        const float w = ui::snap(float(logo->width) * scale);
+        const float h = ui::snap(float(logo->height) * scale);
+        const float x = ui::snap((RS_SCREEN_W - w) * .5f);
+        const float y = ui::snap(136.f - h * .5f + dy);
+        r.setTexFilter(gfx::TexFilter::Linear);
+        r.sprite(*logo, 0.f, 0.f, float(logo->width), float(logo->height),
+                 x, y, w, h, rsWithAlpha(rsHex(0xFFFFFF), a));
+        r.setTexFilter(previous);
+    } else {
+        fonts.display.draw(r, RS_SCREEN_W * .5f,
+                           fonts.display.centerY(113.f + dy, 38.f),
+                           upper(systemTitle(system)).c_str(),
+                           fade(rsHex(0xFFFFFF), a), text::Align::Center, 2.f);
+    }
+
+    char games[32];
+    std::snprintf(games, sizeof games, "%d GAME%s", m_systemTotal,
+                  m_systemTotal == 1 ? "" : "S");
+    const float countW = fonts.small.measure(games) + 20.f;
+    const float countX = ui::snap((RS_SCREEN_W - countW) * .5f);
+    ui::pixelRect(r, countX, 199.f + dy, countW, 22.f, 3,
+                  fade(rsHex(0x111111, 232), a));
+    fonts.small.draw(r, RS_SCREEN_W * .5f,
+                     fonts.small.centerY(199.f + dy, 22.f), games,
+                     fade(rsHex(0xBBBBBB), a), text::Align::Center, 1.f);
+}
+
 void HomeScene::drawContinue(App& app, u32 a, float dy) {
     if (a <= 2u || m_recents.empty()) return;
     auto& r = app.renderer();
@@ -1391,6 +1473,10 @@ void HomeScene::drawContinue(App& app, u32 a, float dy) {
 
 void HomeScene::drawLibrary(App& app, u32 a, float dy) {
     if (a <= 2u) return;
+    if (app.theme().isGallery()) {
+        drawGalleryLibrary(app, a, dy);
+        return;
+    }
     auto& r = app.renderer();
     const auto& pal = app.pal();
     const auto& fonts = app.fonts();
@@ -1556,6 +1642,136 @@ void HomeScene::drawLibrary(App& app, u32 a, float dy) {
     const char* chips[3] = {badge(int(sel.system)), m_selMeta.genre.c_str(), year};
     chipRow(app, px, py + PREVIEW_H + 25.f, PREVIEW_W, chips, 3, body);
     drawMetaLine(app, sel, px, py + PREVIEW_H + 48.f, PREVIEW_W, body);
+}
+
+void HomeScene::drawGalleryLibrary(App& app, u32 a, float dy) {
+    auto& r = app.renderer();
+    const auto& fonts = app.fonts();
+    const int sys = currentSystemId();
+    const int count = gamesInCurrent();
+    constexpr float LEFT_W = 180.f;
+    constexpr float LIST_X_AB = 20.f;
+    constexpr float LIST_Y_AB = 66.f;
+    constexpr float ROW_H_AB = 21.f;
+    constexpr int VISIBLE_AB = 8;
+
+    r.rect(0.f, dy, LEFT_W, RS_SCREEN_H, fade(rsHex(0x111111), a));
+    r.rect(LEFT_W, dy, RS_SCREEN_W - LEFT_W, RS_SCREEN_H,
+           fade(rsHex(0x222222), a));
+
+    if (sys == FAVORITES_RAIL) {
+        fonts.title.draw(r, LEFT_W * .5f, fonts.title.centerY(18.f + dy, 34.f),
+                         "FAVORITES", fade(rsHex(0xFFFFFF, 214), a),
+                         text::Align::Center, 1.f);
+    } else if (const gfx::Texture* logo = app.theme().logoForSystem(sys)) {
+        const float maxW = 132.f, maxH = 30.f;
+        const float scale = std::fmin(maxW / float(logo->width),
+                                      maxH / float(logo->height));
+        const float w = ui::snap(float(logo->width) * scale);
+        const float h = ui::snap(float(logo->height) * scale);
+        r.sprite(*logo, 0.f, 0.f, float(logo->width), float(logo->height),
+                 ui::snap((LEFT_W - w) * .5f),
+                 ui::snap(8.f + (30.f - h) * .5f + dy), w, h,
+                 rsWithAlpha(rsHex(0xFFFFFF), a * 220u / 255u));
+    } else {
+        fonts.title.draw(r, LEFT_W * .5f, fonts.title.centerY(18.f + dy, 34.f),
+                         upper(systemTitle(sys)).c_str(),
+                         fade(rsHex(0xFFFFFF, 214), a),
+                         text::Align::Center, 1.f);
+    }
+    char total[24];
+    std::snprintf(total, sizeof total, "%d GAME%s", count,
+                  count == 1 ? "" : "S");
+    fonts.tiny.draw(r, LEFT_W * .5f, capsAt(fonts.tiny, 47.f) + dy, total,
+                    fade(rsHex(0x888888), a), text::Align::Center);
+
+    if (count == 0) {
+        fonts.bodyStrong.draw(r, LEFT_W + 24.f,
+                              capsAt(fonts.bodyStrong, 78.f) + dy,
+                              sys == FAVORITES_RAIL
+                                  ? "NO FAVORITES YET" : "NO GAMES TO SHOW",
+                              fade(rsHex(0xFFFFFF), a));
+        drawWrapped(fonts.small, r, LEFT_W + 24.f,
+                    capsAt(fonts.small, 101.f) + dy, 230.f, 15.f, 4,
+                    sys == FAVORITES_RAIL
+                        ? "Press the square button on any game to add it here."
+                        : "Change the Library view or rescan from Settings.",
+                    fade(rsHex(0xAAAAAA), a));
+        return;
+    }
+
+    const float dx = ui::snap(m_slideX.v);
+    const float scroll = rsClamp(m_scroll.v, 0.f,
+                                 float(rsClamp(count - VISIBLE_AB, 0, count)));
+    const ui::GridWindow win =
+        ui::visibleGridWindow(count, 1, VISIBLE_AB, scroll);
+    const int selected = m_nav.currentGame();
+    r.setScissor(0, int(LIST_Y_AB + dy), int(LEFT_W),
+                 int(ROW_H_AB * VISIBLE_AB));
+    for (int i = win.first; i < win.pastLast; ++i) {
+        const float y = ui::snap(LIST_Y_AB +
+                                 (float(i) - scroll) * ROW_H_AB) + dy;
+        const db::GameEntry& game = *m_visible[size_t(i)];
+        const bool focused = i == selected;
+        const float x = LIST_X_AB + dx;
+        if (focused)
+            ui::pixelRect(r, x - 7.f, y + 1.f, 154.f, ROW_H_AB - 2.f, 2,
+                          fade(rsHex(0x444444), a));
+        float right = x + 137.f;
+        if (app.library().isFavorite(game.pathHash)) {
+            ui::icon(r, ui::Icon::Star, right - ui::ICON_SIZE,
+                     y + (ROW_H_AB - ui::ICON_SIZE) * .5f,
+                     fade(focused ? rsHex(0xFFFFFF) : rsHex(0x888888), a));
+            right -= ui::ICON_SIZE + 5.f;
+        }
+        const text::Font& face = focused ? fonts.bodyStrong : fonts.body;
+        drawEllipsized(face, r, x, face.centerY(y, ROW_H_AB), right - x,
+                       game.shown(),
+                       fade(focused ? rsHex(0xFFFFFF) : rsHex(0x777777), a));
+    }
+    r.resetScissor();
+
+    const db::GameEntry& game = *m_visible[size_t(selected)];
+    constexpr float RIGHT_X = LEFT_W + 18.f;
+    constexpr float RIGHT_W = RS_SCREEN_W - RIGHT_X - 16.f;
+    constexpr float ART_X = 230.f, ART_Y = 18.f, ART_W = 222.f, ART_H = 132.f;
+    if (const gfx::Texture* art = app.boxart().peek(game))
+        ui::artWell(app, *art, ART_X + dx, ART_Y + dy, ART_W, ART_H, a);
+    else
+        ui::artFallback(app, int(game.system), ART_X + dx, ART_Y + dy,
+                        ART_W, ART_H, a);
+
+    drawEllipsized(fonts.title, r, RIGHT_X + dx,
+                   capsAt(fonts.title, 164.f) + dy, RIGHT_W,
+                   game.shown(), fade(rsHex(0xFFFFFF), a));
+    const char* badges[3] = {
+        badge(int(game.system)),
+        app.library().isFavorite(game.pathHash) ? "FAVORITE" : nullptr,
+        m_selCore ? m_selCore->label() : nullptr,
+    };
+    chipRow(app, RIGHT_X + dx, 178.f + dy, RIGHT_W, badges, 3, a);
+
+    if (!m_selMeta.description.empty())
+        drawWrapped(fonts.small, r, RIGHT_X + dx,
+                    capsAt(fonts.small, 202.f) + dy, 176.f, 13.f, 3,
+                    m_selMeta.description, fade(rsHex(0xDDDDDD), a));
+    else
+        drawMetaLine(app, game, RIGHT_X + dx, 204.f + dy, 176.f, a);
+
+    char info[48] = "";
+    if (m_selMeta.year > 0)
+        std::snprintf(info, sizeof info, "%d", m_selMeta.year);
+    if (const u32 played = app.library().playSeconds(game.pathHash)) {
+        char duration[24];
+        ui::formatPlaytime(played, duration, sizeof duration);
+        if (*info)
+            std::strncat(info, "  /  ", sizeof info - std::strlen(info) - 1);
+        std::strncat(info, duration, sizeof info - std::strlen(info) - 1);
+    }
+    if (*info)
+        fonts.tiny.draw(r, RS_SCREEN_W - 16.f + dx,
+                        capsAt(fonts.tiny, 230.f) + dy, info,
+                        fade(rsHex(0x999999), a), text::Align::Right);
 }
 
 /* One quiet line under a title: ROM size, then the maker when known. */
@@ -2108,9 +2324,15 @@ void HomeScene::draw(App& app) {
         drawError(app);
         return;
     }
-    app.drawBackground();
-
     const float pos = m_layerPos.v;
+    const bool galleryPrimary = app.theme().isGallery() &&
+                                pos > -.5f && pos < 1.5f;
+    if (galleryPrimary)
+        app.renderer().rect(0.f, 0.f, RS_SCREEN_W, RS_SCREEN_H,
+                            rsHex(0x000000));
+    else
+        app.drawBackground();
+
     const float enter = ui::easeOutCubic(m_entrance.t);
     const u32 enterA = u32(enter * 255.f);
     auto layerA = [&](float index) {
@@ -2118,17 +2340,24 @@ void HomeScene::draw(App& app) {
     };
     auto offset = [&](float index) { return ui::snap((index - pos) * SHIFT); };
 
-    app.drawTopBar();
+    if (!galleryPrimary) app.drawTopBar();
 
     /* Layers draw inside the content band so travel never crosses the
      * header or the legend. */
-    restoreContent(app.renderer());
+    if (galleryPrimary)
+        app.renderer().resetScissor();
+    else
+        restoreContent(app.renderer());
     drawContinue(app, layerA(-1.f), offset(-1.f));
     drawSystems(app, layerA(0.f), offset(0.f));
     drawLibrary(app, layerA(1.f), offset(1.f));
     drawDetail(app, layerA(2.f), offset(2.f));
     app.renderer().resetScissor();
 
+    if (galleryPrimary)
+        app.renderer().rect(0.f, L::FOOTER_RULE_Y, RS_SCREEN_W,
+                            RS_SCREEN_H - L::FOOTER_RULE_Y,
+                            rsHex(0x111111, 238));
     drawLegend(app);
 
     if (m_overlay == Overlay::CorePicker) drawPicker(app);

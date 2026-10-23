@@ -1,0 +1,33 @@
+{
+  "formatVersion": 1,
+  "id": "art-book-next",
+  "name": "Art Book Next",
+  "author": "Anthony Caccese and credited contributors",
+  "license": "CC-BY-NC-SA-2.0",
+  "source": "https://github.com/anthonycaccese/art-book-next-es-de",
+  "dark": true,
+  "presentation": "gallery",
+  "waves": false,
+  "systemArt": {
+    "gb": "system-art/art-game-boy.png",
+    "gbc": "system-art/art-game-boy-color.png",
+    "gba": "system-art/art-game-boy-advance.png",
+    "nes": "system-art/art-nes.png",
+    "snes": "system-art/art-snes.png",
+    "md": "system-art/art-genesis.png",
+    "sms": "system-art/art-master-system.png",
+    "gg": "system-art/art-game-gear.png",
+    "pce": "system-art/art-pc-engine.png"
+  },
+  "systemLogos": {
+    "gb": "logos/logo-game-boy.png",
+    "gbc": "logos/logo-game-boy-color.png",
+    "gba": "logos/logo-game-boy-advance.png",
+    "nes": "logos/logo-nes.png",
+    "snes": "logos/logo-snes.png",
+    "md": "logos/logo-genesis.png",
+    "sms": "logos/logo-master-system.png",
+    "gg": "logos/logo-game-gear.png",
+    "pce": "logos/logo-pc-engine.png"
+  }
+}

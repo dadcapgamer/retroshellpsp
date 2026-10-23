@@ -191,6 +191,19 @@ legacy wave animation (off by default; the built-ins are flat). Unset values
 inherit from the built-in Light or Dark palette (`"dark": true|false`).
 Built-ins need no files. Palette changes crossfade live.
 
+An external manifest may set `"presentation": "gallery"` and provide
+`systemArt` and `systemLogos` objects keyed by stable system IDs (`gb`, `gbc`,
+`gba`, `nes`, `snes`, `md`, `sms`, `gg`, `pce`). The Gallery presentation
+uses an artwork carousel for Systems and a two-pane Library while retaining
+the same navigation, Favorites rail, core selection, details, and game-launch
+behavior. External PNGs are decoded to 16-bit textures and are released with
+the rest of the theme before a core launch. Theme IDs and asset paths are
+validated before they are read from `RETROSHELL/themes/`.
+
+Theme add-ons remain separate from the application package and keep their own
+licenses. The complete format and packaging workflow are documented in
+`docs/GALLERY_THEME.md`.
+
 ## Save data
 
 ```

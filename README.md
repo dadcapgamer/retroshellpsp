@@ -4,7 +4,7 @@ RetroShell is an open-source retro game launcher for the Sony PSP. It scans one 
 
 The project targets both the 32 MB PSP-1000 and later 64 MB models. It requires custom firmware.
 
-> **Beta:** `v1.0.0-beta.3` is the current public test release. Save data should be backed up before updating.
+> **Beta:** `v1.0.0-beta.7` is the current public test release. Save data should be backed up before updating.
 
 ## Install
 
@@ -87,6 +87,18 @@ Pokemon Yellow.png
 
 Open the in-game RetroShell menu with **L + R + Select**.
 
+## Install themes
+
+RetroShell includes Dark, Graphite, Light, and Mist. External themes can add a
+custom palette, background, and Gallery presentation without rebuilding the
+application. Extract a theme package to the Memory Stick so its manifest is at
+`ms0:/RETROSHELL/themes/<theme-id>/theme.json`, then select it under
+**Settings → Theme**.
+
+Art Book Next is provided as a separate non-commercial community add-on under
+`theme-packs/art-book-next/`; it is not bundled in the main RetroShell ZIP.
+See [Gallery themes](docs/GALLERY_THEME.md) for packaging and manifest details.
+
 ## Build
 
 Install [PSPDEV](https://github.com/pspdev/pspdev), then run:
@@ -105,6 +117,7 @@ The candidate command creates the versioned PSP ZIP and optional core packages u
 - [Emulator directory](docs/CORE_DIRECTORY.md)
 - [Release changelog](CHANGELOG.md)
 - [Architecture](docs/ARCHITECTURE.md)
+- [Gallery themes](docs/GALLERY_THEME.md)
 - [Adding a core](docs/ADDING_A_CORE.md)
 - [Core audit and hardware status](docs/CORE_AUDIT.md)
 
