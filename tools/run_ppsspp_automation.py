@@ -86,9 +86,11 @@ def main() -> int:
         help="0 = PSP-1000 (32 MB, default), 1 = PSP-2000+ (64 MB). The "
              "64 MB model is a required release gate that cores sized from "
              "available memory behave differently under.")
-    parser.add_argument("--theme", choices=("dark", "graphite", "light", "mist"),
-                        default="dark",
-                        help="frontend theme used for visual validation")
+    parser.add_argument("--theme", default="dark",
+                        help="built-in or installed frontend theme id")
+    parser.add_argument(
+        "--theme-dir", type=Path,
+        help="external theme directory copied into the isolated test")
     storage_group = parser.add_mutually_exclusive_group()
     storage_group.add_argument(
         "--legacy-storage", action="store_true",
@@ -106,6 +108,8 @@ def main() -> int:
         args.bios = args.bios.resolve()
     if args.core_package:
         args.core_package = args.core_package.resolve()
+    if args.theme_dir:
+        args.theme_dir = args.theme_dir.resolve()
     args.build_dir = args.build_dir.resolve()
     args.runs_dir = args.runs_dir.resolve()
     if not args.rom.is_file():
@@ -125,6 +129,18 @@ def main() -> int:
         parser.error(f"PPSSPP executable not found: {args.ppsspp}")
     if not re.fullmatch(r"[A-Za-z0-9_-]{1,48}", args.core):
         parser.error("unsafe core name")
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,48}", args.theme):
+        parser.error("unsafe theme id")
+    if args.theme_dir:
+        manifest_path = args.theme_dir / "theme.json"
+        if not manifest_path.is_file():
+            parser.error(f"theme directory has no theme.json: {args.theme_dir}")
+        try:
+            theme_manifest = json.loads(manifest_path.read_text())
+        except (OSError, json.JSONDecodeError) as error:
+            parser.error(f"invalid theme manifest: {error}")
+        if theme_manifest.get("id") != args.theme:
+            parser.error("theme manifest id must match --theme")
     # Capture identity before launching. The source may live on a removable
     # PSP Memory Stick that is disconnected while the isolated copy runs.
     rom_name = args.rom.name
@@ -173,6 +189,8 @@ def main() -> int:
     for directory in (game_dir, system_dir, rs_system_dir, cores_dir,
                       target_rom_dir):
         directory.mkdir(parents=True, exist_ok=True)
+    if args.theme_dir:
+        shutil.copytree(args.theme_dir, seed_dir / "themes" / args.theme)
     shutil.copy2(eboot, game_dir / "EBOOT.PBP")
     # The core under test is always installed; a package is added beside it
     # (and must be a different core), so a system can offer two emulators.

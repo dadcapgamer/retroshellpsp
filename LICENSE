@@ -12,8 +12,10 @@ furnished to do so, subject to the following conditions:
 The above copyright notice and this permission notice shall be included in all
 copies or substantial portions of the Software.
 
-Vendored third-party components in external/ (stb, miniz, cJSON) and any
-emulator cores integrated under cores/ retain their own upstream licenses.
+Vendored third-party components in external/ (stb, miniz, cJSON), emulator
+cores integrated under cores/, and optional add-on packages under theme-packs/
+retain their own upstream licenses. They are not relicensed under this MIT
+license.
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE

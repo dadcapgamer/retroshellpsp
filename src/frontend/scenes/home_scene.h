@@ -97,8 +97,10 @@ private:
 
     /* --- drawing --------------------------------------------------------- */
     void drawSystems(App& app, u32 alpha, float dy);
+    void drawGallerySystems(App& app, u32 alpha, float dy);
     void drawContinue(App& app, u32 alpha, float dy);
     void drawLibrary(App& app, u32 alpha, float dy);
+    void drawGalleryLibrary(App& app, u32 alpha, float dy);
     void drawDetail(App& app, u32 alpha, float dy);
     void drawMetaLine(App& app, const db::GameEntry& g, float x, float capsTop,
                       float maxW, u32 alpha);

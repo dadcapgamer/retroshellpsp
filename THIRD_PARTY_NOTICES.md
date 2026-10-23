@@ -23,6 +23,17 @@ included in this local build at the user's direction.
 Game Boy, Game Boy Color, and Game Boy Advance are trademarks of Nintendo.
 RetroShell is not affiliated with or endorsed by Nintendo.
 
+## Optional theme packages
+
+The Art Book Next package under `theme-packs/art-book-next/` is an optional,
+separately downloadable theme. Its artwork comes from
+[Art Book Next ES-DE](https://github.com/anthonycaccese/art-book-next-es-de),
+commit `d772d07109701d9bd7c9fda305bfef6601105ab8`, by Anthony Caccese and
+credited contributors. It is licensed under Creative Commons
+Attribution-NonCommercial-ShareAlike 2.0. It is not part of RetroShell's MIT
+license and is not included in the main application archive. See the package's
+`LICENSE.md` and `README.md` for attribution and redistribution terms.
+
 | Core | Upstream | License |
 |---|---|---|
 | Gambatte | libretro/gambatte-libretro | GPL-2.0 |
